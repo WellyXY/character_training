@@ -318,7 +318,7 @@ export default function ContentGallery({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={resolveApiUrl(item.data.image_url)}
+                      src={resolveApiUrl(item.data.image_url!)}
                       alt="Generated"
                       className="h-full w-full object-cover"
                     />
@@ -336,7 +336,7 @@ export default function ContentGallery({
                               e.stopPropagation();
                               setSelectedItem({
                                 type: "image",
-                                url: resolveApiUrl(item.data.image_url),
+                                url: resolveApiUrl(item.data.image_url!),
                                 prompt: item.data.metadata?.prompt,
                                 image: item.data,
                                 editMode: true,
@@ -483,7 +483,7 @@ export default function ContentGallery({
                             e.stopPropagation();
                             setSelectedItem({
                               type: "image",
-                              url: resolveApiUrl(img.image_url),
+                              url: resolveApiUrl(img.image_url!),
                               prompt: img.metadata?.prompt,
                               image: img,
                               editMode: true,
@@ -584,7 +584,7 @@ export default function ContentGallery({
                             e.stopPropagation();
                             setSelectedItem({
                               type: "image",
-                              url: resolveApiUrl(img.image_url),
+                              url: resolveApiUrl(img.image_url!),
                               prompt: img.metadata?.prompt,
                               image: img,
                               editMode: true,
@@ -940,7 +940,7 @@ export default function ContentGallery({
                           <div className="flex flex-wrap gap-2">
                             {selectedItem.image.metadata.reference_image_ids.map((refId) => {
                               const refImage = images.find(img => img.id === refId);
-                              return refImage ? (
+                              return refImage && refImage.image_url ? (
                                 <div key={refId} className="relative group/ref">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
@@ -1039,7 +1039,7 @@ export default function ContentGallery({
                           <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Reference Image</p>
                           {(() => {
                             const sourceImage = images.find(img => img.id === selectedItem.video?.metadata?.source_image_id);
-                            return sourceImage ? (
+                            return sourceImage && sourceImage.image_url ? (
                               <div className="relative group/ref inline-block">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
@@ -1095,7 +1095,6 @@ export default function ContentGallery({
           onVideoCreated={() => {
             onVideoCreated?.();
           }}
-          onTaskStarted={onTaskStarted}
         />
       )}
     </section>

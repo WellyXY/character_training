@@ -321,11 +321,11 @@ export default function AgentChatPanel({
     if (loading) return;
     if (!input.trim() && !canSendWithoutMessage) return;
 
-    // Use uploaded image path first, then selected existing image
-    const referenceImagePath = uploadedReferenceImage?.url || selectedReferenceImage?.image_url;
+    // Use uploaded image path first, then selected existing image (only if image has URL)
+    const referenceImagePath = uploadedReferenceImage?.url || (selectedReferenceImage?.image_url ?? undefined);
     // Get the full URL for display in chat
     const referenceImageUrl = uploadedReferenceImage?.fullUrl
-      || (selectedReferenceImage ? resolveApiUrl(selectedReferenceImage.image_url) : undefined);
+      || (selectedReferenceImage?.image_url ? resolveApiUrl(selectedReferenceImage.image_url) : undefined);
     // Pass reference mode only if there's a reference image
     onSend(input.trim(), referenceImagePath, referenceImageUrl, hasReference ? referenceMode : undefined);
     setInput("");
@@ -498,7 +498,7 @@ export default function AgentChatPanel({
                 src={
                   uploadedReferenceImage
                     ? uploadedReferenceImage.fullUrl
-                    : resolveApiUrl(selectedReferenceImage!.image_url)
+                    : (selectedReferenceImage?.image_url ? resolveApiUrl(selectedReferenceImage.image_url) : "")
                 }
                 alt="Reference"
                 className="w-12 h-12 object-cover rounded"
@@ -581,7 +581,7 @@ export default function AgentChatPanel({
             </div>
             {availableImages.length > 0 ? (
               <div className="grid grid-cols-4 gap-2">
-                {availableImages.map((img) => (
+                {availableImages.filter(img => img.image_url).map((img) => (
                   <button
                     key={img.id}
                     type="button"
@@ -598,7 +598,7 @@ export default function AgentChatPanel({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={resolveApiUrl(img.image_url)}
+                      src={resolveApiUrl(img.image_url!)}
                       alt="Select"
                       className="w-full h-full object-cover"
                     />

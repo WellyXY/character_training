@@ -40,8 +40,8 @@ export default function CharacterSidebar({
     setShowCreate(false);
   };
 
-  const approvedImages = baseImages.filter((img) => img.is_approved);
-  const pendingImages = baseImages.filter((img) => !img.is_approved);
+  const approvedImages = baseImages.filter((img) => img.is_approved && img.image_url);
+  const pendingImages = baseImages.filter((img) => !img.is_approved && img.image_url);
 
   return (
     <aside className="flex flex-col rounded-2xl border border-[#333] bg-[#111] p-4 h-full overflow-hidden">
@@ -104,11 +104,11 @@ export default function CharacterSidebar({
               <div
                 key={img.id}
                 className="relative aspect-[9/16] overflow-hidden rounded-lg border border-white/10 group cursor-pointer"
-                onClick={() => setSelectedImage(resolveApiUrl(img.image_url))}
+                onClick={() => setSelectedImage(resolveApiUrl(img.image_url!))}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={resolveApiUrl(img.image_url)}
+                  src={resolveApiUrl(img.image_url!)}
                   alt="Base"
                   className="h-full w-full object-cover"
                 />
@@ -145,11 +145,11 @@ export default function CharacterSidebar({
                   <div
                     key={img.id}
                     className="relative aspect-[9/16] overflow-hidden rounded-lg border border-amber-500/30 cursor-pointer"
-                    onClick={() => setSelectedImage(resolveApiUrl(img.image_url))}
+                    onClick={() => setSelectedImage(resolveApiUrl(img.image_url!))}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={resolveApiUrl(img.image_url)}
+                      src={resolveApiUrl(img.image_url!)}
                       alt="Pending"
                       className="h-full w-full object-cover opacity-70"
                     />

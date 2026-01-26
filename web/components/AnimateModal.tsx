@@ -14,7 +14,6 @@ interface AnimateModalProps {
   characterId: string;
   onClose: () => void;
   onVideoCreated: () => void;
-  onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
 }
 
 type ModalState = "analyzing" | "ready" | "generating" | "success" | "error";
@@ -24,7 +23,6 @@ export default function AnimateModal({
   characterId,
   onClose,
   onVideoCreated,
-  onTaskStarted,
 }: AnimateModalProps) {
   const [state, setState] = useState<ModalState>("analyzing");
   const [analysis, setAnalysis] = useState<AnalyzeImageResponse | null>(null);
@@ -58,18 +56,8 @@ export default function AnimateModal({
       return;
     }
 
-    // Create a task and notify parent immediately, then close
-    if (onTaskStarted) {
-      const taskId = `animate-${Date.now()}`;
-      onTaskStarted({
-        task_id: taskId,
-        prompt: prompt.trim(),
-        reference_image_url: image.image_url,
-      });
-    }
-
-    // Close modal immediately after task submission
-    onClose();
+    setState("generating");
+    setError(null);
 
     try {
       const result = await animateImage({
@@ -80,12 +68,17 @@ export default function AnimateModal({
       });
 
       if (result.success && result.video_url) {
+        // Success - show video preview and notify parent
+        setVideoUrl(result.video_url);
+        setState("success");
         onVideoCreated();
       } else {
-        console.error("Video generation failed:", result.message);
+        setError(result.message || "Video generation failed");
+        setState("error");
       }
     } catch (err) {
-      console.error("Video generation failed:", err);
+      setError(err instanceof Error ? err.message : "Video generation failed");
+      setState("error");
     }
   };
 
@@ -135,7 +128,7 @@ export default function AnimateModal({
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={resolveApiUrl(image.image_url)}
+                    src={image.image_url ? resolveApiUrl(image.image_url) : ""}
                     alt="Source"
                     className="h-full w-full object-cover"
                   />
