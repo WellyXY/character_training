@@ -1,0 +1,1 @@
+"""Character Training Backend Application."""

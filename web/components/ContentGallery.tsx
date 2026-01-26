@@ -1,0 +1,1200 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import type { Image, Video, GenerationTask } from "@/lib/types";
+import { resolveApiUrl, retryImage, retryVideo } from "@/lib/api";
+import AnimateModal from "./AnimateModal";
+import ImageEditPanel from "./ImageEditPanel";
+
+interface ContentGalleryProps {
+  images: Image[];
+  videos: Video[];
+  activeTasks?: GenerationTask[];
+  onDeleteImage: (imageId: string) => Promise<void>;
+  onDeleteVideo: (videoId: string) => Promise<void>;
+  loading: boolean;
+  characterId?: string | null;
+  onVideoCreated?: () => void;
+  onRefresh?: () => void;
+  onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
+}
+
+type TabType = "all" | "base" | "images" | "videos";
+
+export default function ContentGallery({
+  images,
+  videos,
+  activeTasks = [],
+  onDeleteImage,
+  onDeleteVideo,
+  loading,
+  characterId,
+  onVideoCreated,
+  onRefresh,
+  onTaskStarted,
+}: ContentGalleryProps) {
+  const [activeTab, setActiveTab] = useState<TabType>("all");
+  const [selectedItem, setSelectedItem] = useState<{
+    type: "image" | "video";
+    url: string;
+    prompt?: string;
+    image?: Image;
+    video?: Video;
+    editMode?: boolean;
+  } | null>(null);
+  const [animatingImage, setAnimatingImage] = useState<Image | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  // Helper function to get readable aspect ratio
+  const getAspectRatio = (width: number, height: number): string => {
+    const ratio = width / height;
+    // Common aspect ratios with tolerance
+    const commonRatios = [
+      { w: 9, h: 16, label: "9:16" },
+      { w: 16, h: 9, label: "16:9" },
+      { w: 1, h: 1, label: "1:1" },
+      { w: 4, h: 3, label: "4:3" },
+      { w: 3, h: 4, label: "3:4" },
+      { w: 3, h: 2, label: "3:2" },
+      { w: 2, h: 3, label: "2:3" },
+      { w: 21, h: 9, label: "21:9" },
+    ];
+
+    for (const common of commonRatios) {
+      const commonRatio = common.w / common.h;
+      if (Math.abs(ratio - commonRatio) < 0.05) {
+        return common.label;
+      }
+    }
+
+    // Fallback: show decimal ratio
+    return ratio > 1
+      ? `${ratio.toFixed(2)}:1`
+      : `1:${(1/ratio).toFixed(2)}`;
+  };
+
+  // Sort images and videos by creation time (newest first)
+  const sortedImages = useMemo(
+    () => [...images].sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ),
+    [images]
+  );
+
+  const sortedVideos = useMemo(
+    () => [...videos].sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ),
+    [videos]
+  );
+
+  // Filter images by type (from sorted list)
+  const baseImages = sortedImages.filter((img) => img.type === "base");
+  const contentImages = sortedImages.filter((img) => img.type !== "base");
+
+  // Combined and sorted list for "all" tab (images + videos sorted by created_at)
+  type ContentItem = { type: "image"; data: Image } | { type: "video"; data: Video };
+  const allContentSorted = useMemo<ContentItem[]>(() => {
+    const items: ContentItem[] = [
+      ...images.map((img): ContentItem => ({ type: "image", data: img })),
+      ...videos.map((vid): ContentItem => ({ type: "video", data: vid })),
+    ];
+    return items.sort((a, b) =>
+      new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime()
+    );
+  }, [images, videos]);
+
+  // Filter active tasks (pending or generating)
+  const pendingTasks = activeTasks.filter(
+    (t) => t.status === "pending" || t.status === "generating"
+  );
+
+  const tabs: { key: TabType; label: string; count: number }[] = [
+    { key: "all", label: "All", count: sortedImages.length + sortedVideos.length + pendingTasks.length },
+    { key: "base", label: "Base", count: baseImages.length },
+    { key: "images", label: "Content", count: contentImages.length },
+    { key: "videos", label: "Videos", count: sortedVideos.length },
+  ];
+
+  const handleRetryImage = async (imageId: string) => {
+    if (loading) return;
+    const retryKey = `image:${imageId}`;
+    setRetryingId(retryKey);
+    try {
+      await retryImage(imageId);
+      await onRefresh?.();
+    } catch (err) {
+      console.error("Retry image failed:", err);
+      const message = err instanceof Error ? err.message : "Retry failed";
+      alert(message);
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleRetryVideo = async (videoId: string) => {
+    if (loading) return;
+    const retryKey = `video:${videoId}`;
+    setRetryingId(retryKey);
+    try {
+      await retryVideo(videoId);
+      await onRefresh?.();
+    } catch (err) {
+      console.error("Retry video failed:", err);
+      const message = err instanceof Error ? err.message : "Retry failed";
+      alert(message);
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  return (
+    <section className="flex flex-col rounded-2xl border border-[#333] bg-[#111] p-4 h-full overflow-hidden">
+      {/* Header */}
+      <div className="mb-4">
+        <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
+          Gallery
+        </p>
+        <h2 className="text-lg font-semibold">Generated Content</h2>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-row gap-2 mb-4">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold font-mono uppercase tracking-wide transition-colors ${
+                isActive
+                  ? "bg-white text-black"
+                  : "bg-[#1a1a1a] text-gray-400 border border-[#333] hover:text-white"
+              }`}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content Grid */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {sortedImages.length === 0 && sortedVideos.length === 0 && pendingTasks.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-gray-400">
+            <p className="text-sm">No content generated yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {/* Generating Tasks */}
+            {activeTab === "all" &&
+              pendingTasks.map((task) => (
+                <div
+                  key={task.task_id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  {/* Reference Image Preview (if available) */}
+                  {task.reference_image_url && (
+                    <div className="absolute inset-0 opacity-30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={resolveApiUrl(task.reference_image_url)}
+                        alt="Reference"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* Content */}
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    {/* Spinner */}
+                    <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+
+                    {/* Status */}
+                    <p className="text-sm font-medium text-blue-400 mb-1">
+                      {task.stage || (task.status === "pending" ? "Queued..." : "Generating...")}
+                    </p>
+
+                    {/* Progress Bar */}
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-300"
+                        style={{ width: `${task.progress}%` }}
+                      />
+                    </div>
+
+                    {/* Prompt Preview */}
+                    {task.prompt && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2">
+                        {task.prompt}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      Generating
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+            {/* All Content (sorted by time) */}
+            {activeTab === "all" &&
+              allContentSorted.map((item) =>
+                item.type === "image" ? (
+                  <div
+                    key={item.data.id}
+                    className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                    onClick={() =>
+                      setSelectedItem({
+                        type: "image",
+                        url: resolveApiUrl(item.data.image_url),
+                        prompt: item.data.metadata?.prompt,
+                        image: item.data,
+                      })
+                    }
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={resolveApiUrl(item.data.image_url)}
+                      alt="Generated"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
+                      {item.data.metadata?.prompt && (
+                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                          {item.data.metadata.prompt}
+                        </p>
+                      )}
+                      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                        {characterId && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedItem({
+                                type: "image",
+                                url: resolveApiUrl(item.data.image_url),
+                                prompt: item.data.metadata?.prompt,
+                                image: item.data,
+                                editMode: true,
+                              });
+                            }}
+                            disabled={loading}
+                            style={{
+                              flex: 1, padding: "4px 8px", borderRadius: "4px",
+                              backgroundColor: "rgba(147, 51, 234, 0.8)", color: "#fff",
+                              fontSize: "12px", border: "none",
+                              cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {characterId && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setAnimatingImage(item.data); }}
+                            disabled={loading}
+                            style={{
+                              flex: 1, padding: "4px 8px", borderRadius: "4px",
+                              backgroundColor: "rgba(59, 130, 246, 0.8)", color: "#fff",
+                              fontSize: "12px", border: "none",
+                              cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
+                            }}
+                          >
+                            Animate
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleRetryImage(item.data.id); }}
+                          disabled={loading || retryingId === `image:${item.data.id}`}
+                          style={{
+                            flex: 1, padding: "4px 8px", borderRadius: "4px",
+                            backgroundColor: "rgba(245, 158, 11, 0.85)", color: "#111",
+                            fontSize: "12px", border: "none",
+                            cursor: loading || retryingId === `image:${item.data.id}` ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          {retryingId === `image:${item.data.id}` ? "Retrying..." : "Retry"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteImage(item.data.id); }}
+                          disabled={loading}
+                          style={{
+                            flex: 1, padding: "4px 8px", borderRadius: "4px",
+                            backgroundColor: "rgba(239, 68, 68, 0.8)", color: "#fff",
+                            fontSize: "12px", border: "none",
+                            cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <div className="absolute top-2 left-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] text-white backdrop-blur-sm ${
+                        item.data.type === "base" ? "bg-green-500/50" : "bg-white/20"
+                      }`}>
+                        {item.data.type === "base" ? "Base" : item.data.type === "content" ? "Content" : item.data.type}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    key={item.data.id}
+                    className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                    onClick={() =>
+                      setSelectedItem({
+                        type: "video",
+                        url: resolveApiUrl(item.data.video_url),
+                        prompt: item.data.metadata?.prompt,
+                        video: item.data,
+                      })
+                    }
+                  >
+                    {item.data.thumbnail_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={resolveApiUrl(item.data.thumbnail_url)} alt="Video thumbnail" className="h-full w-full object-cover" />
+                    ) : (
+                      <video src={resolveApiUrl(item.data.video_url)} className="h-full w-full object-cover" muted />
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:opacity-50 transition-opacity">
+                        <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
+                      {item.data.metadata?.prompt && (
+                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">{item.data.metadata.prompt}</p>
+                      )}
+                      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleRetryVideo(item.data.id); }}
+                          disabled={loading || retryingId === `video:${item.data.id}`}
+                          style={{
+                            flex: 1, padding: "4px 8px", borderRadius: "4px",
+                            backgroundColor: "rgba(245, 158, 11, 0.85)", color: "#111",
+                            fontSize: "12px", border: "none",
+                            cursor: loading || retryingId === `video:${item.data.id}` ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          {retryingId === `video:${item.data.id}` ? "Retrying..." : "Retry"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteVideo(item.data.id); }}
+                          disabled={loading}
+                          style={{
+                            flex: 1, padding: "4px 8px", borderRadius: "4px",
+                            backgroundColor: "rgba(239, 68, 68, 0.8)", color: "#fff",
+                            fontSize: "12px", border: "none",
+                            cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <div className="absolute top-2 left-2">
+                      <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">{item.data.type}</span>
+                    </div>
+                    {item.data.status !== "completed" && (
+                      <div className="absolute top-2 right-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] backdrop-blur-sm ${
+                          item.data.status === "processing" ? "bg-amber-500/50 text-white"
+                            : item.data.status === "failed" ? "bg-red-500/50 text-white" : "bg-gray-500/50 text-white"
+                        }`}>{item.data.status}</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
+
+            {/* Base Images (only for base tab) */}
+            {activeTab === "base" &&
+              baseImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                  onClick={() =>
+                    setSelectedItem({
+                      type: "image",
+                      url: resolveApiUrl(img.image_url),
+                      prompt: img.metadata?.prompt,
+                      image: img,
+                    })
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveApiUrl(img.image_url)}
+                    alt="Base"
+                    className="h-full w-full object-cover"
+                  />
+
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
+                    {img.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                        {img.metadata.prompt}
+                      </p>
+                    )}
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      {characterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedItem({
+                              type: "image",
+                              url: resolveApiUrl(img.image_url),
+                              prompt: img.metadata?.prompt,
+                              image: img,
+                              editMode: true,
+                            });
+                          }}
+                          disabled={loading}
+                          style={{
+                            flex: 1,
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(147, 51, 234, 0.8)",
+                            color: "#fff",
+                            fontSize: "12px",
+                            border: "none",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {characterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAnimatingImage(img);
+                          }}
+                          disabled={loading}
+                          style={{
+                            flex: 1,
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(59, 130, 246, 0.8)",
+                            color: "#fff",
+                            fontSize: "12px",
+                            border: "none",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          Animate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryImage(img.id);
+                        }}
+                        disabled={loading || retryingId === `image:${img.id}`}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(245, 158, 11, 0.85)",
+                          color: "#111",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading || retryingId === `image:${img.id}` ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteImage(img.id);
+                        }}
+                        disabled={loading}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(239, 68, 68, 0.8)",
+                          color: "#fff",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Type Badge - Green for Base */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-full bg-green-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                      Base
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+            {/* Content Images (only for images tab) */}
+            {activeTab === "images" &&
+              contentImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                  onClick={() =>
+                    setSelectedItem({
+                      type: "image",
+                      url: resolveApiUrl(img.image_url),
+                      prompt: img.metadata?.prompt,
+                      image: img,
+                    })
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveApiUrl(img.image_url)}
+                    alt="Generated"
+                    className="h-full w-full object-cover"
+                  />
+
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
+                    {img.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                        {img.metadata.prompt}
+                      </p>
+                    )}
+                    {!img.metadata?.prompt && img.metadata?.style && (
+                      <span className="text-[10px] text-gray-300 mb-1">
+                        {img.metadata.style}
+                      </span>
+                    )}
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      {characterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedItem({
+                              type: "image",
+                              url: resolveApiUrl(img.image_url),
+                              prompt: img.metadata?.prompt,
+                              image: img,
+                              editMode: true,
+                            });
+                          }}
+                          disabled={loading}
+                          style={{
+                            flex: 1,
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(147, 51, 234, 0.8)",
+                            color: "#fff",
+                            fontSize: "12px",
+                            border: "none",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {characterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAnimatingImage(img);
+                          }}
+                          disabled={loading}
+                          style={{
+                            flex: 1,
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(59, 130, 246, 0.8)",
+                            color: "#fff",
+                            fontSize: "12px",
+                            border: "none",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          Animate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryImage(img.id);
+                        }}
+                        disabled={loading || retryingId === `image:${img.id}`}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(245, 158, 11, 0.85)",
+                          color: "#111",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading || retryingId === `image:${img.id}` ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteImage(img.id);
+                        }}
+                        disabled={loading}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(239, 68, 68, 0.8)",
+                          color: "#fff",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                      {img.type === "content" ? "Content" : img.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+            {/* Videos (only for videos tab) */}
+            {activeTab === "videos" &&
+              sortedVideos.map((video) => (
+                <div
+                  key={video.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                  onClick={() =>
+                    setSelectedItem({
+                      type: "video",
+                      url: resolveApiUrl(video.video_url),
+                      prompt: video.metadata?.prompt,
+                      video: video,
+                    })
+                  }
+                >
+                  {video.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={resolveApiUrl(video.thumbnail_url)}
+                      alt="Video thumbnail"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <video
+                      src={resolveApiUrl(video.video_url)}
+                      className="h-full w-full object-cover"
+                      muted
+                    />
+                  )}
+
+                  {/* Play Icon */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:opacity-50 transition-opacity">
+                      <svg
+                        className="w-6 h-6 text-white ml-1"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
+                    {video.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                        {video.metadata.prompt}
+                      </p>
+                    )}
+                    {!video.metadata?.prompt && video.duration && (
+                      <span className="text-[10px] text-gray-300 mb-1">
+                        {Math.round(video.duration)}s
+                      </span>
+                    )}
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryVideo(video.id);
+                        }}
+                        disabled={loading || retryingId === `video:${video.id}`}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(245, 158, 11, 0.85)",
+                          color: "#111",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading || retryingId === `video:${video.id}` ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        {retryingId === `video:${video.id}` ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteVideo(video.id);
+                        }}
+                        disabled={loading}
+                        style={{
+                          flex: 1,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(239, 68, 68, 0.8)",
+                          color: "#fff",
+                          fontSize: "12px",
+                          border: "none",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          pointerEvents: "auto",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                      {video.type}
+                    </span>
+                  </div>
+
+                  {/* Status Badge */}
+                  {video.status !== "completed" && (
+                    <div className="absolute top-2 right-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] backdrop-blur-sm ${
+                          video.status === "processing"
+                            ? "bg-amber-500/50 text-white"
+                            : video.status === "failed"
+                            ? "bg-red-500/50 text-white"
+                            : "bg-gray-500/50 text-white"
+                        }`}
+                      >
+                        {video.status}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {selectedItem && (
+        <div
+          className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+          onClick={() => setSelectedItem(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedItem(null)}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              width: "40px",
+              height: "40px",
+              borderRadius: "9999px",
+              backgroundColor: "rgba(255,255,255,0.1)",
+              color: "#fff",
+              fontSize: "20px",
+              border: "none",
+              cursor: "pointer",
+              zIndex: 10,
+            }}
+          >
+            ×
+          </button>
+
+          {selectedItem.editMode && selectedItem.image ? (
+            /* Edit Mode: Split Layout */
+            <div
+              className="flex h-full w-full max-w-7xl mx-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left: Image Preview (60%) */}
+              <div className="flex-[6] flex flex-col items-center justify-center p-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selectedItem.url}
+                  alt="Source"
+                  className="max-h-[80vh] max-w-full object-contain rounded-lg"
+                />
+                {selectedItem.prompt && (
+                  <div className="mt-4 max-w-xl w-full bg-white/5 rounded-lg p-3 backdrop-blur-sm">
+                    <p className="text-xs text-gray-400 mb-1">Original Prompt</p>
+                    <p className="text-sm text-gray-200 whitespace-pre-wrap line-clamp-3">
+                      {selectedItem.prompt}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Edit Panel (40%) */}
+              <div className="flex-[4] h-full">
+                <ImageEditPanel
+                  sourceImage={selectedItem.image}
+                  characterId={characterId ?? null}
+                  onImageGenerated={() => {
+                    onRefresh?.();
+                  }}
+                  onClose={() => setSelectedItem(null)}
+                  onTaskStarted={onTaskStarted}
+                />
+              </div>
+            </div>
+          ) : (
+            /* Normal Mode: Horizontal Layout */
+            <div
+              className="flex flex-row w-full h-full max-w-6xl mx-auto gap-6 p-6 pt-16"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left: Media Preview */}
+              <div className="flex-1 flex flex-col items-center justify-center min-w-0 overflow-hidden">
+                {selectedItem.type === "image" ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={selectedItem.url}
+                      alt="Full size"
+                      className="max-h-[85vh] max-w-full object-contain rounded-lg"
+                    />
+                    {/* Edit Button in Preview Mode */}
+                    {selectedItem.image && characterId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedItem({
+                            ...selectedItem,
+                            editMode: true,
+                          })
+                        }
+                        style={{
+                          marginTop: "16px",
+                          padding: "8px 24px",
+                          borderRadius: "8px",
+                          backgroundColor: "#9333ea",
+                          color: "#fff",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit with AI
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <video
+                    src={selectedItem.url}
+                    controls
+                    autoPlay
+                    className="max-h-[85vh] max-w-full rounded-lg"
+                  />
+                )}
+              </div>
+
+              {/* Right: Metadata Panel */}
+              <div className="w-80 flex-shrink-0 bg-[#1a1a1a] rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh-6rem)]">
+                <div className="p-4 border-b border-white/10 flex-shrink-0">
+                  <h3 className="text-sm font-semibold text-white">
+                    Details
+                  </h3>
+                </div>
+                <div className="p-4 overflow-y-auto flex-1">
+                  {selectedItem.type === "image" && selectedItem.image && (
+                    <div className="space-y-4">
+                      {/* Grid of basic info */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Resolution */}
+                        {(selectedItem.image.metadata?.width && selectedItem.image.metadata?.height) && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Resolution</p>
+                            <p className="text-sm text-gray-200">
+                              {selectedItem.image.metadata.width} x {selectedItem.image.metadata.height}
+                            </p>
+                          </div>
+                        )}
+                        {/* Ratio */}
+                        {selectedItem.image.metadata?.width && selectedItem.image.metadata?.height && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Ratio</p>
+                            <p className="text-sm text-gray-200">
+                              {getAspectRatio(selectedItem.image.metadata.width, selectedItem.image.metadata.height)}
+                            </p>
+                          </div>
+                        )}
+                        {/* Content Type */}
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Type</p>
+                          <p className="text-sm text-gray-200 capitalize">{selectedItem.image.type}</p>
+                        </div>
+                        {/* Style */}
+                        {selectedItem.image.metadata?.style && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Style</p>
+                            <p className="text-sm text-gray-200">{selectedItem.image.metadata.style}</p>
+                          </div>
+                        )}
+                        {/* Cloth */}
+                        {selectedItem.image.metadata?.cloth && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Cloth</p>
+                            <p className="text-sm text-gray-200">{selectedItem.image.metadata.cloth}</p>
+                          </div>
+                        )}
+                        {/* Steps */}
+                        {selectedItem.image.metadata?.steps && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Steps</p>
+                            <p className="text-sm text-gray-200">{selectedItem.image.metadata.steps}</p>
+                          </div>
+                        )}
+                        {/* Guidance Scale */}
+                        {selectedItem.image.metadata?.guidance_scale && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Guidance</p>
+                            <p className="text-sm text-gray-200">{selectedItem.image.metadata.guidance_scale}</p>
+                          </div>
+                        )}
+                        {/* Seed */}
+                        {selectedItem.image.metadata?.seed && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Seed</p>
+                            <p className="text-sm text-gray-200">{selectedItem.image.metadata.seed}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* User Reference Image */}
+                      {selectedItem.image.metadata?.user_reference_path && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Reference Image</p>
+                          <div className="relative group/ref inline-block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={resolveApiUrl(selectedItem.image.metadata.user_reference_path)}
+                              alt="Reference"
+                              className="w-20 h-20 object-cover rounded-md border border-white/20"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reference Images by ID (legacy) */}
+                      {selectedItem.image.metadata?.reference_image_ids && selectedItem.image.metadata.reference_image_ids.length > 0 && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Base Images</p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedItem.image.metadata.reference_image_ids.map((refId) => {
+                              const refImage = images.find(img => img.id === refId);
+                              return refImage ? (
+                                <div key={refId} className="relative group/ref">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={resolveApiUrl(refImage.image_url)}
+                                    alt="Reference"
+                                    className="w-16 h-16 object-cover rounded-md border border-white/20"
+                                  />
+                                  <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-[8px] text-center text-gray-300 py-0.5 rounded-b-md opacity-0 group-hover/ref:opacity-100 transition-opacity">
+                                    {refImage.type}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div key={refId} className="w-16 h-16 bg-white/10 rounded-md flex items-center justify-center">
+                                  <span className="text-[8px] text-gray-500 text-center px-1 break-all">{refId.slice(0, 8)}...</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Prompt */}
+                      {selectedItem.prompt && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Prompt</p>
+                          <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.prompt}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedItem.type === "video" && selectedItem.video && (
+                    <div className="space-y-4">
+                      {/* Grid of basic info */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Resolution */}
+                        {(selectedItem.video.metadata?.resolution || (selectedItem.video.metadata?.width && selectedItem.video.metadata?.height)) && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Resolution</p>
+                            <p className="text-sm text-gray-200">
+                              {selectedItem.video.metadata.resolution || `${selectedItem.video.metadata.width} x ${selectedItem.video.metadata.height}`}
+                            </p>
+                          </div>
+                        )}
+                        {/* Ratio */}
+                        {selectedItem.video.metadata?.width && selectedItem.video.metadata?.height && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Ratio</p>
+                            <p className="text-sm text-gray-200">
+                              {getAspectRatio(selectedItem.video.metadata.width, selectedItem.video.metadata.height)}
+                            </p>
+                          </div>
+                        )}
+                        {/* Content Type */}
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Type</p>
+                          <p className="text-sm text-gray-200 capitalize">
+                            {selectedItem.video.metadata?.content_type || selectedItem.video.type}
+                          </p>
+                        </div>
+                        {/* Model */}
+                        {selectedItem.video.metadata?.video_model && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Model</p>
+                            <p className="text-sm text-gray-200">{selectedItem.video.metadata.video_model}</p>
+                          </div>
+                        )}
+                        {/* Duration */}
+                        {(selectedItem.video.metadata?.duration || selectedItem.video.duration) && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Duration</p>
+                            <p className="text-sm text-gray-200">
+                              {Math.round(selectedItem.video.metadata?.duration || selectedItem.video.duration || 0)}s
+                            </p>
+                          </div>
+                        )}
+                        {/* Style */}
+                        {selectedItem.video.metadata?.style && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Style</p>
+                            <p className="text-sm text-gray-200">{selectedItem.video.metadata.style}</p>
+                          </div>
+                        )}
+                        {/* Cloth */}
+                        {selectedItem.video.metadata?.cloth && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Cloth</p>
+                            <p className="text-sm text-gray-200">{selectedItem.video.metadata.cloth}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Source Image with thumbnail */}
+                      {selectedItem.video.metadata?.source_image_id && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Reference Image</p>
+                          {(() => {
+                            const sourceImage = images.find(img => img.id === selectedItem.video?.metadata?.source_image_id);
+                            return sourceImage ? (
+                              <div className="relative group/ref inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={resolveApiUrl(sourceImage.image_url)}
+                                  alt="Source"
+                                  className="w-20 h-20 object-cover rounded-md border border-white/20"
+                                />
+                                <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-[8px] text-center text-gray-300 py-0.5 rounded-b-md opacity-0 group-hover/ref:opacity-100 transition-opacity">
+                                  {sourceImage.type}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="w-20 h-20 bg-white/10 rounded-md flex items-center justify-center">
+                                <span className="text-[8px] text-gray-500 text-center px-1 break-all">
+                                  {selectedItem.video?.metadata?.source_image_id?.slice(0, 8)}...
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Prompt */}
+                      {selectedItem.prompt && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Prompt</p>
+                          <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.prompt}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Fallback for items without full metadata */}
+                  {!selectedItem.image && !selectedItem.video && selectedItem.prompt && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Prompt</p>
+                      <p className="text-sm text-gray-200 whitespace-pre-wrap">{selectedItem.prompt}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Animate Modal */}
+      {animatingImage && characterId && (
+        <AnimateModal
+          image={animatingImage}
+          characterId={characterId}
+          onClose={() => setAnimatingImage(null)}
+          onVideoCreated={() => {
+            onVideoCreated?.();
+          }}
+          onTaskStarted={onTaskStarted}
+        />
+      )}
+    </section>
+  );
+}
