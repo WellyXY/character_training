@@ -96,37 +96,37 @@ function ConfirmationCard({
 
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-      <p className="text-xs uppercase tracking-widest text-amber-400 mb-3">
+      <p className="text-xs uppercase tracking-widest text-amber-400 mb-3 font-mono">
         Pending Confirmation
       </p>
 
       <div className="space-y-2 text-sm">
         {pending.params.style && (
           <div className="flex justify-between">
-            <span className="text-gray-400">Style</span>
-            <span className="text-white">
+            <span className="text-gray-400 font-mono uppercase tracking-wide">Style</span>
+            <span className="text-white font-mono">
               {STYLE_DISPLAY[pending.params.style] || pending.params.style}
             </span>
           </div>
         )}
         {pending.params.cloth && (
           <div className="flex justify-between">
-            <span className="text-gray-400">Outfit</span>
-            <span className="text-white">
+            <span className="text-gray-400 font-mono uppercase tracking-wide">Outfit</span>
+            <span className="text-white font-mono">
               {CLOTH_DISPLAY[pending.params.cloth] || pending.params.cloth}
             </span>
           </div>
         )}
         <div className="flex justify-between">
-          <span className="text-gray-400">Type</span>
-          <span className="text-white">
+          <span className="text-gray-400 font-mono uppercase tracking-wide">Type</span>
+          <span className="text-white font-mono">
             {pending.skill === "image_generator" ? "Image" : "Video"}
           </span>
         </div>
         {pending.params.reference_image_path && (
           <div className="pt-2 border-t border-white/10 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-gray-400 text-xs">Reference Image</span>
+              <span className="text-gray-400 text-xs font-mono uppercase tracking-wide">Reference Image</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={resolveApiUrl(pending.params.reference_image_path)}
@@ -136,8 +136,8 @@ function ConfirmationCard({
             </div>
             {pending.params.reference_image_mode && (
               <div className="flex justify-between">
-                <span className="text-gray-400 text-xs">Reference Mode</span>
-                <span className="text-xs text-amber-400">
+                <span className="text-gray-400 text-xs font-mono uppercase tracking-wide">Reference Mode</span>
+                <span className="text-xs text-amber-400 font-mono">
                   {REFERENCE_MODES.find(m => m.key === pending.params.reference_image_mode)?.label || pending.params.reference_image_mode}
                 </span>
               </div>
@@ -149,9 +149,9 @@ function ConfirmationCard({
       {/* Optimized Prompt - Editable */}
       <div className="mt-3 pt-3 border-t border-white/10">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-gray-400">Optimized Prompt</p>
+          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Optimized Prompt</p>
           {isPromptEdited && (
-            <span className="text-xs text-amber-400">Edited</span>
+            <span className="text-xs text-amber-400 font-mono uppercase tracking-wider">Edited</span>
           )}
         </div>
         <textarea
@@ -161,14 +161,14 @@ function ConfirmationCard({
             setIsPromptEdited(true);
           }}
           disabled={loading}
-          className="w-full text-xs text-gray-300 bg-black/30 rounded-lg p-2 h-24 resize-none border border-transparent focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+          className="w-full text-xs text-gray-300 bg-black/30 rounded-lg p-2 h-24 resize-none border border-transparent focus:border-amber-500/50 focus:outline-none disabled:opacity-50 font-mono"
           placeholder="Enter or edit prompt..."
         />
       </div>
 
       {/* Aspect Ratio Selector */}
       <div className="mt-3 pt-3 border-t border-white/10">
-        <p className="text-xs text-gray-400 mb-2">Aspect Ratio</p>
+        <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Aspect Ratio</p>
         <div className="flex gap-2">
           {ASPECT_RATIO_OPTIONS.map((option) => (
             <button
@@ -190,14 +190,14 @@ function ConfirmationCard({
 
       {/* AI Reasoning */}
       <div className="mt-3 pt-3 border-t border-white/10">
-        <p className="text-xs text-gray-400 mb-1">AI Reasoning</p>
-        <p className="text-sm text-gray-300">{pending.reasoning}</p>
+        <p className="text-xs text-gray-400 mb-1 font-mono uppercase tracking-wider">AI Reasoning</p>
+        <p className="text-sm text-gray-300 font-mono">{pending.reasoning}</p>
       </div>
 
       {/* Suggestions */}
       {pending.suggestions && pending.suggestions.length > 0 && (
         <div className="mt-3 pt-3 border-t border-white/10">
-          <p className="text-xs text-gray-400 mb-2">Quick Adjustments</p>
+          <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Quick Adjustments</p>
           <div className="flex flex-wrap gap-2">
             {pending.suggestions.map((suggestion, index) => (
               <button
@@ -287,9 +287,19 @@ export default function AgentChatPanel({
   // Apply initial reference URL from query parameter (once)
   useEffect(() => {
     if (initialReferenceUrl && !initialRefApplied) {
+      // Extract path from full URL if necessary (e.g., https://.../.../file.jpg -> /uploads/.../file.jpg)
+      let relativePath = initialReferenceUrl;
+      if (initialReferenceUrl.startsWith("http://") || initialReferenceUrl.startsWith("https://")) {
+        try {
+          const urlObj = new URL(initialReferenceUrl);
+          relativePath = urlObj.pathname;
+        } catch {
+          // If URL parsing fails, use as-is
+        }
+      }
       // Convert the relative URL to full URL for display
-      const fullUrl = resolveApiUrl(initialReferenceUrl);
-      setUploadedReferenceImage({ url: initialReferenceUrl, fullUrl });
+      const fullUrl = resolveApiUrl(relativePath);
+      setUploadedReferenceImage({ url: relativePath, fullUrl });
       setInitialRefApplied(true);
     }
   }, [initialReferenceUrl, initialRefApplied]);
@@ -385,15 +395,15 @@ export default function AgentChatPanel({
             <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
               Agent
             </p>
-            <h2 className="text-lg font-semibold">AI Assistant</h2>
+            <h2 className="text-lg font-semibold font-mono">AI Assistant</h2>
           </div>
           {getStateLabel() && (
-            <span className="text-xs text-amber-400 animate-pulse">
+            <span className="text-xs text-amber-400 animate-pulse font-mono uppercase tracking-wide">
               {getStateLabel()}
             </span>
           )}
         </div>
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-gray-400 font-mono">
           {characterName ? `Character: ${characterName}` : "Please select a character"}
         </p>
       </div>
@@ -403,8 +413,8 @@ export default function AgentChatPanel({
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <p className="text-sm text-gray-400 mb-2">Start a conversation</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-400 mb-2 font-mono">Start a conversation</p>
+              <p className="text-xs text-gray-500 font-mono">
                 Example: &quot;Generate a sexy beach photo for me&quot;
               </p>
             </div>
@@ -419,7 +429,7 @@ export default function AgentChatPanel({
                   : "bg-[#1a1a1a] text-gray-200 mr-8"
               }`}
             >
-              <p className="text-xs uppercase tracking-widest text-[#cbcbcb] mb-1">
+              <p className="text-xs uppercase tracking-widest text-[#cbcbcb] mb-1 font-mono">
                 {message.role === "user" ? "You" : "AI"}
               </p>
               {/* Reference Image Attachment */}
@@ -431,12 +441,12 @@ export default function AgentChatPanel({
                     alt="Reference"
                     className="w-24 h-24 object-cover rounded-lg border border-white/20"
                   />
-                  <p className="text-[10px] text-gray-400 mt-1">Reference Image</p>
+                  <p className="text-[10px] text-gray-400 mt-1 font-mono uppercase tracking-wider">Reference Image</p>
                 </div>
               )}
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p className="whitespace-pre-wrap font-mono">{message.content}</p>
               {message.actionTaken && (
-                <p className="mt-2 text-xs text-green-400">
+                <p className="mt-2 text-xs text-green-400 font-mono uppercase tracking-wide">
                   ✓ {message.actionTaken}
                 </p>
               )}
@@ -494,8 +504,8 @@ export default function AgentChatPanel({
                 className="w-12 h-12 object-cover rounded"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-400">Reference Image</p>
-                <p className="text-xs text-gray-300 truncate">
+                <p className="text-xs text-gray-400 font-mono uppercase tracking-wide">Reference Image</p>
+                <p className="text-xs text-gray-300 truncate font-mono">
                   {uploadedReferenceImage
                     ? "Uploaded"
                     : `${selectedReferenceImage!.type === "base" ? "Base" : "Content"} - ${selectedReferenceImage!.id.slice(0, 8)}`}
@@ -512,7 +522,7 @@ export default function AgentChatPanel({
 
             {/* Reference Mode Selector */}
             <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10">
-              <p className="text-xs text-gray-400 mb-2">Reference Mode</p>
+              <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Reference Mode</p>
               <div className="space-y-1">
                 {REFERENCE_MODES.map((mode) => (
                   <button
@@ -538,14 +548,14 @@ export default function AgentChatPanel({
                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         )}
                       </div>
-                      <span className="text-xs font-medium text-white">
+                      <span className="text-xs font-medium text-white font-mono uppercase tracking-wide">
                         {mode.label}
                         {mode.key === "pose_background" && (
                           <span className="ml-1 text-amber-400">(Recommended)</span>
                         )}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-500 ml-5 mt-0.5">
+                    <p className="text-[10px] text-gray-500 ml-5 mt-0.5 font-mono">
                       {mode.description}
                     </p>
                   </button>
@@ -559,12 +569,12 @@ export default function AgentChatPanel({
         {showImagePicker && (
           <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 max-h-48 overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-400">Select or upload a reference image</p>
+              <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Select or upload a reference image</p>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
+                className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50 font-mono uppercase tracking-wide"
               >
                 {uploading ? "Uploading..." : "+ Upload Image"}
               </button>
@@ -604,12 +614,12 @@ export default function AgentChatPanel({
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-xs text-gray-500 mb-2">No images available</p>
+                <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wide">No images available</p>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 font-mono uppercase tracking-wide"
                 >
                   {uploading ? "Uploading..." : "Upload reference image"}
                 </button>
@@ -663,7 +673,7 @@ export default function AgentChatPanel({
                 : "Enter a message..."
             }
             disabled={!characterName || loading}
-            className="flex-1 h-20 rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50"
+            className="flex-1 h-20 rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
           />
         </div>
         <div className="flex gap-2">

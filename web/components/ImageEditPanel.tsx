@@ -149,8 +149,8 @@ export default function ImageEditPanel({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[#333]">
         <div>
-          <h3 className="text-lg font-semibold text-white">AI Image Editor</h3>
-          <p className="text-xs text-gray-400">Describe the edit you want in natural language</p>
+          <h3 className="text-lg font-semibold text-white font-mono">AI Image Editor</h3>
+          <p className="text-xs text-gray-400 font-mono">Describe the edit you want in natural language</p>
         </div>
         <button
           onClick={onClose}
@@ -164,7 +164,7 @@ export default function ImageEditPanel({
 
       {/* Quick Edit Buttons */}
       <div className="p-3 border-b border-[#333]">
-        <p className="text-xs text-gray-500 mb-2">Quick edits</p>
+        <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Quick edits</p>
         <div className="flex flex-wrap gap-2">
           {QUICK_EDIT_BUTTONS.map((btn) => (
             <button
@@ -183,8 +183,8 @@ export default function ImageEditPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-gray-500 py-8">
-            <p className="text-sm">Enter the edit you want</p>
-            <p className="text-xs mt-1">For example: &quot;Change the background to a beach&quot;</p>
+            <p className="text-sm font-mono">Enter the edit you want</p>
+            <p className="text-xs mt-1 font-mono">For example: &quot;Change the background to a beach&quot;</p>
           </div>
         )}
 
@@ -200,7 +200,7 @@ export default function ImageEditPanel({
                   : "bg-white/10 text-gray-200"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-sm whitespace-pre-wrap font-mono">{msg.content}</p>
             </div>
           </div>
         ))}
@@ -210,15 +210,15 @@ export default function ImageEditPanel({
           <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] rounded-xl p-4 border border-blue-500/30">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm font-medium text-blue-400">Confirm Edit</span>
+              <span className="text-sm font-medium text-blue-400 font-mono uppercase tracking-wider">Confirm Edit</span>
             </div>
 
             {/* Optimized Prompt - Editable */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-gray-500">Optimized Prompt</p>
+                <p className="text-xs text-gray-500 font-mono uppercase tracking-wider">Optimized Prompt</p>
                 {isPromptEdited && (
-                  <span className="text-xs text-blue-400">Edited</span>
+                  <span className="text-xs text-blue-400 font-mono uppercase tracking-wider">Edited</span>
                 )}
               </div>
               <textarea
@@ -228,7 +228,7 @@ export default function ImageEditPanel({
                   setIsPromptEdited(true);
                 }}
                 disabled={isLoading}
-                className="w-full text-sm text-gray-300 bg-black/30 rounded-lg p-2 h-20 resize-none border border-transparent focus:border-blue-500/50 focus:outline-none disabled:opacity-50"
+                className="w-full text-sm text-gray-300 bg-black/30 rounded-lg p-2 h-20 resize-none border border-transparent focus:border-blue-500/50 focus:outline-none disabled:opacity-50 font-mono"
                 placeholder="Enter or edit prompt..."
               />
             </div>
@@ -236,7 +236,7 @@ export default function ImageEditPanel({
             {/* Edit Type */}
             {pendingEdit.params.edit_type && (
               <div className="mb-3">
-                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
                   {pendingEdit.params.edit_type}
                 </span>
               </div>
@@ -244,7 +244,7 @@ export default function ImageEditPanel({
 
             {/* Aspect Ratio Selection */}
             <div className="mb-4">
-              <p className="text-xs text-gray-500 mb-2">Output Aspect Ratio</p>
+              <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Output Aspect Ratio</p>
               <div className="flex gap-2">
                 {["9:16", "1:1", "16:9"].map((ratio) => (
                   <button
@@ -265,7 +265,7 @@ export default function ImageEditPanel({
             {/* Suggestions */}
             {pendingEdit.suggestions.length > 0 && (
               <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2">Other suggestions</p>
+                <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Other suggestions</p>
                 <div className="flex flex-wrap gap-2">
                   {pendingEdit.suggestions.map((suggestion, idx) => (
                     <button
@@ -318,7 +318,7 @@ export default function ImageEditPanel({
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Describe the edit you want..."
             disabled={isLoading}
-            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 disabled:opacity-50"
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 disabled:opacity-50 font-mono"
           />
           <button
             type="submit"

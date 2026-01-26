@@ -162,21 +162,11 @@ function SamplesContent() {
       {/* Error Banner */}
       {(error || uploadError) && (
         <div className="fixed top-14 left-0 right-0 z-40 bg-red-500/20 border-b border-red-500/30 px-4 py-2">
-          <p className="text-sm text-red-300 text-center">{error || uploadError}</p>
+          <p className="text-sm text-red-300 text-center font-mono">{error || uploadError}</p>
           <button
             type="button"
             onClick={() => { setError(null); setUploadError(null); }}
-            style={{
-              position: "absolute",
-              right: "16px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#fca5a5",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "18px",
-            }}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-red-300 text-lg hover:text-red-200"
           >
             ×
           </button>
@@ -194,7 +184,7 @@ function SamplesContent() {
               <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
                 Add Sample
               </p>
-              <h2 className="text-lg font-semibold mb-3">Upload</h2>
+              <h2 className="text-lg font-semibold font-mono mb-3">Upload</h2>
 
               {/* Hidden file input */}
               <input
@@ -220,7 +210,7 @@ function SamplesContent() {
                 <svg className="w-8 h-8 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="text-xs text-gray-400">Drop file or click</p>
+                <p className="text-xs text-gray-400 font-mono">Drop file or click</p>
               </div>
 
               {/* Instagram URL Input */}
@@ -231,7 +221,7 @@ function SamplesContent() {
                   value={instagramUrl}
                   onChange={(e) => setInstagramUrl(e.target.value)}
                   disabled={uploading}
-                  className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50"
+                  className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
                 />
                 <input
                   type="text"
@@ -239,23 +229,13 @@ function SamplesContent() {
                   value={uploadTags}
                   onChange={(e) => setUploadTags(e.target.value)}
                   disabled={uploading}
-                  className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50"
+                  className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
                 />
                 <button
                   type="button"
                   onClick={handleImportUrl}
                   disabled={uploading || !instagramUrl.trim()}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    backgroundColor: uploading || !instagramUrl.trim() ? "rgba(255,255,255,0.5)" : "#fff",
-                    color: "#000",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: uploading || !instagramUrl.trim() ? "not-allowed" : "pointer",
-                  }}
+                  className="w-full rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:bg-white/50 disabled:cursor-not-allowed disabled:hover:bg-white/50"
                 >
                   {uploading ? "Importing..." : "Import"}
                 </button>
@@ -270,7 +250,7 @@ function SamplesContent() {
               <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
                 Filters
               </p>
-              <h2 className="text-lg font-semibold mb-3">Browse</h2>
+              <h2 className="text-lg font-semibold font-mono mb-3">Browse</h2>
 
               {/* Search */}
               <input
@@ -278,12 +258,12 @@ function SamplesContent() {
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none mb-3"
+                className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none mb-3 font-mono"
               />
 
               {/* Type Filter */}
-              <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>Type</p>
-              <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <p className="text-xs text-gray-400 font-mono uppercase tracking-widest mb-2">Type</p>
+              <div className="flex gap-2 mb-4">
                 {(["all", "image", "video"] as FilterType[]).map((type) => {
                   const isActive = filterType === type;
                   return (
@@ -291,17 +271,11 @@ function SamplesContent() {
                       key={type}
                       type="button"
                       onClick={() => setFilterType(type)}
-                      style={{
-                        flex: 1,
-                        padding: "6px 8px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        backgroundColor: isActive ? "#fff" : "transparent",
-                        color: isActive ? "#000" : "#d1d5db",
-                        border: isActive ? "none" : "1px solid #333",
-                        cursor: "pointer",
-                      }}
+                      className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                        isActive
+                          ? "bg-white text-black border-transparent"
+                          : "bg-transparent text-gray-300 border-[#333] hover:text-white"
+                      }`}
                     >
                       {type === "all" ? "All" : type === "image" ? "Image" : "Video"}
                     </button>
@@ -312,20 +286,16 @@ function SamplesContent() {
               {/* Tags */}
               {allTags.length > 0 && (
                 <>
-                  <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>Tags</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  <p className="text-xs text-gray-400 font-mono uppercase tracking-widest mb-2">Tags</p>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => setSelectedTag(null)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "9999px",
-                        fontSize: "12px",
-                        backgroundColor: selectedTag === null ? "#fff" : "transparent",
-                        color: selectedTag === null ? "#000" : "#9ca3af",
-                        border: selectedTag === null ? "none" : "1px solid #333",
-                        cursor: "pointer",
-                      }}
+                      className={`rounded-full border px-2 py-1 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                        selectedTag === null
+                          ? "bg-white text-black border-transparent"
+                          : "bg-transparent text-gray-400 border-[#333] hover:text-white"
+                      }`}
                     >
                       All
                     </button>
@@ -336,15 +306,11 @@ function SamplesContent() {
                           key={tag}
                           type="button"
                           onClick={() => setSelectedTag(isActive ? null : tag)}
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "9999px",
-                            fontSize: "12px",
-                            backgroundColor: isActive ? "#fff" : "transparent",
-                            color: isActive ? "#000" : "#9ca3af",
-                            border: isActive ? "none" : "1px solid #333",
-                            cursor: "pointer",
-                          }}
+                          className={`rounded-full border px-2 py-1 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                            isActive
+                              ? "bg-white text-black border-transparent"
+                              : "bg-transparent text-gray-400 border-[#333] hover:text-white"
+                          }`}
                         >
                           {tag}
                         </button>
@@ -362,7 +328,7 @@ function SamplesContent() {
               <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
                 Gallery
               </p>
-              <h2 className="text-lg font-semibold">Reference Content</h2>
+              <h2 className="text-lg font-semibold font-mono">Reference Content</h2>
             </div>
 
             {/* Gallery Grid */}
@@ -374,8 +340,8 @@ function SamplesContent() {
               ) : filteredSamples.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-gray-400">
                   <div className="text-center">
-                    <p className="text-sm mb-2">No samples found</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm mb-2 font-mono">No samples found</p>
+                    <p className="text-xs text-gray-500 font-mono">
                       {searchQuery || selectedTag || filterType !== "all"
                         ? "Try adjusting filters"
                         : "Upload or import samples to get started"}
@@ -408,20 +374,7 @@ function SamplesContent() {
           <button
             type="button"
             onClick={() => setSelectedSample(null)}
-            style={{
-              position: "absolute",
-              top: "16px",
-              right: "16px",
-              width: "40px",
-              height: "40px",
-              borderRadius: "9999px",
-              backgroundColor: "rgba(255,255,255,0.1)",
-              color: "#fff",
-              fontSize: "20px",
-              border: "none",
-              cursor: "pointer",
-              zIndex: 10,
-            }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 z-10"
           >
             ×
           </button>
@@ -457,13 +410,13 @@ function SamplesContent() {
                   {selectedSample.creator_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="font-medium text-white">@{selectedSample.creator_name}</p>
+                  <p className="font-mono font-medium text-white">@{selectedSample.creator_name}</p>
                   {selectedSample.source_url !== "uploaded" && (
                     <a
                       href={selectedSample.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-gray-400 hover:text-white"
+                      className="text-xs text-gray-400 hover:text-white font-mono"
                     >
                       View original
                     </a>
@@ -474,8 +427,8 @@ function SamplesContent() {
               {/* Caption */}
               {selectedSample.caption && (
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-1">Caption</p>
-                  <p className="text-sm text-gray-300 whitespace-pre-wrap line-clamp-4">
+                  <p className="text-xs text-gray-500 mb-1 font-mono uppercase tracking-wider">Caption</p>
+                  <p className="text-sm text-gray-300 whitespace-pre-wrap line-clamp-4 font-mono">
                     {selectedSample.caption}
                   </p>
                 </div>
@@ -484,12 +437,12 @@ function SamplesContent() {
               {/* Tags */}
               {selectedSample.tags.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">Tags</p>
+                  <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Tags</p>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedSample.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 rounded-full border border-[#333] text-xs text-gray-400"
+                        className="px-2 py-1 rounded-full border border-[#333] text-xs text-gray-400 font-mono"
                       >
                         {tag}
                       </span>
@@ -505,17 +458,7 @@ function SamplesContent() {
               <button
                 type="button"
                 onClick={() => handleApply(selectedSample)}
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: "8px",
-                  backgroundColor: "#fff",
-                  color: "#000",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                className="w-full rounded-lg bg-white px-4 py-3 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
               >
                 Apply as Reference
               </button>
@@ -531,7 +474,7 @@ export default function SamplesPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <span className="text-amber-400 animate-pulse">Loading...</span>
+        <span className="text-amber-400 animate-pulse font-mono">Loading...</span>
       </div>
     }>
       <SamplesContent />

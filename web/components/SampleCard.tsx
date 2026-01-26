@@ -61,7 +61,7 @@ export default function SampleCard({
           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] text-white font-bold">
             {sample.creator_name.charAt(0).toUpperCase()}
           </div>
-          <span className="text-xs text-white font-medium truncate">
+          <span className="text-xs text-white font-medium truncate font-mono">
             @{sample.creator_name}
           </span>
         </div>
@@ -74,7 +74,7 @@ export default function SampleCard({
               {sample.tags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] text-white backdrop-blur-sm"
+                  className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide"
                 >
                   {tag}
                 </span>
@@ -89,18 +89,7 @@ export default function SampleCard({
               e.stopPropagation();
               onApply(sample);
             }}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              background: "linear-gradient(to right, #9333ea, #db2777)",
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: 500,
-              border: "none",
-              cursor: "pointer",
-              pointerEvents: "auto",
-            }}
+            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:from-purple-500 hover:to-pink-500 pointer-events-auto"
           >
             Apply
           </button>
@@ -112,7 +101,7 @@ export default function SampleCard({
         <span
           className={`rounded-full px-2 py-0.5 text-[10px] text-white backdrop-blur-sm ${
             isVideo ? "bg-blue-500/50" : "bg-green-500/50"
-          }`}
+          } font-mono uppercase tracking-wide`}
         >
           {isVideo ? "Video" : "Image"}
         </span>
@@ -120,7 +109,7 @@ export default function SampleCard({
 
       {/* Caption Preview (visible without hover) */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 group-hover:opacity-0 transition-opacity">
-        <span className="text-xs text-white font-medium">
+        <span className="text-xs text-white font-medium font-mono">
           @{sample.creator_name}
         </span>
       </div>

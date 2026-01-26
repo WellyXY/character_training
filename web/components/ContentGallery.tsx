@@ -155,7 +155,7 @@ export default function ContentGallery({
         <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
           Gallery
         </p>
-        <h2 className="text-lg font-semibold">Generated Content</h2>
+        <h2 className="text-lg font-semibold font-mono">Generated Content</h2>
       </div>
 
       {/* Tabs */}
@@ -183,7 +183,7 @@ export default function ContentGallery({
       <div className="flex-1 overflow-y-auto min-h-0">
         {sortedImages.length === 0 && sortedVideos.length === 0 && pendingTasks.length === 0 ? (
           <div className="flex h-full items-center justify-center text-gray-400">
-            <p className="text-sm">No content generated yet</p>
+            <p className="text-sm font-mono">No content generated yet</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -212,7 +212,7 @@ export default function ContentGallery({
                     <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
 
                     {/* Status */}
-                    <p className="text-sm font-medium text-blue-400 mb-1">
+                    <p className="text-sm font-medium text-blue-400 mb-1 font-mono uppercase tracking-wide">
                       {task.stage || (task.status === "pending" ? "Queued..." : "Generating...")}
                     </p>
 
@@ -226,7 +226,7 @@ export default function ContentGallery({
 
                     {/* Prompt Preview */}
                     {task.prompt && (
-                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2">
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
                         {task.prompt}
                       </p>
                     )}
@@ -234,7 +234,7 @@ export default function ContentGallery({
 
                   {/* Type Badge */}
                   <div className="absolute top-2 left-2">
-                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       Generating
                     </span>
@@ -266,11 +266,11 @@ export default function ContentGallery({
                     />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
                       {item.data.metadata?.prompt && (
-                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">
                           {item.data.metadata.prompt}
                         </p>
                       )}
-                      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      <div className="flex gap-2 mt-2">
                         {characterId && (
                           <button
                             type="button"
@@ -285,12 +285,7 @@ export default function ContentGallery({
                               });
                             }}
                             disabled={loading}
-                            style={{
-                              flex: 1, padding: "4px 8px", borderRadius: "4px",
-                              backgroundColor: "rgba(147, 51, 234, 0.8)", color: "#fff",
-                              fontSize: "12px", border: "none",
-                              cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
-                            }}
+                            className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
                             Edit
                           </button>
@@ -300,12 +295,7 @@ export default function ContentGallery({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setAnimatingImage(item.data); }}
                             disabled={loading}
-                            style={{
-                              flex: 1, padding: "4px 8px", borderRadius: "4px",
-                              backgroundColor: "rgba(59, 130, 246, 0.8)", color: "#fff",
-                              fontSize: "12px", border: "none",
-                              cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
-                            }}
+                            className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
                             Animate
                           </button>
@@ -314,13 +304,7 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleRetryImage(item.data.id); }}
                           disabled={loading || retryingId === `image:${item.data.id}`}
-                          style={{
-                            flex: 1, padding: "4px 8px", borderRadius: "4px",
-                            backgroundColor: "rgba(245, 158, 11, 0.85)", color: "#111",
-                            fontSize: "12px", border: "none",
-                            cursor: loading || retryingId === `image:${item.data.id}` ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           {retryingId === `image:${item.data.id}` ? "Retrying..." : "Retry"}
                         </button>
@@ -328,12 +312,7 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteImage(item.data.id); }}
                           disabled={loading}
-                          style={{
-                            flex: 1, padding: "4px 8px", borderRadius: "4px",
-                            backgroundColor: "rgba(239, 68, 68, 0.8)", color: "#fff",
-                            fontSize: "12px", border: "none",
-                            cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Delete
                         </button>
@@ -342,7 +321,7 @@ export default function ContentGallery({
                     <div className="absolute top-2 left-2">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] text-white backdrop-blur-sm ${
                         item.data.type === "base" ? "bg-green-500/50" : "bg-white/20"
-                      }`}>
+                      } font-mono uppercase tracking-wide`}>
                         {item.data.type === "base" ? "Base" : item.data.type === "content" ? "Content" : item.data.type}
                       </span>
                     </div>
@@ -373,20 +352,14 @@ export default function ContentGallery({
                     </div>
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
                       {item.data.metadata?.prompt && (
-                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">{item.data.metadata.prompt}</p>
+                        <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">{item.data.metadata.prompt}</p>
                       )}
-                      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      <div className="flex gap-2 mt-2">
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleRetryVideo(item.data.id); }}
                           disabled={loading || retryingId === `video:${item.data.id}`}
-                          style={{
-                            flex: 1, padding: "4px 8px", borderRadius: "4px",
-                            backgroundColor: "rgba(245, 158, 11, 0.85)", color: "#111",
-                            fontSize: "12px", border: "none",
-                            cursor: loading || retryingId === `video:${item.data.id}` ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           {retryingId === `video:${item.data.id}` ? "Retrying..." : "Retry"}
                         </button>
@@ -394,26 +367,21 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteVideo(item.data.id); }}
                           disabled={loading}
-                          style={{
-                            flex: 1, padding: "4px 8px", borderRadius: "4px",
-                            backgroundColor: "rgba(239, 68, 68, 0.8)", color: "#fff",
-                            fontSize: "12px", border: "none",
-                            cursor: loading ? "not-allowed" : "pointer", pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Delete
                         </button>
                       </div>
                     </div>
                     <div className="absolute top-2 left-2">
-                      <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">{item.data.type}</span>
+                      <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide">{item.data.type}</span>
                     </div>
                     {item.data.status !== "completed" && (
                       <div className="absolute top-2 right-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] backdrop-blur-sm ${
                           item.data.status === "processing" ? "bg-amber-500/50 text-white"
                             : item.data.status === "failed" ? "bg-red-500/50 text-white" : "bg-gray-500/50 text-white"
-                        }`}>{item.data.status}</span>
+                        } font-mono uppercase tracking-wide`}>{item.data.status}</span>
                       </div>
                     )}
                   </div>
@@ -445,11 +413,11 @@ export default function ContentGallery({
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
                     {img.metadata?.prompt && (
-                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">
                         {img.metadata.prompt}
                       </p>
                     )}
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    <div className="flex gap-2 mt-2">
                       {characterId && (
                         <button
                           type="button"
@@ -464,17 +432,7 @@ export default function ContentGallery({
                             });
                           }}
                           disabled={loading}
-                          style={{
-                            flex: 1,
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            backgroundColor: "rgba(147, 51, 234, 0.8)",
-                            color: "#fff",
-                            fontSize: "12px",
-                            border: "none",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Edit
                         </button>
@@ -487,17 +445,7 @@ export default function ContentGallery({
                             setAnimatingImage(img);
                           }}
                           disabled={loading}
-                          style={{
-                            flex: 1,
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            backgroundColor: "rgba(59, 130, 246, 0.8)",
-                            color: "#fff",
-                            fontSize: "12px",
-                            border: "none",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Animate
                         </button>
@@ -509,17 +457,7 @@ export default function ContentGallery({
                           handleRetryImage(img.id);
                         }}
                         disabled={loading || retryingId === `image:${img.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(245, 158, 11, 0.85)",
-                          color: "#111",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading || retryingId === `image:${img.id}` ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -530,17 +468,7 @@ export default function ContentGallery({
                           onDeleteImage(img.id);
                         }}
                         disabled={loading}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(239, 68, 68, 0.8)",
-                          color: "#fff",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         Delete
                       </button>
@@ -549,7 +477,7 @@ export default function ContentGallery({
 
                   {/* Type Badge - Green for Base */}
                   <div className="absolute top-2 left-2">
-                    <span className="rounded-full bg-green-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    <span className="rounded-full bg-green-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide">
                       Base
                     </span>
                   </div>
@@ -581,16 +509,16 @@ export default function ContentGallery({
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
                     {img.metadata?.prompt && (
-                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">
                         {img.metadata.prompt}
                       </p>
                     )}
                     {!img.metadata?.prompt && img.metadata?.style && (
-                      <span className="text-[10px] text-gray-300 mb-1">
+                      <span className="text-[10px] text-gray-300 mb-1 font-mono">
                         {img.metadata.style}
                       </span>
                     )}
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    <div className="flex gap-2 mt-2">
                       {characterId && (
                         <button
                           type="button"
@@ -605,17 +533,7 @@ export default function ContentGallery({
                             });
                           }}
                           disabled={loading}
-                          style={{
-                            flex: 1,
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            backgroundColor: "rgba(147, 51, 234, 0.8)",
-                            color: "#fff",
-                            fontSize: "12px",
-                            border: "none",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Edit
                         </button>
@@ -628,17 +546,7 @@ export default function ContentGallery({
                             setAnimatingImage(img);
                           }}
                           disabled={loading}
-                          style={{
-                            flex: 1,
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            backgroundColor: "rgba(59, 130, 246, 0.8)",
-                            color: "#fff",
-                            fontSize: "12px",
-                            border: "none",
-                            cursor: loading ? "not-allowed" : "pointer",
-                            pointerEvents: "auto",
-                          }}
+                          className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Animate
                         </button>
@@ -650,17 +558,7 @@ export default function ContentGallery({
                           handleRetryImage(img.id);
                         }}
                         disabled={loading || retryingId === `image:${img.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(245, 158, 11, 0.85)",
-                          color: "#111",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading || retryingId === `image:${img.id}` ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -671,17 +569,7 @@ export default function ContentGallery({
                           onDeleteImage(img.id);
                         }}
                         disabled={loading}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(239, 68, 68, 0.8)",
-                          color: "#fff",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         Delete
                       </button>
@@ -690,7 +578,7 @@ export default function ContentGallery({
 
                   {/* Type Badge */}
                   <div className="absolute top-2 left-2">
-                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide">
                       {img.type === "content" ? "Content" : img.type}
                     </span>
                   </div>
@@ -743,16 +631,16 @@ export default function ContentGallery({
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
                     {video.metadata?.prompt && (
-                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1">
+                      <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">
                         {video.metadata.prompt}
                       </p>
                     )}
                     {!video.metadata?.prompt && video.duration && (
-                      <span className="text-[10px] text-gray-300 mb-1">
+                      <span className="text-[10px] text-gray-300 mb-1 font-mono">
                         {Math.round(video.duration)}s
                       </span>
                     )}
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                    <div className="flex gap-2 mt-2">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -760,17 +648,7 @@ export default function ContentGallery({
                           handleRetryVideo(video.id);
                         }}
                         disabled={loading || retryingId === `video:${video.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(245, 158, 11, 0.85)",
-                          color: "#111",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading || retryingId === `video:${video.id}` ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `video:${video.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -781,17 +659,7 @@ export default function ContentGallery({
                           onDeleteVideo(video.id);
                         }}
                         disabled={loading}
-                        style={{
-                          flex: 1,
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor: "rgba(239, 68, 68, 0.8)",
-                          color: "#fff",
-                          fontSize: "12px",
-                          border: "none",
-                          cursor: loading ? "not-allowed" : "pointer",
-                          pointerEvents: "auto",
-                        }}
+                        className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         Delete
                       </button>
@@ -800,7 +668,7 @@ export default function ContentGallery({
 
                   {/* Type Badge */}
                   <div className="absolute top-2 left-2">
-                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide">
                       {video.type}
                     </span>
                   </div>
@@ -815,7 +683,7 @@ export default function ContentGallery({
                             : video.status === "failed"
                             ? "bg-red-500/50 text-white"
                             : "bg-gray-500/50 text-white"
-                        }`}
+                        } font-mono uppercase tracking-wide`}
                       >
                         {video.status}
                       </span>
@@ -836,20 +704,7 @@ export default function ContentGallery({
           <button
             type="button"
             onClick={() => setSelectedItem(null)}
-            style={{
-              position: "absolute",
-              top: "16px",
-              right: "16px",
-              width: "40px",
-              height: "40px",
-              borderRadius: "9999px",
-              backgroundColor: "rgba(255,255,255,0.1)",
-              color: "#fff",
-              fontSize: "20px",
-              border: "none",
-              cursor: "pointer",
-              zIndex: 10,
-            }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 z-10"
           >
             ×
           </button>
@@ -870,8 +725,8 @@ export default function ContentGallery({
                 />
                 {selectedItem.prompt && (
                   <div className="mt-4 max-w-xl w-full bg-white/5 rounded-lg p-3 backdrop-blur-sm">
-                    <p className="text-xs text-gray-400 mb-1">Original Prompt</p>
-                    <p className="text-sm text-gray-200 whitespace-pre-wrap line-clamp-3">
+                    <p className="text-xs text-gray-400 mb-1 font-mono uppercase tracking-wider">Original Prompt</p>
+                    <p className="text-sm text-gray-200 whitespace-pre-wrap line-clamp-3 font-mono">
                       {selectedItem.prompt}
                     </p>
                   </div>
@@ -917,17 +772,7 @@ export default function ContentGallery({
                             editMode: true,
                           })
                         }
-                        style={{
-                          marginTop: "16px",
-                          padding: "8px 24px",
-                          borderRadius: "8px",
-                          backgroundColor: "#9333ea",
-                          color: "#fff",
-                          fontSize: "14px",
-                          fontWeight: 500,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
+                        className="mt-4 rounded-lg bg-purple-600 px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-500"
                       >
                         Edit with AI
                       </button>
@@ -946,11 +791,11 @@ export default function ContentGallery({
               {/* Right: Metadata Panel */}
               <div className="w-80 flex-shrink-0 bg-[#1a1a1a] rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh-6rem)]">
                 <div className="p-4 border-b border-white/10 flex-shrink-0">
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="text-sm font-semibold text-white font-mono">
                     Details
                   </h3>
                 </div>
-                <div className="p-4 overflow-y-auto flex-1">
+                <div className="p-4 overflow-y-auto flex-1 font-mono">
                   {selectedItem.type === "image" && selectedItem.image && (
                     <div className="space-y-4">
                       {/* Grid of basic info */}

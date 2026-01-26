@@ -50,7 +50,7 @@ export default function CharacterSidebar({
         <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
           Character
         </p>
-        <h2 className="text-lg font-semibold">Character Management</h2>
+        <h2 className="text-lg font-semibold font-mono">Character Management</h2>
       </div>
 
       {/* Character Selector */}
@@ -59,7 +59,7 @@ export default function CharacterSidebar({
           value={selectedCharacter?.id || ""}
           onChange={(e) => onSelect(e.target.value)}
           disabled={loading}
-          className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+          className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none font-mono"
         >
           <option value="">Select a character...</option>
           {characters.map((char) => (
@@ -73,18 +73,18 @@ export default function CharacterSidebar({
       {/* Selected Character Info */}
       {selectedCharacter && (
         <div className="mb-4 rounded-xl border border-white/10 bg-[#0b0b0b] p-3">
-          <h3 className="font-semibold text-white">{selectedCharacter.name}</h3>
+          <h3 className="font-semibold text-white font-mono">{selectedCharacter.name}</h3>
           {selectedCharacter.gender && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 mt-1 font-mono">
               {selectedCharacter.gender === "female" ? "Female" : selectedCharacter.gender === "male" ? "Male" : selectedCharacter.gender}
             </p>
           )}
           {selectedCharacter.description && (
-            <p className="text-xs text-gray-400 mt-2 line-clamp-3">
+            <p className="text-xs text-gray-400 mt-2 line-clamp-3 font-mono">
               {selectedCharacter.description}
             </p>
           )}
-          <p className="text-[10px] text-gray-500 mt-2">
+          <p className="text-[10px] text-gray-500 mt-2 font-mono uppercase tracking-wider">
             Status: {selectedCharacter.status}
           </p>
         </div>
@@ -131,7 +131,7 @@ export default function CharacterSidebar({
                 key={`empty-${i}`}
                 className="aspect-[9/16] rounded-lg border border-dashed border-white/20 flex items-center justify-center"
               >
-                <span className="text-xs text-gray-500">+</span>
+                <span className="text-xs text-gray-500 font-mono">+</span>
               </div>
             ))}
           </div>
@@ -139,7 +139,7 @@ export default function CharacterSidebar({
           {/* Pending Images */}
           {pendingImages.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs text-gray-400 mb-2">Pending ({pendingImages.length})</p>
+              <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Pending ({pendingImages.length})</p>
               <div className="grid grid-cols-3 gap-2">
                 {pendingImages.map((img) => (
                   <div
@@ -160,7 +160,7 @@ export default function CharacterSidebar({
                           onApproveImage(img.id);
                         }}
                         disabled={loading || approvedImages.length >= 3}
-                        className="flex-1 rounded bg-green-500/80 px-1 py-0.5 text-[10px] text-white disabled:opacity-50"
+                        className="flex-1 rounded bg-green-500/80 px-1 py-0.5 text-[10px] text-white font-mono uppercase tracking-wide disabled:opacity-50"
                       >
                         Approve
                       </button>
@@ -170,7 +170,7 @@ export default function CharacterSidebar({
                           onDeleteImage(img.id);
                         }}
                         disabled={loading}
-                        className="flex-1 rounded bg-red-500/80 px-1 py-0.5 text-[10px] text-white"
+                        className="flex-1 rounded bg-red-500/80 px-1 py-0.5 text-[10px] text-white font-mono uppercase tracking-wide"
                       >
                         Delete
                       </button>
@@ -192,19 +192,19 @@ export default function CharacterSidebar({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Character name"
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white"
+              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
             />
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Character description"
               rows={2}
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white"
+              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
             />
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white"
+              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
             >
               <option value="">Gender (optional)</option>
               <option value="female">Female</option>

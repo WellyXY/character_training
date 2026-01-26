@@ -109,7 +109,7 @@ export default function AnimateModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#333]">
-          <h2 className="text-lg font-semibold">Animate Image</h2>
+          <h2 className="text-lg font-semibold font-mono">Animate Image</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
@@ -149,7 +149,7 @@ export default function AnimateModal({
               {state === "analyzing" && (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-sm">Analyzing image...</p>
+                  <p className="text-sm font-mono">Analyzing image...</p>
                 </div>
               )}
 
@@ -159,8 +159,8 @@ export default function AnimateModal({
                   {/* Image Analysis */}
                   {analysis && (
                     <div className="mb-4">
-                      <p className="text-xs text-gray-400 mb-1">Image Analysis</p>
-                      <p className="text-sm text-gray-200 bg-white/5 rounded-lg p-3">
+                      <p className="text-xs text-gray-400 mb-1 font-mono uppercase tracking-wider">Image Analysis</p>
+                      <p className="text-sm text-gray-200 bg-white/5 rounded-lg p-3 font-mono">
                         {analysis.image_analysis}
                       </p>
                     </div>
@@ -169,7 +169,7 @@ export default function AnimateModal({
                   {/* Motion Type Tags */}
                   {analysis && analysis.suggested_motion_types.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-xs text-gray-400 mb-2">Suggested Motion Types</p>
+                      <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Suggested Motion Types</p>
                       <div className="flex flex-wrap gap-2">
                         {analysis.suggested_motion_types.map((motionType, idx) => (
                           <button
@@ -186,21 +186,21 @@ export default function AnimateModal({
 
                   {/* Prompt Input */}
                   <div className="mb-4">
-                    <p className="text-xs text-gray-400 mb-1">Video Prompt</p>
+                    <p className="text-xs text-gray-400 mb-1 font-mono uppercase tracking-wider">Video Prompt</p>
                     <textarea
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder="Describe the motion/animation..."
                       rows={4}
                       disabled={state === "generating"}
-                      className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 resize-none disabled:opacity-50"
+                      className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 resize-none disabled:opacity-50 font-mono"
                     />
                   </div>
 
                   {/* Error Message */}
                   {error && (
                     <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
-                      <p className="text-sm text-red-300">{error}</p>
+                      <p className="text-sm text-red-300 font-mono">{error}</p>
                     </div>
                   )}
 
@@ -227,7 +227,7 @@ export default function AnimateModal({
                   </button>
 
                   {state === "generating" && (
-                    <p className="mt-2 text-xs text-gray-400 text-center">
+                    <p className="mt-2 text-xs text-gray-400 text-center font-mono">
                       Video generation may take a few minutes. Please wait...
                     </p>
                   )}
@@ -242,8 +242,8 @@ export default function AnimateModal({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <p className="text-lg font-medium text-white mb-2">Video generated!</p>
-                  <p className="text-sm text-gray-400 mb-4">Video saved to Gallery</p>
+                  <p className="text-lg font-medium text-white mb-2 font-mono">Video generated!</p>
+                  <p className="text-sm text-gray-400 mb-4 font-mono">Video saved to Gallery</p>
                   <button
                     onClick={onClose}
                     className="px-6 py-2 rounded-lg bg-[#1a1a1a] border border-[#333] text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300 transition-colors"

@@ -72,7 +72,7 @@ export default function GenerationProgressCard({
     : "bg-blue-500";
 
   return (
-    <div className={`rounded-xl border ${cardStyle} p-4 transition-all duration-300`}>
+    <div className={`rounded-xl border ${cardStyle} p-4 transition-all duration-300 font-mono`}>
       {/* Status Badge */}
       <div className="flex items-center gap-2 mb-3">
         {isActive && (
