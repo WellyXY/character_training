@@ -24,7 +24,7 @@ class SeedreamClient:
         self.model = settings.seedream_model
         self.auth_header = settings.seedream_auth_header
         self.auth_scheme = settings.seedream_auth_scheme
-        self.public_base_url = settings.public_base_url.rstrip("/")
+        self.public_base_url = settings.public_base_url.strip().rstrip("/")
         self.timeout = httpx.Timeout(300.0)  # 5 minutes for image generation
         self.watermark = settings.seedream_watermark
         if self.model and "images/generations" not in self.generate_path:

@@ -17,7 +17,8 @@ class StorageService:
 
     def __init__(self):
         settings = get_settings()
-        self.public_base_url = settings.public_base_url.rstrip("/")
+        # Strip whitespace and trailing slash from URL
+        self.public_base_url = settings.public_base_url.strip().rstrip("/")
 
     def _generate_filename(self, original_name: str) -> str:
         """Generate a unique filename."""

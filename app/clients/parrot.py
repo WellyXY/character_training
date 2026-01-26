@@ -16,7 +16,7 @@ class ParrotClient:
 
     def __init__(self):
         settings = get_settings()
-        self.base_url = settings.parrot_api_url.rstrip("/")
+        self.base_url = settings.parrot_api_url.strip().rstrip("/")
         self.api_key = settings.parrot_api_key
         self.timeout = httpx.Timeout(60.0)  # 60 seconds for initial request
         self.long_timeout = httpx.Timeout(300.0)  # 5 minutes for polling
