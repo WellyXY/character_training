@@ -14,6 +14,13 @@ class ImageType(str, Enum):
     CONTENT = "content"
 
 
+class ImageStatus(str, Enum):
+    """Image generation status."""
+    GENERATING = "generating"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class AspectRatio(str, Enum):
     """Aspect ratio options."""
     PORTRAIT = "9:16"
@@ -67,12 +74,15 @@ class ImageResponse(BaseModel):
     id: str
     character_id: str
     type: ImageType
-    image_url: str
+    status: ImageStatus = ImageStatus.COMPLETED
+    image_url: Optional[str] = None  # Nullable for generating state
+    task_id: Optional[str] = None
     pose: Optional[str] = None
     expression: Optional[str] = None
     metadata: ImageMetadata = Field(default_factory=ImageMetadata)
     consistency_score: Optional[float] = None
     is_approved: bool
+    error_message: Optional[str] = None
     created_at: datetime
 
     class Config:

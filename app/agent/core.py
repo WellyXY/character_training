@@ -763,6 +763,8 @@ class Agent:
         has_base_images: bool,
     ):
         """Run generation in background."""
+        from app.models.image import Image, ImageType, ImageStatus
+
         session = self.sessions.get(session_id)
         if not session or task_id not in session.active_tasks:
             logger.error(f"Session or task not found: {session_id}/{task_id}")
@@ -783,13 +785,37 @@ class Agent:
                     task.stage = "generating image"
                     task.progress = 20
 
+                    # Determine image type
+                    is_base_image = content_type == "base" or not has_base_images
+                    image_type = ImageType.BASE if is_base_image else ImageType.CONTENT
+
+                    # Create image record with "generating" status first
+                    image = Image(
+                        character_id=character_id,
+                        type=image_type,
+                        status=ImageStatus.GENERATING,
+                        task_id=task_id,
+                        is_approved=False,
+                        metadata_json=json.dumps({
+                            "prompt": final_prompt,
+                            "style": pending.params.style,
+                            "cloth": pending.params.cloth,
+                        }),
+                    )
+                    db.add(image)
+                    await db.commit()
+                    await db.refresh(image)
+                    existing_image_id = image.id
+                    logger.info(f"Created generating image record: {existing_image_id}")
+
                     # If no base images and trying content_post, generate base image instead
-                    if content_type == "base" or not has_base_images:
+                    if is_base_image:
                         result = await self.image_generator.execute(
                             action="generate_base",
                             params={
                                 "prompt": final_prompt,
                                 "aspect_ratio": aspect_ratio,
+                                "existing_image_id": existing_image_id,
                             },
                             character_id=character_id,
                             db=db,
@@ -805,6 +831,7 @@ class Agent:
                             cloth=pending.params.cloth,
                             reference_image_path=pending.params.reference_image_path,
                             db=db,
+                            existing_image_id=existing_image_id,
                         )
 
                 elif pending.skill == "video_generator":

@@ -76,5 +76,29 @@ def _run_migrations(conn):
                     logger.info("Added feedback_at column to images table")
                 except Exception as e:
                     logger.warning(f"Could not add feedback_at column: {e}")
+
+            # Add status column if missing (for tracking generating state)
+            if "status" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE images ADD COLUMN status VARCHAR(20) DEFAULT 'completed'"))
+                    logger.info("Added status column to images table")
+                except Exception as e:
+                    logger.warning(f"Could not add status column: {e}")
+
+            # Add task_id column if missing
+            if "task_id" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE images ADD COLUMN task_id VARCHAR(36)"))
+                    logger.info("Added task_id column to images table")
+                except Exception as e:
+                    logger.warning(f"Could not add task_id column: {e}")
+
+            # Add error_message column if missing
+            if "error_message" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE images ADD COLUMN error_message TEXT"))
+                    logger.info("Added error_message column to images table")
+                except Exception as e:
+                    logger.warning(f"Could not add error_message column: {e}")
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")

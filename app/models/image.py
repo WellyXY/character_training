@@ -18,6 +18,13 @@ class ImageType(str, enum.Enum):
     CONTENT = "content"
 
 
+class ImageStatus(str, enum.Enum):
+    """Image generation status enum."""
+    GENERATING = "generating"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class Image(Base):
     """Image model for generated images."""
 
@@ -38,7 +45,13 @@ class Image(Base):
         default=ImageType.CONTENT,
         nullable=False,
     )
-    image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ImageStatus] = mapped_column(
+        SQLEnum(ImageStatus),
+        default=ImageStatus.COMPLETED,
+        nullable=False,
+    )
+    task_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Nullable for generating state
     pose: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     expression: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -46,6 +59,7 @@ class Image(Base):
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     feedback_rating: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     feedback_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,

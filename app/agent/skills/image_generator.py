@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.skills.base import BaseSkill
 from app.clients.seedream import get_seedream_client
-from app.models.image import Image, ImageType
+from app.models.image import Image, ImageType, ImageStatus
 from app.models.character import Character
 from app.services.storage import get_storage_service
 
@@ -97,22 +97,54 @@ class ImageGeneratorSkill(BaseSkill):
             # Download and save the image locally
             saved = await self.storage.save_from_url(image_url, db, prefix="base")
 
-            # Create image record
-            image = Image(
-                character_id=character_id,
-                type=ImageType.BASE,
-                image_url=saved["url"],
-                is_approved=False,  # Needs approval
-                metadata_json=json.dumps({
-                    "prompt": prompt,
-                    "width": width,
-                    "height": height,
-                    "seed": result.get("seed"),
-                }),
-            )
-            db.add(image)
-            await db.commit()
-            await db.refresh(image)
+            # Build metadata
+            metadata = {
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "seed": result.get("seed"),
+            }
+
+            # Check if we should update an existing record or create new
+            existing_image_id = params.get("existing_image_id")
+            if existing_image_id:
+                # Update existing record
+                result_query = await db.execute(
+                    select(Image).where(Image.id == existing_image_id)
+                )
+                image = result_query.scalar_one_or_none()
+                if image:
+                    image.image_url = saved["url"]
+                    image.status = ImageStatus.COMPLETED
+                    image.metadata_json = json.dumps(metadata)
+                    await db.commit()
+                    await db.refresh(image)
+                else:
+                    # Fallback: create new if not found
+                    image = Image(
+                        character_id=character_id,
+                        type=ImageType.BASE,
+                        image_url=saved["url"],
+                        status=ImageStatus.COMPLETED,
+                        is_approved=False,
+                        metadata_json=json.dumps(metadata),
+                    )
+                    db.add(image)
+                    await db.commit()
+                    await db.refresh(image)
+            else:
+                # Create new image record
+                image = Image(
+                    character_id=character_id,
+                    type=ImageType.BASE,
+                    image_url=saved["url"],
+                    status=ImageStatus.COMPLETED,
+                    is_approved=False,
+                    metadata_json=json.dumps(metadata),
+                )
+                db.add(image)
+                await db.commit()
+                await db.refresh(image)
 
             return {
                 "success": True,
@@ -122,6 +154,20 @@ class ImageGeneratorSkill(BaseSkill):
             }
 
         except Exception as e:
+            # If we have an existing image, mark it as failed
+            existing_image_id = params.get("existing_image_id")
+            if existing_image_id:
+                try:
+                    result_query = await db.execute(
+                        select(Image).where(Image.id == existing_image_id)
+                    )
+                    image = result_query.scalar_one_or_none()
+                    if image:
+                        image.status = ImageStatus.FAILED
+                        image.error_message = str(e)
+                        await db.commit()
+                except Exception:
+                    pass
             return {"success": False, "error": str(e)}
 
     async def _generate_content_image(
@@ -185,7 +231,7 @@ class ImageGeneratorSkill(BaseSkill):
             # Download and save the image locally
             saved = await self.storage.save_from_url(image_url, db, prefix="content")
 
-            # Create image record
+            # Build metadata
             metadata = {
                 "prompt": prompt,
                 "width": width,
@@ -201,16 +247,46 @@ class ImageGeneratorSkill(BaseSkill):
                 metadata["user_reference_path"] = user_reference_path
                 metadata["user_reference_passed_to_seedream"] = True
 
-            image = Image(
-                character_id=character_id,
-                type=ImageType.CONTENT,
-                image_url=saved["url"],
-                is_approved=False,
-                metadata_json=json.dumps(metadata),
-            )
-            db.add(image)
-            await db.commit()
-            await db.refresh(image)
+            # Check if we should update an existing record or create new
+            existing_image_id = params.get("existing_image_id")
+            if existing_image_id:
+                # Update existing record
+                result_query = await db.execute(
+                    select(Image).where(Image.id == existing_image_id)
+                )
+                image = result_query.scalar_one_or_none()
+                if image:
+                    image.image_url = saved["url"]
+                    image.status = ImageStatus.COMPLETED
+                    image.metadata_json = json.dumps(metadata)
+                    await db.commit()
+                    await db.refresh(image)
+                else:
+                    # Fallback: create new if not found
+                    image = Image(
+                        character_id=character_id,
+                        type=ImageType.CONTENT,
+                        image_url=saved["url"],
+                        status=ImageStatus.COMPLETED,
+                        is_approved=False,
+                        metadata_json=json.dumps(metadata),
+                    )
+                    db.add(image)
+                    await db.commit()
+                    await db.refresh(image)
+            else:
+                # Create new image record
+                image = Image(
+                    character_id=character_id,
+                    type=ImageType.CONTENT,
+                    image_url=saved["url"],
+                    status=ImageStatus.COMPLETED,
+                    is_approved=False,
+                    metadata_json=json.dumps(metadata),
+                )
+                db.add(image)
+                await db.commit()
+                await db.refresh(image)
 
             return {
                 "success": True,
@@ -220,6 +296,20 @@ class ImageGeneratorSkill(BaseSkill):
             }
 
         except Exception as e:
+            # If we have an existing image, mark it as failed
+            existing_image_id = params.get("existing_image_id")
+            if existing_image_id:
+                try:
+                    result_query = await db.execute(
+                        select(Image).where(Image.id == existing_image_id)
+                    )
+                    image = result_query.scalar_one_or_none()
+                    if image:
+                        image.status = ImageStatus.FAILED
+                        image.error_message = str(e)
+                        await db.commit()
+                except Exception:
+                    pass
             return {"success": False, "error": str(e)}
 
     async def generate_content(
@@ -231,11 +321,13 @@ class ImageGeneratorSkill(BaseSkill):
         cloth: Optional[str] = None,
         reference_image_path: Optional[str] = None,
         db: AsyncSession = None,
+        existing_image_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Convenience method to generate content image.
 
         Used by the agent for confirmed generations.
+        If existing_image_id is provided, updates the existing record instead of creating new.
         """
         return await self._generate_content_image(
             params={
@@ -244,6 +336,7 @@ class ImageGeneratorSkill(BaseSkill):
                 "style": style,
                 "cloth": cloth,
                 "reference_image_path": reference_image_path,
+                "existing_image_id": existing_image_id,
             },
             character_id=character_id,
             db=db,

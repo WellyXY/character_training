@@ -88,21 +88,25 @@ export default function ContentGallery({
     [videos]
   );
 
-  // Filter images by type (from sorted list)
-  const baseImages = sortedImages.filter((img) => img.type === "base");
-  const contentImages = sortedImages.filter((img) => img.type !== "base");
+  // Filter out generating images to show them separately with spinner
+  const generatingImages = sortedImages.filter((img) => img.status === "generating");
+  const completedImages = sortedImages.filter((img) => img.status !== "generating");
 
-  // Combined and sorted list for "all" tab (images + videos sorted by created_at)
+  // Filter images by type (from completed list)
+  const baseImages = completedImages.filter((img) => img.type === "base");
+  const contentImages = completedImages.filter((img) => img.type !== "base");
+
+  // Combined and sorted list for "all" tab (completed images + videos sorted by created_at)
   type ContentItem = { type: "image"; data: Image } | { type: "video"; data: Video };
   const allContentSorted = useMemo<ContentItem[]>(() => {
     const items: ContentItem[] = [
-      ...images.map((img): ContentItem => ({ type: "image", data: img })),
+      ...completedImages.map((img): ContentItem => ({ type: "image", data: img })),
       ...videos.map((vid): ContentItem => ({ type: "video", data: vid })),
     ];
     return items.sort((a, b) =>
       new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime()
     );
-  }, [images, videos]);
+  }, [completedImages, videos]);
 
   // Filter active tasks (pending or generating)
   const pendingTasks = activeTasks.filter(
@@ -110,7 +114,7 @@ export default function ContentGallery({
   );
 
   const tabs: { key: TabType; label: string; count: number }[] = [
-    { key: "all", label: "All", count: sortedImages.length + sortedVideos.length + pendingTasks.length },
+    { key: "all", label: "All", count: completedImages.length + sortedVideos.length + pendingTasks.length + generatingImages.length },
     { key: "base", label: "Base", count: baseImages.length },
     { key: "images", label: "Content", count: contentImages.length },
     { key: "videos", label: "Videos", count: sortedVideos.length },
@@ -181,13 +185,13 @@ export default function ContentGallery({
 
       {/* Content Grid */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {sortedImages.length === 0 && sortedVideos.length === 0 && pendingTasks.length === 0 ? (
+        {completedImages.length === 0 && sortedVideos.length === 0 && pendingTasks.length === 0 && generatingImages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-gray-400">
             <p className="text-sm font-mono">No content generated yet</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {/* Generating Tasks */}
+            {/* Generating Tasks (from memory) */}
             {activeTab === "all" &&
               pendingTasks.map((task) => (
                 <div
@@ -242,17 +246,71 @@ export default function ContentGallery({
                 </div>
               ))}
 
+            {/* Generating Images (from database - persisted) */}
+            {activeTab === "all" &&
+              generatingImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  {/* Content */}
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    {/* Spinner */}
+                    <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+
+                    {/* Status */}
+                    <p className="text-sm font-medium text-blue-400 mb-1 font-mono uppercase tracking-wide">
+                      Generating...
+                    </p>
+
+                    {/* Progress Bar (indeterminate) */}
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full w-1/3 bg-blue-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                    </div>
+
+                    {/* Prompt Preview */}
+                    {img.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
+                        {img.metadata.prompt}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      {img.type === "base" ? "Base" : "Content"}
+                    </span>
+                  </div>
+
+                  {/* Delete button */}
+                  <div className="absolute bottom-2 right-2">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteImage(img.id)}
+                      disabled={loading}
+                      className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ))}
+
             {/* All Content (sorted by time) */}
             {activeTab === "all" &&
               allContentSorted.map((item) =>
-                item.type === "image" ? (
+                item.type === "image" && item.data.image_url ? (
                   <div
                     key={item.data.id}
-                    className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
+                    className={`relative aspect-[9/16] overflow-hidden rounded-xl border bg-[#0b0b0b] group cursor-pointer ${
+                      item.data.status === "failed" ? "border-red-500/30" : "border-white/10"
+                    }`}
                     onClick={() =>
                       setSelectedItem({
                         type: "image",
-                        url: resolveApiUrl(item.data.image_url),
+                        url: resolveApiUrl(item.data.image_url!),
                         prompt: item.data.metadata?.prompt,
                         image: item.data,
                       })
@@ -390,14 +448,14 @@ export default function ContentGallery({
 
             {/* Base Images (only for base tab) */}
             {activeTab === "base" &&
-              baseImages.map((img) => (
+              baseImages.filter(img => img.image_url).map((img) => (
                 <div
                   key={img.id}
                   className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
                   onClick={() =>
                     setSelectedItem({
                       type: "image",
-                      url: resolveApiUrl(img.image_url),
+                      url: resolveApiUrl(img.image_url!),
                       prompt: img.metadata?.prompt,
                       image: img,
                     })
@@ -405,7 +463,7 @@ export default function ContentGallery({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={resolveApiUrl(img.image_url)}
+                    src={resolveApiUrl(img.image_url!)}
                     alt="Base"
                     className="h-full w-full object-cover"
                   />
@@ -486,14 +544,14 @@ export default function ContentGallery({
 
             {/* Content Images (only for images tab) */}
             {activeTab === "images" &&
-              contentImages.map((img) => (
+              contentImages.filter(img => img.image_url).map((img) => (
                 <div
                   key={img.id}
                   className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
                   onClick={() =>
                     setSelectedItem({
                       type: "image",
-                      url: resolveApiUrl(img.image_url),
+                      url: resolveApiUrl(img.image_url!),
                       prompt: img.metadata?.prompt,
                       image: img,
                     })
@@ -501,7 +559,7 @@ export default function ContentGallery({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={resolveApiUrl(img.image_url)}
+                    src={resolveApiUrl(img.image_url!)}
                     alt="Generated"
                     className="h-full w-full object-cover"
                   />

@@ -23,6 +23,7 @@ export interface Character {
 }
 
 export type ImageType = "base" | "scene" | "reference_output" | "content";
+export type ImageStatus = "generating" | "completed" | "failed";
 export type AspectRatio = "9:16" | "1:1" | "16:9";
 
 // Content generation types
@@ -51,12 +52,15 @@ export interface Image {
   id: string;
   character_id: string;
   type: ImageType;
-  image_url: string;
+  status: ImageStatus;
+  image_url?: string | null;  // Nullable for generating state
+  task_id?: string | null;
   pose?: string | null;
   expression?: string | null;
   metadata: ImageMetadata;
   consistency_score?: number | null;
   is_approved: boolean;
+  error_message?: string | null;
   created_at: string;
 }
 

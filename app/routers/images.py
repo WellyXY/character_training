@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.image import Image, ImageType as DBImageType
 from app.models.character import Character
-from app.schemas.image import ImageResponse, ImageMetadata, ImageType
+from app.schemas.image import ImageResponse, ImageMetadata, ImageType, ImageStatus
 from app.agent.skills.image_generator import ImageGeneratorSkill
 
 router = APIRouter()
@@ -17,6 +17,8 @@ router = APIRouter()
 
 def _image_to_response(image: Image) -> ImageResponse:
     """Convert Image model to response schema."""
+    from app.models.image import ImageStatus as DBImageStatus
+
     metadata = ImageMetadata()
     if image.metadata_json:
         try:
@@ -25,16 +27,27 @@ def _image_to_response(image: Image) -> ImageResponse:
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Convert status with fallback for legacy records
+    status = ImageStatus.COMPLETED
+    if hasattr(image, 'status') and image.status:
+        try:
+            status = ImageStatus(image.status.value)
+        except (ValueError, AttributeError):
+            status = ImageStatus.COMPLETED
+
     return ImageResponse(
         id=image.id,
         character_id=image.character_id,
         type=ImageType(image.type.value),
+        status=status,
         image_url=image.image_url,
+        task_id=getattr(image, 'task_id', None),
         pose=image.pose,
         expression=image.expression,
         metadata=metadata,
         consistency_score=image.consistency_score,
         is_approved=image.is_approved,
+        error_message=getattr(image, 'error_message', None),
         created_at=image.created_at,
     )
 
