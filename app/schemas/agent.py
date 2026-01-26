@@ -67,7 +67,7 @@ class PendingGeneration(BaseModel):
 
 class AgentChatRequest(BaseModel):
     """Agent chat request."""
-    message: str = Field(..., min_length=1)
+    message: str = ""  # Can be empty when reference image is provided with a mode
     character_id: Optional[str] = None
     session_id: Optional[str] = None
     reference_image_path: Optional[str] = None
