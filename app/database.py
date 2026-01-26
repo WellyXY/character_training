@@ -47,20 +47,34 @@ async def init_db():
 def _run_migrations(conn):
     """Run database migrations to add missing columns."""
     from sqlalchemy import text, inspect
+    import logging
 
-    inspector = inspect(conn)
-    dialect = conn.dialect.name  # 'postgresql' or 'sqlite'
+    logger = logging.getLogger(__name__)
 
-    # Check images table for missing columns
-    if "images" in inspector.get_table_names():
-        existing_columns = {col["name"] for col in inspector.get_columns("images")}
+    try:
+        inspector = inspect(conn)
+        dialect = conn.dialect.name  # 'postgresql' or 'sqlite'
 
-        # Add feedback_rating column if missing
-        if "feedback_rating" not in existing_columns:
-            conn.execute(text("ALTER TABLE images ADD COLUMN feedback_rating VARCHAR(10)"))
+        # Check images table for missing columns
+        if "images" in inspector.get_table_names():
+            existing_columns = {col["name"] for col in inspector.get_columns("images")}
 
-        # Add feedback_at column if missing
-        # PostgreSQL uses TIMESTAMP, SQLite uses DATETIME
-        if "feedback_at" not in existing_columns:
-            timestamp_type = "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
-            conn.execute(text(f"ALTER TABLE images ADD COLUMN feedback_at {timestamp_type}"))
+            # Add feedback_rating column if missing
+            if "feedback_rating" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE images ADD COLUMN feedback_rating VARCHAR(10)"))
+                    logger.info("Added feedback_rating column to images table")
+                except Exception as e:
+                    logger.warning(f"Could not add feedback_rating column: {e}")
+
+            # Add feedback_at column if missing
+            # PostgreSQL uses TIMESTAMP, SQLite uses DATETIME
+            if "feedback_at" not in existing_columns:
+                try:
+                    timestamp_type = "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+                    conn.execute(text(f"ALTER TABLE images ADD COLUMN feedback_at {timestamp_type}"))
+                    logger.info("Added feedback_at column to images table")
+                except Exception as e:
+                    logger.warning(f"Could not add feedback_at column: {e}")
+    except Exception as e:
+        logger.warning(f"Migration check failed: {e}")
