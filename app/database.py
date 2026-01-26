@@ -49,6 +49,7 @@ def _run_migrations(conn):
     from sqlalchemy import text, inspect
 
     inspector = inspect(conn)
+    dialect = conn.dialect.name  # 'postgresql' or 'sqlite'
 
     # Check images table for missing columns
     if "images" in inspector.get_table_names():
@@ -59,5 +60,7 @@ def _run_migrations(conn):
             conn.execute(text("ALTER TABLE images ADD COLUMN feedback_rating VARCHAR(10)"))
 
         # Add feedback_at column if missing
+        # PostgreSQL uses TIMESTAMP, SQLite uses DATETIME
         if "feedback_at" not in existing_columns:
-            conn.execute(text("ALTER TABLE images ADD COLUMN feedback_at DATETIME"))
+            timestamp_type = "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+            conn.execute(text(f"ALTER TABLE images ADD COLUMN feedback_at {timestamp_type}"))
