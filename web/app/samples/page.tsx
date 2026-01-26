@@ -184,7 +184,7 @@ function SamplesContent() {
       )}
 
       {/* Main Content */}
-      <div className="fixed inset-0 pt-14 p-4 overflow-hidden">
+      <div className="fixed inset-0 pt-20 p-4 overflow-hidden">
         <div className="h-full grid grid-cols-[280px_1fr] gap-4 min-h-0">
 
           {/* Left: Upload & Filters Panel */}

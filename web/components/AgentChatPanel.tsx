@@ -176,10 +176,10 @@ function ConfirmationCard({
               type="button"
               onClick={() => setSelectedRatio(option.value)}
               disabled={loading}
-              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
                 selectedRatio === option.value
                   ? "bg-amber-500 text-black"
-                  : "border border-white/20 text-gray-300 hover:border-white/40"
+                  : "bg-[#1a1a1a] border border-[#333] text-gray-300 hover:text-white"
               } disabled:opacity-50`}
             >
               {option.label}
@@ -205,7 +205,7 @@ function ConfirmationCard({
                 type="button"
                 onClick={() => onModify(suggestion)}
                 disabled={loading}
-                className="rounded-full border border-white/20 px-3 py-1 text-xs text-gray-300 hover:border-white/40 hover:text-white disabled:opacity-50"
+                className="rounded-full bg-[#1a1a1a] border border-[#333] px-3 py-1 text-xs font-mono font-bold uppercase tracking-wide text-gray-300 hover:text-white disabled:opacity-50"
               >
                 {suggestion}
               </button>
@@ -220,15 +220,15 @@ function ConfirmationCard({
           type="button"
           disabled={loading}
           onClick={() => onConfirm(selectedRatio, isPromptEdited ? editedPrompt : undefined)}
-          className="flex-1 rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-black hover:bg-amber-400 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-amber-500 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
         >
-          {loading ? "Generating..." : "Confirm Generation"}
+          {loading ? "Generating..." : "Confirm"}
         </button>
         <button
           type="button"
           disabled={loading}
           onClick={onCancel}
-          className="flex-1 rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:border-white/40 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -671,7 +671,7 @@ export default function AgentChatPanel({
             type="button"
             disabled={loading || !characterName || (!input.trim() && !(hasReferenceImage && referenceMode !== "custom"))}
             onClick={handleSend}
-            className="flex-1 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
           >
             Send
           </button>
@@ -679,7 +679,7 @@ export default function AgentChatPanel({
             type="button"
             disabled={loading || messages.length === 0}
             onClick={onClear}
-            className="flex-1 rounded-lg border border-[#333] px-3 py-2 text-sm text-white hover:border-white/30 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300 disabled:opacity-50"
           >
             Clear
           </button>

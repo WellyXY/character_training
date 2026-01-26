@@ -25,7 +25,7 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
         <div className="flex items-center gap-1 p-1 rounded-full bg-[#1a1a1a] border border-[#333]">
           <Link
             href="/samples"
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wide transition-all ${
               isInspiration
                 ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20"
                 : "text-gray-400 hover:text-white hover:bg-[#222]"
@@ -48,7 +48,7 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
           </Link>
           <Link
             href="/"
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wide transition-all ${
               isStudio
                 ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
                 : "text-gray-400 hover:text-white hover:bg-[#222]"

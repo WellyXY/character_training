@@ -388,7 +388,7 @@ function HomeContent() {
       )}
 
       {/* Main Content */}
-      <div className="fixed inset-0 pt-14 p-4 overflow-hidden">
+      <div className="fixed inset-0 pt-20 p-4 overflow-hidden">
         <div className="h-full w-full grid grid-cols-[260px_minmax(0,1fr)_360px] gap-4 min-h-0 max-w-full">
           {/* Left: Character Panel */}
           <CharacterSidebar

@@ -175,7 +175,7 @@ export default function AnimateModal({
                           <button
                             key={idx}
                             onClick={() => handleMotionTagClick(motionType)}
-                            className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs hover:bg-blue-500/30 transition-colors"
+                            className="px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-mono font-bold uppercase tracking-wide hover:bg-blue-500/30 transition-colors"
                           >
                             {motionType}
                           </button>
@@ -208,7 +208,7 @@ export default function AnimateModal({
                   <button
                     onClick={handleGenerate}
                     disabled={state === "generating" || !prompt.trim()}
-                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
                   >
                     {state === "generating" ? (
                       <>
@@ -246,7 +246,7 @@ export default function AnimateModal({
                   <p className="text-sm text-gray-400 mb-4">Video saved to Gallery</p>
                   <button
                     onClick={onClose}
-                    className="px-6 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    className="px-6 py-2 rounded-lg bg-[#1a1a1a] border border-[#333] text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300 transition-colors"
                   >
                     Close
                   </button>
