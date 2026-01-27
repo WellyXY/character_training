@@ -109,6 +109,24 @@ export default function SampleCard({
 
       {/* Caption Preview (visible without hover) */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 group-hover:opacity-0 transition-opacity">
+        {/* Tags */}
+        {sample.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {sample.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="px-1.5 py-0.5 rounded bg-white/20 text-[9px] text-white/90 backdrop-blur-sm font-mono uppercase tracking-wide"
+              >
+                {tag}
+              </span>
+            ))}
+            {sample.tags.length > 3 && (
+              <span className="text-[9px] text-white/60 font-mono">
+                +{sample.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
         <span className="text-xs text-white font-medium font-mono">
           @{sample.creator_name}
         </span>
