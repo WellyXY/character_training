@@ -100,5 +100,37 @@ def _run_migrations(conn):
                     logger.info("Added error_message column to images table")
                 except Exception as e:
                     logger.warning(f"Could not add error_message column: {e}")
+
+        # Convert PostgreSQL enum columns to VARCHAR for compatibility
+        # This fixes the "operator does not exist: imagetype = character varying" error
+        if dialect == "postgresql":
+            enum_conversions = [
+                ("images", "type", "VARCHAR(32)"),
+                ("images", "status", "VARCHAR(16)"),
+                ("videos", "type", "VARCHAR(16)"),
+                ("videos", "status", "VARCHAR(16)"),
+                ("sample_posts", "media_type", "VARCHAR(16)"),
+                ("characters", "status", "VARCHAR(16)"),
+            ]
+
+            for table_name, col_name, new_type in enum_conversions:
+                if table_name in inspector.get_table_names():
+                    try:
+                        # Check if column is USER-DEFINED (enum type)
+                        result = conn.execute(text("""
+                            SELECT data_type FROM information_schema.columns
+                            WHERE table_name = :table AND column_name = :col
+                        """), {"table": table_name, "col": col_name})
+                        row = result.fetchone()
+                        if row and row[0] == 'USER-DEFINED':
+                            conn.execute(text(f"""
+                                ALTER TABLE {table_name}
+                                ALTER COLUMN {col_name} TYPE {new_type}
+                                USING {col_name}::text
+                            """))
+                            logger.info(f"Converted {table_name}.{col_name} from enum to {new_type}")
+                    except Exception as e:
+                        logger.warning(f"Could not convert {table_name}.{col_name}: {e}")
+
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")
