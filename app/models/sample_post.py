@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Optional
 import enum
 
-from sqlalchemy import String, Text, DateTime, Enum as SQLEnum
+from sqlalchemy import String, Text, DateTime
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -14,6 +15,37 @@ class MediaType(str, enum.Enum):
     """Media type enum."""
     IMAGE = "image"
     VIDEO = "video"
+
+
+class MediaTypeColumn(TypeDecorator):
+    """Store MediaType as string to avoid PostgreSQL enum issues."""
+
+    cache_ok = True
+    impl = String(16)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, MediaType):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return MediaType(value.lower()).value
+            except ValueError:
+                return MediaType.IMAGE.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, MediaType):
+            return value
+        if isinstance(value, str):
+            try:
+                return MediaType(value.lower())
+            except ValueError:
+                return MediaType.IMAGE
+        return value
 
 
 class SamplePost(Base):
@@ -29,7 +61,7 @@ class SamplePost(Base):
     creator_name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     media_type: Mapped[MediaType] = mapped_column(
-        SQLEnum(MediaType, values_callable=lambda x: [e.value for e in x]),
+        MediaTypeColumn(),
         default=MediaType.IMAGE,
         nullable=False,
     )

@@ -3,7 +3,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Boolean, Float, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, Text, DateTime, Boolean, Float, ForeignKey
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -18,11 +19,73 @@ class ImageType(str, enum.Enum):
     CONTENT = "content"
 
 
+class ImageTypeColumn(TypeDecorator):
+    """Store ImageType as string to avoid PostgreSQL enum issues."""
+
+    cache_ok = True
+    impl = String(32)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, ImageType):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return ImageType(value.lower()).value
+            except ValueError:
+                return ImageType.CONTENT.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, ImageType):
+            return value
+        if isinstance(value, str):
+            try:
+                return ImageType(value.lower())
+            except ValueError:
+                return ImageType.CONTENT
+        return value
+
+
 class ImageStatus(str, enum.Enum):
     """Image generation status enum."""
     GENERATING = "generating"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class ImageStatusColumn(TypeDecorator):
+    """Store ImageStatus as string to avoid PostgreSQL enum issues."""
+
+    cache_ok = True
+    impl = String(16)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, ImageStatus):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return ImageStatus(value.lower()).value
+            except ValueError:
+                return ImageStatus.COMPLETED.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, ImageStatus):
+            return value
+        if isinstance(value, str):
+            try:
+                return ImageStatus(value.lower())
+            except ValueError:
+                return ImageStatus.COMPLETED
+        return value
 
 
 class Image(Base):
@@ -41,12 +104,12 @@ class Image(Base):
         nullable=False,
     )
     type: Mapped[ImageType] = mapped_column(
-        SQLEnum(ImageType, values_callable=lambda x: [e.value for e in x]),
+        ImageTypeColumn(),
         default=ImageType.CONTENT,
         nullable=False,
     )
     status: Mapped[ImageStatus] = mapped_column(
-        SQLEnum(ImageStatus, values_callable=lambda x: [e.value for e in x]),
+        ImageStatusColumn(),
         default=ImageStatus.COMPLETED,
         nullable=False,
     )

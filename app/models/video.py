@@ -3,7 +3,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Float, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, Text, DateTime, Float, ForeignKey
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -17,12 +18,74 @@ class VideoType(str, enum.Enum):
     LIPSYNC = "lipsync"
 
 
+class VideoTypeColumn(TypeDecorator):
+    """Store VideoType as string to avoid PostgreSQL enum issues."""
+
+    cache_ok = True
+    impl = String(16)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, VideoType):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return VideoType(value.lower()).value
+            except ValueError:
+                return VideoType.VLOG.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, VideoType):
+            return value
+        if isinstance(value, str):
+            try:
+                return VideoType(value.lower())
+            except ValueError:
+                return VideoType.VLOG
+        return value
+
+
 class VideoStatus(str, enum.Enum):
     """Video generation status."""
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class VideoStatusColumn(TypeDecorator):
+    """Store VideoStatus as string to avoid PostgreSQL enum issues."""
+
+    cache_ok = True
+    impl = String(16)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, VideoStatus):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return VideoStatus(value.lower()).value
+            except ValueError:
+                return VideoStatus.PENDING.value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, VideoStatus):
+            return value
+        if isinstance(value, str):
+            try:
+                return VideoStatus(value.lower())
+            except ValueError:
+                return VideoStatus.PENDING
+        return value
 
 
 class Video(Base):
@@ -41,7 +104,7 @@ class Video(Base):
         nullable=False,
     )
     type: Mapped[VideoType] = mapped_column(
-        SQLEnum(VideoType, values_callable=lambda x: [e.value for e in x]),
+        VideoTypeColumn(),
         default=VideoType.VLOG,
         nullable=False,
     )
@@ -51,7 +114,7 @@ class Video(Base):
     source_image_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[VideoStatus] = mapped_column(
-        SQLEnum(VideoStatus, values_callable=lambda x: [e.value for e in x]),
+        VideoStatusColumn(),
         default=VideoStatus.PENDING,
         nullable=False,
     )
