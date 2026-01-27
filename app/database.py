@@ -101,6 +101,14 @@ def _run_migrations(conn):
                 except Exception as e:
                     logger.warning(f"Could not add error_message column: {e}")
 
+            # Make image_url nullable (needed for generating state)
+            if dialect == "postgresql":
+                try:
+                    conn.execute(text("ALTER TABLE images ALTER COLUMN image_url DROP NOT NULL"))
+                    logger.info("Made image_url nullable in images table")
+                except Exception as e:
+                    logger.warning(f"Could not make image_url nullable: {e}")
+
         # Convert PostgreSQL enum columns to VARCHAR for compatibility
         # This fixes the "operator does not exist: imagetype = character varying" error
         if dialect == "postgresql":
