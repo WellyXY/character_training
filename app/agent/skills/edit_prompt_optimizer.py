@@ -108,14 +108,14 @@ class EditPromptOptimizerSkill(BaseSkill):
         """Detect edit type from user instruction."""
         instruction_lower = instruction.lower()
 
-        # Chinese keywords mapping
+        # Keywords mapping
         keywords = {
-            "background": ["背景", "background", "場景", "環境"],
-            "outfit": ["服裝", "衣服", "穿著", "outfit", "cloth", "dress", "wear"],
-            "style": ["風格", "style", "轉換", "transform", "動漫", "anime", "卡通"],
-            "remove": ["移除", "刪除", "去掉", "remove", "delete", "erase"],
-            "add": ["添加", "加上", "新增", "add", "put", "place"],
-            "replace": ["換成", "替換", "改成", "replace", "change to", "swap"],
+            "background": ["background", "scene", "environment"],
+            "outfit": ["outfit", "cloth", "dress", "wear", "clothing"],
+            "style": ["style", "transform", "anime", "cartoon", "artistic"],
+            "remove": ["remove", "delete", "erase"],
+            "add": ["add", "put", "place", "insert"],
+            "replace": ["replace", "change to", "swap"],
         }
 
         for edit_type, kws in keywords.items():

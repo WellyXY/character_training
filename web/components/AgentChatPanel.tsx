@@ -95,63 +95,66 @@ function ConfirmationCard({
   }
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-      <p className="text-xs uppercase tracking-widest text-amber-400 mb-3 font-mono">
-        Pending Confirmation
-      </p>
+    <div className="rounded-2xl border border-[#333] bg-[#111] p-5 shadow-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-[#cbcbcb] font-mono">
+          Pending Confirmation
+        </p>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+          {pending.skill === "image_generator" ? "Image" : "Video"}
+        </span>
+      </div>
 
-      <div className="space-y-2 text-sm">
+      {/* Parameters */}
+      <div className="rounded-xl bg-black/40 border border-white/5 p-3 space-y-2.5 text-sm">
         {pending.params.style && (
-          <div className="flex justify-between">
-            <span className="text-gray-400 font-mono uppercase tracking-wide">Style</span>
-            <span className="text-white font-mono">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-500 font-mono text-xs uppercase tracking-wide">Style</span>
+            <span className="text-white font-mono text-xs font-bold">
               {STYLE_DISPLAY[pending.params.style] || pending.params.style}
             </span>
           </div>
         )}
         {pending.params.cloth && (
-          <div className="flex justify-between">
-            <span className="text-gray-400 font-mono uppercase tracking-wide">Outfit</span>
-            <span className="text-white font-mono">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-500 font-mono text-xs uppercase tracking-wide">Outfit</span>
+            <span className="text-white font-mono text-xs font-bold">
               {CLOTH_DISPLAY[pending.params.cloth] || pending.params.cloth}
             </span>
           </div>
         )}
-        <div className="flex justify-between">
-          <span className="text-gray-400 font-mono uppercase tracking-wide">Type</span>
-          <span className="text-white font-mono">
-            {pending.skill === "image_generator" ? "Image" : "Video"}
-          </span>
-        </div>
         {pending.params.reference_image_path && (
-          <div className="pt-2 border-t border-white/10 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 text-xs font-mono uppercase tracking-wide">Reference Image</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={resolveApiUrl(pending.params.reference_image_path)}
-                alt="Reference"
-                className="w-10 h-10 object-cover rounded"
-              />
-            </div>
-            {pending.params.reference_image_mode && (
-              <div className="flex justify-between">
-                <span className="text-gray-400 text-xs font-mono uppercase tracking-wide">Reference Mode</span>
-                <span className="text-xs text-amber-400 font-mono">
-                  {REFERENCE_MODES.find(m => m.key === pending.params.reference_image_mode)?.label || pending.params.reference_image_mode}
-                </span>
+          <>
+            <div className="border-t border-white/5" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={resolveApiUrl(pending.params.reference_image_path)}
+                  alt="Reference"
+                  className="w-10 h-10 object-cover rounded-lg border border-white/10"
+                />
+                <div>
+                  <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Reference</p>
+                  {pending.params.reference_image_mode && (
+                    <p className="text-xs text-white font-mono font-bold">
+                      {REFERENCE_MODES.find(m => m.key === pending.params.reference_image_mode)?.label || pending.params.reference_image_mode}
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Optimized Prompt - Editable */}
-      <div className="mt-3 pt-3 border-t border-white/10">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Optimized Prompt</p>
+      {/* Optimized Prompt */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest font-bold">Prompt</p>
           {isPromptEdited && (
-            <span className="text-xs text-amber-400 font-mono uppercase tracking-wider">Edited</span>
+            <span className="text-[10px] text-white font-mono uppercase tracking-wider bg-white/10 px-1.5 py-0.5 rounded">Edited</span>
           )}
         </div>
         <textarea
@@ -161,14 +164,14 @@ function ConfirmationCard({
             setIsPromptEdited(true);
           }}
           disabled={loading}
-          className="w-full text-xs text-gray-300 bg-black/30 rounded-lg p-2 h-24 resize-none border border-transparent focus:border-amber-500/50 focus:outline-none disabled:opacity-50 font-mono"
+          className="w-full text-xs text-gray-300 bg-black/40 rounded-xl p-3 h-24 resize-none border border-white/5 focus:border-white/20 focus:outline-none disabled:opacity-50 font-mono leading-relaxed"
           placeholder="Enter or edit prompt..."
         />
       </div>
 
-      {/* Aspect Ratio Selector */}
-      <div className="mt-3 pt-3 border-t border-white/10">
-        <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Aspect Ratio</p>
+      {/* Aspect Ratio */}
+      <div className="mt-4">
+        <p className="text-[10px] text-gray-500 mb-2 font-mono uppercase tracking-widest font-bold">Aspect Ratio</p>
         <div className="flex gap-2">
           {ASPECT_RATIO_OPTIONS.map((option) => (
             <button
@@ -176,10 +179,10 @@ function ConfirmationCard({
               type="button"
               onClick={() => setSelectedRatio(option.value)}
               disabled={loading}
-              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+              className={`flex-1 rounded-lg px-2 py-2 text-xs font-mono font-bold uppercase tracking-wide transition-all ${
                 selectedRatio === option.value
-                  ? "bg-amber-500 text-black"
-                  : "bg-[#1a1a1a] border border-[#333] text-gray-300 hover:text-white"
+                  ? "bg-white text-black shadow-lg"
+                  : "bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-white/20"
               } disabled:opacity-50`}
             >
               {option.label}
@@ -189,23 +192,23 @@ function ConfirmationCard({
       </div>
 
       {/* AI Reasoning */}
-      <div className="mt-3 pt-3 border-t border-white/10">
-        <p className="text-xs text-gray-400 mb-1 font-mono uppercase tracking-wider">AI Reasoning</p>
-        <p className="text-sm text-gray-300 font-mono">{pending.reasoning}</p>
+      <div className="mt-4 rounded-xl bg-white/[0.02] border border-white/5 p-3">
+        <p className="text-[10px] text-gray-500 mb-1.5 font-mono uppercase tracking-widest font-bold">AI Reasoning</p>
+        <p className="text-xs text-gray-400 font-mono leading-relaxed">{pending.reasoning}</p>
       </div>
 
-      {/* Suggestions */}
+      {/* Quick Adjustments */}
       {pending.suggestions && pending.suggestions.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/10">
-          <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Quick Adjustments</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-4">
+          <p className="text-[10px] text-gray-500 mb-2 font-mono uppercase tracking-widest font-bold">Quick Adjustments</p>
+          <div className="flex flex-wrap gap-1.5">
             {pending.suggestions.map((suggestion, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => onModify(suggestion)}
                 disabled={loading}
-                className="rounded-full bg-[#1a1a1a] border border-[#333] px-3 py-1 text-xs font-mono font-bold uppercase tracking-wide text-gray-300 hover:text-white disabled:opacity-50"
+                className="rounded-full bg-white/5 border border-white/10 px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all disabled:opacity-50"
               >
                 {suggestion}
               </button>
@@ -215,12 +218,12 @@ function ConfirmationCard({
       )}
 
       {/* Actions */}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-5 flex gap-2">
         <button
           type="button"
           disabled={loading}
           onClick={() => onConfirm(selectedRatio, isPromptEdited ? editedPrompt : undefined)}
-          className="flex-1 rounded-lg bg-amber-500 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-white px-3 py-2.5 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50 transition-colors shadow-lg"
         >
           {loading ? "Generating..." : "Confirm"}
         </button>
@@ -228,7 +231,7 @@ function ConfirmationCard({
           type="button"
           disabled={loading}
           onClick={onCancel}
-          className="flex-1 rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-xs font-mono font-bold uppercase tracking-wide text-gray-400 hover:text-white hover:border-white/20 disabled:opacity-50 transition-colors"
         >
           Cancel
         </button>
@@ -280,6 +283,10 @@ export default function AgentChatPanel({
   const [referenceMode, setReferenceMode] = useState<ReferenceImageMode>("pose_background");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragScrollLeft, setDragScrollLeft] = useState(0);
   const [initialRefApplied, setInitialRefApplied] = useState(false);
 
   const isAwaitingConfirmation = conversationState === "awaiting_confirmation";
@@ -409,9 +416,10 @@ export default function AgentChatPanel({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-[#0b0b0b] p-3 min-h-0">
+      <div className="flex-1 flex flex-col rounded-xl border border-white/10 bg-[#0b0b0b] min-h-0 overflow-hidden">
+      <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
               <p className="text-sm text-gray-400 mb-2 font-mono">Start a conversation</p>
               <p className="text-xs text-gray-500 font-mono">
@@ -478,6 +486,59 @@ export default function AgentChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
+        {/* Suggestion Bubbles - fixed at bottom of chat */}
+        <div
+          ref={suggestionsRef}
+          className="flex-shrink-0 overflow-x-auto scrollbar-hide cursor-grab select-none border-t border-white/10 p-3"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onMouseDown={(e) => {
+            setIsDragging(true);
+            setDragStartX(e.pageX - (suggestionsRef.current?.offsetLeft || 0));
+            setDragScrollLeft(suggestionsRef.current?.scrollLeft || 0);
+          }}
+          onMouseMove={(e) => {
+            if (!isDragging || !suggestionsRef.current) return;
+            e.preventDefault();
+            const x = e.pageX - (suggestionsRef.current.offsetLeft || 0);
+            suggestionsRef.current.scrollLeft = dragScrollLeft - (x - dragStartX);
+          }}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
+        >
+          <div className="flex flex-col gap-2 w-max">
+            {[
+              [
+                { label: "Ins Post", message: "Reference this Instagram post: " },
+                { label: "Daily Vlog", message: "Generate a casual daily vlog clip, walking around the city with natural lighting" },
+                { label: "Short Video", message: "Create a short video with smooth transitions and trendy background music" },
+                { label: "Sexy Photo", message: "Generate a sexy photo shoot with elegant poses and warm lighting" },
+                { label: "Beach Scene", message: "Create a beach scene photo with sunset lighting and relaxed vibes" },
+              ],
+              [
+                { label: "Home Casual", message: "Generate a cozy home casual shot with soft natural light" },
+                { label: "Fashion Shoot", message: "Create a high-fashion editorial photo with dramatic lighting" },
+                { label: "Dance Video", message: "Generate a short dance video with energetic moves and dynamic angles" },
+                { label: "Cute Selfie", message: "Generate a cute selfie-style photo with soft focus and bright colors" },
+                { label: "Outfit Change", message: "Generate a series showing different outfit styles and poses" },
+              ],
+            ].map((row, rowIndex) => (
+              <div key={rowIndex} className="flex gap-2">
+                {row.map((suggestion) => (
+                  <button
+                    key={suggestion.label}
+                    type="button"
+                    onClick={() => setInput(suggestion.message)}
+                    className="flex-shrink-0 whitespace-nowrap rounded-full border border-[#333] bg-[#1a1a1a] px-3 py-1.5 text-xs font-mono text-gray-300 hover:text-white hover:border-white/30 transition-colors"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Input */}
       <div className="mt-4 space-y-3">
         {/* Hidden file input */}
@@ -532,7 +593,7 @@ export default function AgentChatPanel({
                     disabled={loading}
                     className={`w-full text-left px-2 py-1.5 rounded-lg transition-colors ${
                       referenceMode === mode.key
-                        ? "bg-amber-500/20 border border-amber-500/50"
+                        ? "bg-white/10 border border-white/30"
                         : "hover:bg-white/5 border border-transparent"
                     } disabled:opacity-50`}
                   >
@@ -540,12 +601,12 @@ export default function AgentChatPanel({
                       <div
                         className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
                           referenceMode === mode.key
-                            ? "border-amber-500"
+                            ? "border-white"
                             : "border-gray-500"
                         }`}
                       >
                         {referenceMode === mode.key && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
                         )}
                       </div>
                       <span className="text-xs font-medium text-white font-mono uppercase tracking-wide">
@@ -574,7 +635,7 @@ export default function AgentChatPanel({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50 font-mono uppercase tracking-wide"
+                className="text-xs text-gray-300 hover:text-white disabled:opacity-50 font-mono uppercase tracking-wide"
               >
                 {uploading ? "Uploading..." : "+ Upload Image"}
               </button>
@@ -592,7 +653,7 @@ export default function AgentChatPanel({
                     }}
                     className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-colors ${
                       selectedReferenceImage?.id === img.id
-                        ? "border-amber-500"
+                        ? "border-white"
                         : "border-transparent hover:border-white/30"
                     }`}
                   >
@@ -619,7 +680,7 @@ export default function AgentChatPanel({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 font-mono uppercase tracking-wide"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-white/10 text-gray-300 hover:bg-white/20 disabled:opacity-50 font-mono uppercase tracking-wide"
                 >
                   {uploading ? "Uploading..." : "Upload reference image"}
                 </button>
@@ -636,7 +697,7 @@ export default function AgentChatPanel({
             disabled={!characterName || loading || uploading}
             className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-colors disabled:opacity-50 ${
               showImagePicker || hasReferenceImage
-                ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                ? "border-white bg-white/10 text-white"
                 : "border-[#333] text-gray-400 hover:border-white/30 hover:text-white"
             }`}
             title="Select or upload a reference image"

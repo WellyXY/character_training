@@ -11,80 +11,80 @@ from app.services.storage import get_storage_service
 
 # Seedream prompt optimization guide
 SEEDREAM_PROMPT_GUIDE = """
-你是一個專業的 AI 圖片生成 Prompt 優化專家，專門為 Seedream 4.5 模型優化 prompt。
+You are a professional AI image generation prompt optimization expert, specializing in optimizing prompts for the Seedream 4.5 model.
 
-## Seedream Prompt 最佳實踐:
+## Seedream Prompt Best Practices:
 
-1. **主體描述** (Subject):
-   - 清楚描述主體的外觀特徵
-   - 包含年齡、性別、膚色等基本資訊
-   - 描述髮型、表情、姿勢
+1. **Subject Description**:
+   - Clearly describe the subject's appearance features
+   - Include basic info such as gender, skin tone, etc.
+   - Describe hairstyle, expression, pose
 
-2. **服裝細節** (Clothing):
-   - 具體描述服裝款式、材質、顏色
-   - 根據風格調整服裝描述
-   - **重要**: 服裝必須在 prompt 中明確描述，不要從任何參考圖繼承
+2. **Clothing Details**:
+   - Specifically describe clothing style, material, color
+   - Adjust clothing description based on the style
+   - **Important**: Clothing must be explicitly described in the prompt, do not inherit from any reference image
 
-3. **場景設定** (Scene/Setting):
-   - 描述環境背景
-   - 包含光線、時間、氛圍
+3. **Scene Setting**:
+   - Describe the environment and background
+   - Include lighting, time of day, atmosphere
 
-4. **攝影風格** (Photography Style):
-   - 鏡頭角度 (close-up, medium shot, full body)
-   - 光線類型 (natural light, studio lighting, golden hour)
-   - 畫質描述 (high quality, 4K, photorealistic)
+4. **Photography Style**:
+   - Camera angle (close-up, medium shot, full body)
+   - Lighting type (natural light, studio lighting, golden hour)
+   - Quality descriptors (high quality, 4K, photorealistic)
 
-5. **風格關鍵詞**:
-   - sexy: 性感、魅惑、自信的姿態
-   - cute: 可愛、甜美、青春活力
-   - warm: 溫馨、舒適、自然光線
-   - home: 居家、放鬆、私密感
+5. **Style Keywords**:
+   - sexy: Sensual, alluring, confident poses
+   - cute: Adorable, sweet, youthful energy
+   - warm: Cozy, comfortable, natural lighting
+   - home: Homey, relaxed, intimate feel
 
-## 多圖參考指南 (Multiple Reference Images):
-當同時有 Base Images 和用戶參考圖時，Seedream 會收到多張參考圖:
-- Base images (前幾張) → 用於保持角色臉部特徵和身材比例一致
-- 用戶參考圖 (最後一張) → 用於參考姿勢/構圖/氛圍/光線
+## Multiple Reference Images Guide:
+When both Base Images and user reference images are present, Seedream receives multiple reference images:
+- Base images (first few) → Used to maintain consistent facial features and body proportions
+- User reference image (last one) → Used to reference pose/composition/atmosphere/lighting
 
-Prompt 必須使用特殊格式明確區分參考目標：
+The prompt must use a special format to clearly distinguish reference targets:
 
-**格式**:
+**Format**:
 [Reference Character] Based on the character's face and body shape from the base reference images,
-[Reference Pose/Composition/Style] following the [具體姿勢/構圖/氛圍描述] from the additional reference image,
-generate [主體描述], wearing [服裝描述], in [場景描述]...
+[Reference Pose/Composition/Style] following the [specific pose/composition/atmosphere description] from the additional reference image,
+generate [subject description], wearing [clothing description], in [scene description]...
 
-**重點**:
-1. 使用 [Reference Character] 指向 base images 的臉部和身材
-2. 使用 [Reference Pose/Composition/Style] 指向用戶參考圖的姿勢/構圖/氛圍
-3. 服裝必須明確描述，絕對不要從任何參考圖繼承穿著
-4. 將 GPT-4V 分析出的姿勢、構圖、氛圍描述放在 [Reference Pose...] 區塊
+**Key Points**:
+1. Use [Reference Character] to point to the face and body from base images
+2. Use [Reference Pose/Composition/Style] to point to the pose/composition/atmosphere from the user's reference image
+3. Clothing must be explicitly described, never inherit outfits from any reference image
+4. Place the GPT-4V analyzed pose, composition, and atmosphere descriptions in the [Reference Pose...] block
 
-## 重要注意事項:
-1. **禁止在 prompt 中使用角色名稱**：絕對不要把角色名字（如 "Sake II"、"Luna" 等）寫進 prompt，這會導致文字被渲染到圖片上
-2. 只用 "the character" 或 "the person from base reference images" 來指代角色
-3. 角色外觀資訊只用來了解外觀特徵，不要直接複製名字進 prompt
-4. 不要在 prompt 中提及任何人物的年齡或出生年份
+## Important Notes:
+1. **Never use character names in the prompt**: Never put character names (e.g. "Sake II", "Luna", etc.) in the prompt, as this will cause text to be rendered onto the image
+2. Only use "the character" or "the person from base reference images" to refer to the character
+3. Character appearance info is only for understanding visual features, do not copy names into the prompt
+4. Do not mention any person's age or birth year in the prompt
 
-## 輸出格式:
-請直接輸出優化後的英文 prompt，不需要其他說明。
+## Output Format:
+Output the optimized English prompt directly, no other explanations needed.
 """
 
 
-IMAGE_ANALYSIS_PROMPT = """分析這張圖片，提取以下資訊用於生成類似風格的圖片：
+IMAGE_ANALYSIS_PROMPT = """Analyze this image and extract the following information for generating a similar-style image:
 
-1. **姿勢/動作**: 詳細描述人物的姿勢、身體位置、手勢、頭部角度等
-2. **構圖**: 描述鏡頭角度、取景方式（全身/半身/特寫）、人物在畫面中的位置
-3. **氛圍/Vibe**: 整體感覺、情緒、風格
-4. **光線**: 光線來源、方向、色溫
-5. **場景/背景**: 環境描述
+1. **Pose/Action**: Describe in detail the person's pose, body position, hand gestures, head angle, etc.
+2. **Composition**: Describe the camera angle, framing (full body/half body/close-up), and the person's position in the frame
+3. **Atmosphere/Vibe**: Overall feeling, mood, style
+4. **Lighting**: Light source, direction, color temperature
+5. **Scene/Background**: Environment description
 
-用戶說他想參考: {user_intent}
+The user wants to reference: {user_intent}
 
-請用英文輸出一段描述，可以直接用於圖片生成 prompt。格式如下：
-- 先描述姿勢和動作
-- 再描述構圖和角度
-- 最後描述氛圍和光線
+Output a description in English that can be directly used as an image generation prompt. Format as follows:
+- First describe the pose and action
+- Then describe the composition and angle
+- Finally describe the atmosphere and lighting
 
-只輸出描述，不要其他說明。"""
+Output only the description, no other explanations."""
 
 
 class PromptOptimizerSkill(BaseSkill):
@@ -127,7 +127,7 @@ class PromptOptimizerSkill(BaseSkill):
 
         Args:
             image_path: Path to the reference image (relative URL)
-            user_intent: What the user wants to reference (e.g., "參考動作", "參考氛圍")
+            user_intent: What the user wants to reference (e.g., "reference pose", "reference atmosphere")
 
         Returns:
             Text description of the image that can be used in the prompt
@@ -257,13 +257,13 @@ class PromptOptimizerSkill(BaseSkill):
                     if len(parts) > 1 and len(parts[0]) < 30:  # Name is usually short
                         clean_description = parts[1]
                         break
-            context_parts.append(f"角色外觀: {clean_description}")
+            context_parts.append(f"Character appearance: {clean_description}")
         if style:
-            context_parts.append(f"風格: {style}")
+            context_parts.append(f"Style: {style}")
         if cloth:
-            context_parts.append(f"服裝: {cloth}")
+            context_parts.append(f"Clothing: {cloth}")
         if scene:
-            context_parts.append(f"場景: {scene}")
+            context_parts.append(f"Scene: {scene}")
 
         # Analyze reference image if provided
         reference_context = ""
@@ -279,20 +279,20 @@ class PromptOptimizerSkill(BaseSkill):
                 db=db,
             )
             if reference_analysis:
-                context_parts.append(f"參考圖片分析結果 (姿勢/構圖/氛圍):\n{reference_analysis}")
-                context_parts.append(f"參考模式: {reference_image_mode or 'custom'}")
+                context_parts.append(f"Reference image analysis (pose/composition/atmosphere):\n{reference_analysis}")
+                context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
                 reference_context = f"""
 6. {mode_instructions}
-   - 系統會將 Base Images + 用戶參考圖 一起傳給 Seedream
-   - 將上面「參考圖片分析結果」的姿勢/構圖/氛圍描述融入 prompt"""
+   - The system will pass Base Images + user reference image together to Seedream
+   - Incorporate the pose/composition/atmosphere from the reference image analysis above into the prompt"""
             else:
                 # GPT-4V analysis failed (likely NSFW content), but still need to tell GPT about reference image
-                context_parts.append("參考圖片: 有提供參考圖片，但無法分析內容")
-                context_parts.append(f"參考模式: {reference_image_mode or 'custom'}")
+                context_parts.append("Reference image: A reference image was provided but its content could not be analyzed")
+                context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
                 reference_context = f"""
 6. {mode_instructions}
-   - 系統會將 Base Images + 用戶參考圖 一起傳給 Seedream
-   - 因為無法分析參考圖內容，請根據參考模式生成適當的標記"""
+   - The system will pass Base Images + user reference image together to Seedream
+   - Since the reference image content could not be analyzed, generate appropriate tags based on the reference mode"""
 
         user_context = "\n".join(context_parts) if context_parts else ""
 
@@ -300,21 +300,21 @@ class PromptOptimizerSkill(BaseSkill):
             {"role": "system", "content": SEEDREAM_PROMPT_GUIDE},
             {
                 "role": "user",
-                "content": f"""請優化以下生成請求為高品質的 Seedream prompt:
+                "content": f"""Optimize the following generation request into a high-quality Seedream prompt:
 
-用戶請求: {raw_prompt}
+User request: {raw_prompt}
 
 {user_context}
 
-{"請生成一個結構化的英文 prompt，確保:" if reference_image_mode == "face_swap" else "請生成一個詳細的英文 prompt，確保:"}
-{"""1. 使用 REPLACE 模板格式：Replace the face with... Keep [elements] unchanged.
-2. 明確列出所有要保留的元素（pose, clothing, background, lighting, body position）
-3. 強調 seamless blend 和 skin tone matching
-4. 保持 prompt 結構化 (50-100 字)""" if reference_image_mode == "face_swap" else f"""1. 包含主體的詳細描述
-2. 符合指定的風格和服裝
-3. 包含場景和光線描述
-4. 使用專業攝影術語
-5. 保持 prompt 長度適中 (100-200 字)"""}{reference_context}""",
+{"Generate a structured English prompt, ensuring:" if reference_image_mode == "face_swap" else "Generate a detailed English prompt, ensuring:"}
+{"""1. Use the REPLACE template format: Replace the face with... Keep [elements] unchanged.
+2. Explicitly list all elements to preserve (pose, clothing, background, lighting, body position)
+3. Emphasize seamless blend and skin tone matching
+4. Keep the prompt structured (50-100 words)""" if reference_image_mode == "face_swap" else f"""1. Include a detailed description of the subject
+2. Match the specified style and clothing
+3. Include scene and lighting descriptions
+4. Use professional photography terminology
+5. Keep the prompt at a moderate length (100-200 words)"""}{reference_context}""",
             },
         ]
 
@@ -333,7 +333,7 @@ class PromptOptimizerSkill(BaseSkill):
                 "sorry", "apologize", "inappropriate", "policy",
                 "against my", "guidelines", "cannot create", "can't create",
                 "explicit", "nudity", "sexualized", "minor",
-                "不能", "無法", "抱歉", "對不起", "違反"
+                "not allowed", "violation"
             ]
             # Also check if response starts with refusal pattern
             starts_with_refusal = optimized_lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry"))
@@ -371,43 +371,43 @@ class PromptOptimizerSkill(BaseSkill):
 
     def _get_mode_instructions(self, mode: Optional[str]) -> str:
         """Return specific prompt instructions based on reference image mode."""
-        no_name_warning = "- **絕對禁止**在 prompt 中使用任何角色名稱或年齡，用 'the character' 代替"
+        no_name_warning = "- **Strictly prohibited**: Never use any character name or age in the prompt, use 'the character' instead"
         if mode == "face_swap":
             return f"""
-**重要 - Face Swap 模式 (只換臉)**:
-- 使用類似 image edit 的 REPLACE 模板格式
-- 結構: "Replace the face with [character description]. Keep [preserved elements] unchanged."
-- 必須明確列出要保留的元素：pose, clothing, background, lighting, composition, body position
-- 強調 seamless blend 和 matching skin tone/lighting
+**Important - Face Swap Mode (face only)**:
+- Use a REPLACE template format similar to image editing
+- Structure: "Replace the face with [character description]. Keep [preserved elements] unchanged."
+- Must explicitly list all elements to preserve: pose, clothing, background, lighting, composition, body position
+- Emphasize seamless blend and matching skin tone/lighting
 {no_name_warning}
-- 使用 [Reference Character] 標記指向 base images
-- 範例: [Reference Character] Replace the person's face with the character's facial features from the base reference images. Keep the pose, clothing, background, lighting, composition, and body position completely identical. Seamless face blend, matching skin tone and lighting direction, photorealistic, high detail."""
+- Use [Reference Character] tag to point to base images
+- Example: [Reference Character] Replace the person's face with the character's facial features from the base reference images. Keep the pose, clothing, background, lighting, composition, and body position completely identical. Seamless face blend, matching skin tone and lighting direction, photorealistic, high detail."""
         elif mode == "pose_background":
             return f"""
-**重要 - Pose & Background 模式**:
-- 參考「最後一張參考圖」的動作姿勢和背景構圖
-- 服裝根據用戶描述調整（不從參考圖繼承）
+**Important - Pose & Background Mode**:
+- Reference the pose and background composition from the last reference image
+- Adjust clothing based on user description (do not inherit from reference image)
 {no_name_warning}
-- 必須使用以下標記:
-  - [Reference Character] 指向 base images (臉部和身材)，不要寫角色名字
-  - [Reference Pose] 參考最後參考圖的姿勢
-  - [Reference Background] 參考最後參考圖的背景"""
+- Must use the following tags:
+  - [Reference Character] points to base images (face and body), do not write character name
+  - [Reference Pose] reference the pose from the last reference image
+  - [Reference Background] reference the background from the last reference image"""
         elif mode == "clothing_pose":
             return f"""
-**重要 - Clothing & Pose 模式**:
-- 參考「最後一張參考圖」的服裝穿著和動作姿勢
-- 背景根據用戶描述生成
+**Important - Clothing & Pose Mode**:
+- Reference the clothing and pose from the last reference image
+- Generate background based on user description
 {no_name_warning}
-- 必須使用以下標記:
-  - [Reference Character] 指向 base images (臉部和身材)，不要寫角色名字
-  - [Reference Pose] 參考最後參考圖的姿勢
-  - [Reference Clothing] 參考最後參考圖的穿著"""
+- Must use the following tags:
+  - [Reference Character] points to base images (face and body), do not write character name
+  - [Reference Pose] reference the pose from the last reference image
+  - [Reference Clothing] reference the clothing from the last reference image"""
         else:  # custom or None
             return f"""
-**Custom 模式**:
-- 根據用戶描述自由參考圖片的相關元素
+**Custom Mode**:
+- Freely reference relevant elements from the image based on user description
 {no_name_warning}
-- 靈活使用 [Reference Pose], [Reference Background], [Reference Clothing] 等標記"""
+- Flexibly use [Reference Pose], [Reference Background], [Reference Clothing] and other tags"""
 
     async def optimize(
         self,

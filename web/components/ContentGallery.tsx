@@ -17,6 +17,7 @@ interface ContentGalleryProps {
   onVideoCreated?: () => void;
   onRefresh?: () => void;
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
+  onTaskUpdate?: (taskId: string, update: Partial<GenerationTask>) => void;
 }
 
 type TabType = "all" | "base" | "images" | "videos";
@@ -32,6 +33,7 @@ export default function ContentGallery({
   onVideoCreated,
   onRefresh,
   onTaskStarted,
+  onTaskUpdate,
 }: ContentGalleryProps) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [selectedItem, setSelectedItem] = useState<{
@@ -122,33 +124,81 @@ export default function ContentGallery({
 
   const handleRetryImage = async (imageId: string) => {
     if (loading) return;
-    const retryKey = `image:${imageId}`;
-    setRetryingId(retryKey);
+
+    // Find the image to get its metadata for display
+    const img = images.find((i) => i.id === imageId);
+    const taskId = `retry-image-${Date.now()}`;
+
+    // Show generating task immediately
+    if (onTaskStarted) {
+      onTaskStarted({
+        task_id: taskId,
+        prompt: img?.metadata?.prompt || "Retrying image...",
+        reference_image_url: img?.image_url ?? undefined,
+      });
+    }
+
+    // Run retry in background
     try {
       await retryImage(imageId);
+      // Mark task as completed
+      if (onTaskUpdate) {
+        onTaskUpdate(taskId, {
+          status: "completed" as GenerationTask["status"],
+          progress: 100,
+          stage: "completed",
+        });
+      }
       await onRefresh?.();
     } catch (err) {
       console.error("Retry image failed:", err);
       const message = err instanceof Error ? err.message : "Retry failed";
-      alert(message);
-    } finally {
-      setRetryingId(null);
+      if (onTaskUpdate) {
+        onTaskUpdate(taskId, {
+          status: "failed" as GenerationTask["status"],
+          progress: 0,
+          stage: "failed",
+          error: message,
+        });
+      }
     }
   };
 
   const handleRetryVideo = async (videoId: string) => {
     if (loading) return;
-    const retryKey = `video:${videoId}`;
-    setRetryingId(retryKey);
+
+    const video = videos.find((v) => v.id === videoId);
+    const taskId = `retry-video-${Date.now()}`;
+
+    if (onTaskStarted) {
+      onTaskStarted({
+        task_id: taskId,
+        prompt: video?.metadata?.prompt || "Retrying video...",
+        reference_image_url: video?.thumbnail_url ?? undefined,
+      });
+    }
+
     try {
       await retryVideo(videoId);
+      if (onTaskUpdate) {
+        onTaskUpdate(taskId, {
+          status: "completed" as GenerationTask["status"],
+          progress: 100,
+          stage: "completed",
+        });
+      }
       await onRefresh?.();
     } catch (err) {
       console.error("Retry video failed:", err);
       const message = err instanceof Error ? err.message : "Retry failed";
-      alert(message);
-    } finally {
-      setRetryingId(null);
+      if (onTaskUpdate) {
+        onTaskUpdate(taskId, {
+          status: "failed" as GenerationTask["status"],
+          progress: 0,
+          stage: "failed",
+          error: message,
+        });
+      }
     }
   };
 
@@ -343,7 +393,7 @@ export default function ContentGallery({
                               });
                             }}
                             disabled={loading}
-                            className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                            className="flex-1 rounded-md bg-white/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
                             Edit
                           </button>
@@ -353,7 +403,7 @@ export default function ContentGallery({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setAnimatingImage(item.data); }}
                             disabled={loading}
-                            className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                            className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
                             Animate
                           </button>
@@ -362,7 +412,7 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleRetryImage(item.data.id); }}
                           disabled={loading || retryingId === `image:${item.data.id}`}
-                          className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           {retryingId === `image:${item.data.id}` ? "Retrying..." : "Retry"}
                         </button>
@@ -417,7 +467,7 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleRetryVideo(item.data.id); }}
                           disabled={loading || retryingId === `video:${item.data.id}`}
-                          className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           {retryingId === `video:${item.data.id}` ? "Retrying..." : "Retry"}
                         </button>
@@ -490,7 +540,7 @@ export default function ContentGallery({
                             });
                           }}
                           disabled={loading}
-                          className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-white/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Edit
                         </button>
@@ -503,7 +553,7 @@ export default function ContentGallery({
                             setAnimatingImage(img);
                           }}
                           disabled={loading}
-                          className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Animate
                         </button>
@@ -515,7 +565,7 @@ export default function ContentGallery({
                           handleRetryImage(img.id);
                         }}
                         disabled={loading || retryingId === `image:${img.id}`}
-                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -591,7 +641,7 @@ export default function ContentGallery({
                             });
                           }}
                           disabled={loading}
-                          className="flex-1 rounded-md bg-purple-600/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-white/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Edit
                         </button>
@@ -604,7 +654,7 @@ export default function ContentGallery({
                             setAnimatingImage(img);
                           }}
                           disabled={loading}
-                          className="flex-1 rounded-md bg-blue-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           Animate
                         </button>
@@ -616,7 +666,7 @@ export default function ContentGallery({
                           handleRetryImage(img.id);
                         }}
                         disabled={loading || retryingId === `image:${img.id}`}
-                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -706,7 +756,7 @@ export default function ContentGallery({
                           handleRetryVideo(video.id);
                         }}
                         disabled={loading || retryingId === `video:${video.id}`}
-                        className="flex-1 rounded-md bg-amber-500/85 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `video:${video.id}` ? "Retrying..." : "Retry"}
                       </button>
@@ -830,7 +880,7 @@ export default function ContentGallery({
                             editMode: true,
                           })
                         }
-                        className="mt-4 rounded-lg bg-purple-600 px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:bg-purple-500"
+                        className="mt-4 rounded-lg bg-white px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
                       >
                         Edit with AI
                       </button>
@@ -1095,6 +1145,7 @@ export default function ContentGallery({
           onVideoCreated={() => {
             onVideoCreated?.();
           }}
+          onTaskStarted={onTaskStarted}
         />
       )}
     </section>

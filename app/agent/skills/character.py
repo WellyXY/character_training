@@ -67,7 +67,7 @@ class CharacterSkill(BaseSkill):
         return {
             "success": True,
             "character_id": character.id,
-            "message": f"角色 '{name}' 創建成功！",
+            "message": f"Character '{name}' created successfully!",
         }
 
     async def _update_character(
@@ -100,7 +100,7 @@ class CharacterSkill(BaseSkill):
 
         return {
             "success": True,
-            "message": f"角色 '{character.name}' 更新成功！",
+            "message": f"Character '{character.name}' updated successfully!",
         }
 
     async def _get_character(
@@ -217,7 +217,7 @@ class CharacterSkill(BaseSkill):
         if current_count >= 3:
             return {
                 "success": False,
-                "error": "已達到最大 Base Image 數量限制 (3張)",
+                "error": "Maximum Base Image limit reached (3 images)",
             }
 
         # Add new base image
@@ -235,7 +235,7 @@ class CharacterSkill(BaseSkill):
         return {
             "success": True,
             "image_id": image.id,
-            "message": f"Base Image 添加成功！({current_count + 1}/3)",
+            "message": f"Base Image added successfully! ({current_count + 1}/3)",
         }
 
     async def _remove_base_image(
@@ -264,5 +264,5 @@ class CharacterSkill(BaseSkill):
 
         return {
             "success": True,
-            "message": "Base Image 已移除",
+            "message": "Base Image removed",
         }

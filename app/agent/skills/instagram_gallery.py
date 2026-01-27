@@ -70,7 +70,7 @@ class InstagramGallerySkill(BaseSkill):
         if not shortcode:
             return {
                 "success": False,
-                "error": "無法解析 Instagram URL。請提供有效的貼文連結。",
+                "error": "Unable to parse the Instagram URL. Please provide a valid post link.",
             }
 
         try:
@@ -89,7 +89,7 @@ class InstagramGallerySkill(BaseSkill):
                 image_urls.append(post.url)
 
             if not image_urls:
-                return {"success": False, "error": "貼文中沒有圖片（可能是純影片貼文）"}
+                return {"success": False, "error": "No images found in the post (it may be a video-only post)"}
 
             # Limit to 5 images
             image_urls = image_urls[:5]
@@ -110,7 +110,7 @@ class InstagramGallerySkill(BaseSkill):
                     logger.warning(f"Failed to download image {i}: {e}")
 
             if not saved_images:
-                return {"success": False, "error": "無法下載任何圖片"}
+                return {"success": False, "error": "Failed to download any images"}
 
             await db.commit()
 
@@ -120,15 +120,15 @@ class InstagramGallerySkill(BaseSkill):
                 "count": len(saved_images),
                 "owner": post.owner_username,
                 "caption": post.caption[:200] if post.caption else None,
-                "message": f"成功下載 {len(saved_images)} 張圖片作為參考",
+                "message": f"Successfully downloaded {len(saved_images)} images as reference",
             }
 
         except instaloader.exceptions.LoginRequiredException:
-            return {"success": False, "error": "此貼文需要登入才能查看（可能是私人帳號）"}
+            return {"success": False, "error": "This post requires login to view (it may be a private account)"}
         except instaloader.exceptions.ProfileNotExistsException:
-            return {"success": False, "error": "貼文不存在或已被刪除"}
+            return {"success": False, "error": "Post does not exist or has been deleted"}
         except instaloader.exceptions.QueryReturnedBadRequestException:
-            return {"success": False, "error": "Instagram API 請求失敗，請稍後再試"}
+            return {"success": False, "error": "Instagram API request failed, please try again later"}
         except Exception as e:
             logger.error(f"Instagram fetch error: {e}")
-            return {"success": False, "error": f"下載失敗: {str(e)}"}
+            return {"success": False, "error": f"Download failed: {str(e)}"}

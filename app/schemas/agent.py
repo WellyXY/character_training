@@ -54,6 +54,7 @@ class PendingGenerationParams(BaseModel):
     aspect_ratio: Optional[str] = "9:16"
     reference_image_path: Optional[str] = None  # User uploaded reference image
     reference_image_mode: Optional[ReferenceImageMode] = None  # How to use the reference image
+    video_prompt: Optional[str] = None
 
 
 class PendingGeneration(BaseModel):

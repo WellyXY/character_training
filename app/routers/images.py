@@ -3,6 +3,7 @@ import json
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -231,3 +232,53 @@ async def retry_image(
         raise HTTPException(status_code=500, detail="Retry image not found")
 
     return _image_to_response(new_image)
+
+
+class DirectGenerateRequest(BaseModel):
+    """Request for direct prompt generation (bypasses AI agent)."""
+    character_id: str
+    prompt: str
+    aspect_ratio: str = "9:16"
+
+
+@router.post("/generate/direct", response_model=ImageResponse)
+async def generate_direct(
+    request: DirectGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an image directly with a custom prompt + base images, bypassing the AI agent."""
+    # Verify character exists
+    char_result = await db.execute(
+        select(Character).where(Character.id == request.character_id)
+    )
+    character = char_result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    skill = ImageGeneratorSkill()
+    result = await skill.execute(
+        action="generate_content",
+        params={
+            "prompt": request.prompt,
+            "aspect_ratio": request.aspect_ratio,
+        },
+        character_id=request.character_id,
+        db=db,
+    )
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Generation failed"),
+        )
+
+    image_id = result.get("image_id")
+    if not image_id:
+        raise HTTPException(status_code=500, detail="No image_id returned")
+
+    img_result = await db.execute(select(Image).where(Image.id == image_id))
+    image = img_result.scalar_one_or_none()
+    if not image:
+        raise HTTPException(status_code=500, detail="Generated image not found")
+
+    return _image_to_response(image)

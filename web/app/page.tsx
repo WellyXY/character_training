@@ -79,9 +79,10 @@ function HomeContent() {
 
   // Poll active tasks for progress updates
   useEffect(() => {
-    // Only poll if there are active tasks and we have a session
+    // Only poll server-tracked tasks (skip locally-created edit/animate tasks)
     const activePendingTasks = activeTasks.filter(
-      (t) => t.status === "pending" || t.status === "generating"
+      (t) => (t.status === "pending" || t.status === "generating") &&
+        !t.task_id.startsWith("edit-") && !t.task_id.startsWith("animate-") && !t.task_id.startsWith("retry-")
     );
     if (activePendingTasks.length === 0 || !sessionId) return;
 
@@ -399,6 +400,9 @@ function HomeContent() {
             onCreate={handleCreateCharacter}
             onApproveImage={handleApproveImage}
             onDeleteImage={handleDeleteImage}
+            onRefresh={() => {
+              if (selectedCharacterId) loadMedia(selectedCharacterId);
+            }}
             loading={loading}
           />
 
@@ -434,6 +438,20 @@ function HomeContent() {
                 created_at: new Date().toISOString(),
               };
               setActiveTasks((prev) => [...prev, newTask]);
+            }}
+            onTaskUpdate={(taskId, update) => {
+              setActiveTasks((prev) =>
+                prev.map((t) =>
+                  t.task_id === taskId ? { ...t, ...update } : t
+                )
+              );
+              // Auto-remove completed/failed tasks after a delay
+              if (update.status === "completed" || update.status === "failed") {
+                const delay = update.status === "completed" ? 2000 : 3000;
+                setTimeout(() => {
+                  setActiveTasks((prev) => prev.filter((t) => t.task_id !== taskId));
+                }, delay);
+              }
             }}
           />
 

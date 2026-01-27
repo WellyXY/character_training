@@ -196,7 +196,7 @@ export default function ImageEditPanel({
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-2 ${
                 msg.role === "user"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-white/15 text-white"
                   : "bg-white/10 text-gray-200"
               }`}
             >
@@ -207,10 +207,10 @@ export default function ImageEditPanel({
 
         {/* Pending Edit Confirmation Card */}
         {pendingEdit && (
-          <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] rounded-xl p-4 border border-blue-500/30">
+          <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-xl p-4 border border-[#333]">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm font-medium text-blue-400 font-mono uppercase tracking-wider">Confirm Edit</span>
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span className="text-sm font-medium text-white font-mono uppercase tracking-wider">Confirm Edit</span>
             </div>
 
             {/* Optimized Prompt - Editable */}
@@ -218,7 +218,7 @@ export default function ImageEditPanel({
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-gray-500 font-mono uppercase tracking-wider">Optimized Prompt</p>
                 {isPromptEdited && (
-                  <span className="text-xs text-blue-400 font-mono uppercase tracking-wider">Edited</span>
+                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wider">Edited</span>
                 )}
               </div>
               <textarea
@@ -228,7 +228,7 @@ export default function ImageEditPanel({
                   setIsPromptEdited(true);
                 }}
                 disabled={isLoading}
-                className="w-full text-sm text-gray-300 bg-black/30 rounded-lg p-2 h-20 resize-none border border-transparent focus:border-blue-500/50 focus:outline-none disabled:opacity-50 font-mono"
+                className="w-full text-sm text-gray-300 bg-black/30 rounded-lg p-2 h-20 resize-none border border-transparent focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
                 placeholder="Enter or edit prompt..."
               />
             </div>
@@ -236,7 +236,7 @@ export default function ImageEditPanel({
             {/* Edit Type */}
             {pendingEdit.params.edit_type && (
               <div className="mb-3">
-                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
+                <span className="text-xs bg-white/10 text-gray-300 px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
                   {pendingEdit.params.edit_type}
                 </span>
               </div>
@@ -252,7 +252,7 @@ export default function ImageEditPanel({
                     onClick={() => setSelectedRatio(ratio)}
                     className={`px-3 py-1 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
                       selectedRatio === ratio
-                        ? "bg-blue-600 text-white"
+                        ? "bg-white text-black"
                         : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
                     }`}
                   >
@@ -292,7 +292,7 @@ export default function ImageEditPanel({
               <button
                 onClick={handleConfirm}
                 disabled={isLoading}
-                className="flex-1 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 text-xs font-mono font-bold uppercase tracking-wide transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-white text-black hover:bg-gray-200 text-xs font-mono font-bold uppercase tracking-wide transition-colors disabled:opacity-50"
               >
                 {isLoading ? "Generating..." : "Confirm"}
               </button>
@@ -318,12 +318,12 @@ export default function ImageEditPanel({
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Describe the edit you want..."
             disabled={isLoading}
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 disabled:opacity-50 font-mono"
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 disabled:opacity-50 font-mono"
           />
           <button
             type="submit"
             disabled={isLoading || !inputValue.trim()}
-            className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-mono font-bold uppercase tracking-wide hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 rounded-xl bg-white text-black text-xs font-mono font-bold uppercase tracking-wide hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? (
               <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">

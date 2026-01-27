@@ -149,6 +149,18 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   return (await res.json()) as UploadResponse;
 }
 
+// Direct generation (bypasses AI agent)
+export async function generateDirect(request: {
+  character_id: string;
+  prompt: string;
+  aspect_ratio?: string;
+}): Promise<import("./types").Image> {
+  return apiFetch<import("./types").Image>("/generate/direct", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
 // Agent endpoints
 export async function agentChat(request: AgentChatRequest): Promise<AgentChatResponse> {
   return apiFetch<AgentChatResponse>("/agent/chat", {

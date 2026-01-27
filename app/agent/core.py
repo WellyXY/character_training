@@ -34,107 +34,107 @@ logger = logging.getLogger(__name__)
 
 
 # System prompt for o1-mini reasoning
-AGENT_SYSTEM_PROMPT = """你是一個 AI 角色內容生成助手。你的任務是理解用戶的需求，並決定要採取什麼行動。
+AGENT_SYSTEM_PROMPT = """You are an AI character content generation assistant. Your task is to understand user requests and decide what action to take.
 
-## 可用功能:
+## Available Functions:
 
-1. **generate_image** - 生成圖片
+1. **generate_image** - Generate an image
    - content_type:
-     - "base" - 創建角色基礎圖，用於建立角色外觀身份
-     - "content_post" - 生成內容圖片，會參考角色的 base images
+     - "base" - Create a character base image, used to establish the character's appearance identity
+     - "content_post" - Generate content images, referencing the character's base images
    - style: sexy, cute, warm, home, exposed, erotic
    - cloth: daily, fashion, sexy_lingerie, sexy_underwear, home_wear, sports, nude
-   - scene_description: 場景描述
+   - scene_description: Scene description
 
-2. **generate_video** - 生成影片 (會先生成圖片再轉影片)
-   - 同 generate_image 的參數
-   - video_prompt: 影片動作描述
+2. **generate_video** - Generate a video (will first generate an image then convert to video)
+   - Same parameters as generate_image
+   - video_prompt: Video action description
 
-3. **create_character** - 創建新角色
-   - name: 角色名稱
-   - description: 角色描述
-   - gender: 性別
+3. **create_character** - Create a new character
+   - name: Character name
+   - description: Character description
+   - gender: Gender
 
-4. **update_character** - 更新角色資訊
+4. **update_character** - Update character information
 
-5. **add_base_image** - 為角色添加現有圖片作為 base image（不生成新圖）
-   - image_url: 圖片的 URL（必須，用戶提供的圖片連結）
-   - 當用戶說「用這張圖作為 base image」並提供 URL 時使用此功能
+5. **add_base_image** - Add an existing image as a base image for the character (does not generate a new image)
+   - image_url: Image URL (required, the image link provided by the user)
+   - Use this function when the user says "use this image as a base image" and provides a URL
 
-6. **list_characters** - 列出所有角色
+6. **list_characters** - List all characters
 
-7. **general_chat** - 一般對話，不需要執行任何操作
+7. **general_chat** - General conversation, no action required
 
-8. **fetch_instagram** - 從 Instagram 貼文下載參考圖片
-   - url: Instagram 貼文 URL (例如 https://www.instagram.com/p/ABC123/)
+8. **fetch_instagram** - Download reference images from an Instagram post
+   - url: Instagram post URL (e.g. https://www.instagram.com/p/ABC123/)
 
-## 回應格式:
+## Response Format:
 
-請以 JSON 格式回應，包含以下字段:
+Respond in JSON format with the following fields:
 ```json
 {
   "intent": "generate_image | generate_video | create_character | update_character | add_base_image | list_characters | general_chat | fetch_instagram",
-  "reasoning": "你的推理過程，解釋為什麼選擇這個意圖",
+  "reasoning": "Your reasoning process, explaining why you chose this intent",
   "parameters": {
-    // 根據 intent 填寫相應參數
+    // Fill in the corresponding parameters based on intent
   },
-  "needs_confirmation": true,  // 生成類操作需要確認，其他操作不需要
-  "response_message": "給用戶的回應訊息"
+  "needs_confirmation": true,  // Generation operations require confirmation, others do not
+  "response_message": "Response message to the user"
 }
 ```
 
-## 重要規則:
+## Important Rules:
 
-1. 生成圖片或影片時，必須設置 needs_confirmation: true
-2. 如果用戶沒有選擇角色，提醒他們先選擇角色
-3. **非常重要**: 如果 Base Images 數量為 0，你應該:
-   - 設置 content_type: "base" 來先生成 base image
-   - 在 response_message 中告訴用戶「我將先幫你生成一張 Base Image 來建立角色外觀」
-4. 只有當 Base Images 數量 > 0 時，才使用 content_type: "content_post"
-5. 影片只支持 image-to-video，會自動先生成圖片
-6. 用自然、友善的中文回應用戶
-7. **add_base_image 使用時機**: 當用戶提供一個圖片 URL 並說要「作為 base image」、「當作基礎圖」、「添加到 base images」時，使用 add_base_image intent，並將 URL 放入 parameters.image_url
-8. **參考圖片處理**: 當「參考圖片」顯示為「有」時：
-   - 表示用戶已經上傳了參考圖片，不需要再要求用戶提供
-   - 應直接使用 generate_image intent
-   - 根據參考模式來處理：
-     * Face Only (只換臉): 保留參考圖的姿勢、背景、服裝（包括裸露狀態），只換角色的臉
-     * Pose & Background: 參考姿勢和背景，服裝根據用戶描述調整
-     * Clothing & Pose: 參考服裝和姿勢，背景根據用戶描述調整
-     * Custom: 根據用戶訊息自由參考
-   - 在 scene_description 中描述要生成的內容，不需要再問用戶要圖片
+1. When generating images or videos, you must set needs_confirmation: true
+2. If the user has not selected a character, remind them to select one first
+3. **Very Important**: If the number of Base Images is 0, you should:
+   - Set content_type: "base" to generate a base image first
+   - Tell the user in response_message: "I'll first generate a Base Image to establish the character's appearance"
+4. Only use content_type: "content_post" when Base Images count > 0
+5. Video only supports image-to-video, it will automatically generate an image first
+6. Respond to the user in natural, friendly English
+7. **When to use add_base_image**: When the user provides an image URL and says to "use as base image", "set as base image", or "add to base images", use the add_base_image intent and put the URL in parameters.image_url
+8. **Reference image handling**: When "Reference Image" shows as "Yes":
+   - The user has already uploaded a reference image, no need to ask for one
+   - Use the generate_image intent directly
+   - Handle according to the reference mode:
+     * Face Only: Keep the pose, background, and outfit (including nudity state) from the reference, only replace the character's face
+     * Pose & Background: Reference the pose and background, adjust outfit based on user description
+     * Clothing & Pose: Reference the outfit and pose, adjust background based on user description
+     * Custom: Freely reference based on user message
+   - Describe the content to generate in scene_description, no need to ask the user for images
 """
 
 
 # System prompt for image editing
-IMAGE_EDIT_SYSTEM_PROMPT = """你是一個 AI 圖片編輯助手。用戶會提供一張圖片和編輯指令，你需要理解編輯意圖並生成適當的回應。
+IMAGE_EDIT_SYSTEM_PROMPT = """You are an AI image editing assistant. The user will provide an image and editing instructions. You need to understand the editing intent and generate an appropriate response.
 
-## 編輯類型:
+## Edit Types:
 
-1. **background** - 換背景: 更換圖片背景，保持人物不變
-2. **outfit** - 換服裝: 更換服裝，保持臉部和姿勢不變
-3. **style** - 風格轉換: 改變整體風格（如動漫、油畫等）
-4. **remove** - 移除元素: 從圖片中移除某個元素
-5. **add** - 添加元素: 在圖片中添加元素
-6. **replace** - 替換元素: 用新元素替換原有元素
-7. **modify** - 一般修改: 其他類型的修改
+1. **background** - Change background: Replace the image background, keep the person unchanged
+2. **outfit** - Change outfit: Replace clothing, keep face and pose unchanged
+3. **style** - Style transfer: Change overall style (e.g. anime, oil painting, etc.)
+4. **remove** - Remove element: Remove an element from the image
+5. **add** - Add element: Add an element to the image
+6. **replace** - Replace element: Replace an existing element with a new one
+7. **modify** - General modification: Other types of modifications
 
-## 回應格式:
+## Response Format:
 
-請以 JSON 格式回應:
+Respond in JSON format:
 ```json
 {
   "edit_type": "background | outfit | style | remove | add | replace | modify",
-  "reasoning": "你的理解和分析",
-  "response_message": "給用戶的友善中文回應，說明你理解了什麼並準備執行",
-  "suggestions": ["其他可能的編輯建議1", "建議2", "建議3"]
+  "reasoning": "Your understanding and analysis",
+  "response_message": "A friendly English response to the user, explaining what you understood and are about to execute",
+  "suggestions": ["Other possible edit suggestion 1", "Suggestion 2", "Suggestion 3"]
 }
 ```
 
-## 重要規則:
-1. 準確識別編輯類型
-2. 用友善的中文回應
-3. 提供 2-3 個相關的編輯建議
+## Important Rules:
+1. Accurately identify the edit type
+2. Respond in friendly English
+3. Provide 2-3 related editing suggestions
 """
 
 
@@ -214,23 +214,23 @@ class Agent:
         ]
 
         # Add context about current state
-        reference_image_info = "無"
+        reference_image_info = "None"
         if context.get('reference_image_path'):
             mode = context.get('reference_image_mode', 'custom')
             mode_display = {
-                'face_swap': 'Face Only (只換臉)',
-                'pose_background': 'Pose & Background (參考姿勢和背景)',
-                'clothing_pose': 'Clothing & Pose (參考服裝和姿勢)',
-                'custom': 'Custom (自訂)',
+                'face_swap': 'Face Only',
+                'pose_background': 'Pose & Background',
+                'clothing_pose': 'Clothing & Pose',
+                'custom': 'Custom',
             }.get(mode, mode)
-            reference_image_info = f"有（用戶已上傳參考圖片，模式: {mode_display}）"
+            reference_image_info = f"Yes (user uploaded a reference image, mode: {mode_display})"
         context_msg = f"""
-當前狀態:
-- 選中的角色: {context.get('character_name', '未選擇')}
-- 角色 ID: {context.get('character_id', 'N/A')}
-- Base Images 數量: {context.get('base_image_count', 0)}
-- 角色描述: {context.get('character_description', 'N/A')}
-- 參考圖片: {reference_image_info}
+Current State:
+- Selected Character: {context.get('character_name', 'Not selected')}
+- Character ID: {context.get('character_id', 'N/A')}
+- Base Images Count: {context.get('base_image_count', 0)}
+- Character Description: {context.get('character_description', 'N/A')}
+- Reference Image: {reference_image_info}
 """
         messages.append({"role": "user", "content": context_msg})
 
@@ -251,14 +251,14 @@ class Agent:
         if "instagram.com/p/" in message_lower or "instagram.com/reel/" in message_lower:
             return {
                 "intent": "fetch_instagram",
-                "reasoning": "本地檢測到 Instagram URL",
+                "reasoning": "Locally detected Instagram URL",
                 "parameters": {"url": message},
                 "needs_confirmation": False,
-                "response_message": "正在從 Instagram 下載參考圖片...",
+                "response_message": "Downloading reference images from Instagram...",
             }
 
         # Check for add_base_image intent
-        base_image_keywords = ["base image", "base_image", "基礎圖", "作為 base", "當作 base", "添加到 base"]
+        base_image_keywords = ["base image", "base_image", "as base", "set as base", "add to base"]
         has_base_image_intent = any(kw in message_lower for kw in base_image_keywords)
 
         # Extract URL from message
@@ -269,15 +269,15 @@ class Agent:
         if has_base_image_intent and urls:
             return {
                 "intent": "add_base_image",
-                "reasoning": "本地檢測到添加 base image 意圖",
+                "reasoning": "Locally detected add base image intent",
                 "parameters": {"image_url": urls[0]},
                 "needs_confirmation": False,
-                "response_message": f"正在將圖片添加為 Base Image...",
+                "response_message": "Adding the image as a Base Image...",
             }
 
         # Check for image generation keywords
-        image_keywords = ["生成", "創建", "做", "畫", "圖", "照片", "image", "photo", "generate", "create"]
-        video_keywords = ["影片", "視頻", "video", "動畫"]
+        image_keywords = ["image", "photo", "generate", "create", "picture", "shoot", "selfie"]
+        video_keywords = ["video", "clip", "vlog", "dance"]
 
         is_image = any(kw in message_lower for kw in image_keywords)
         is_video = any(kw in message_lower for kw in video_keywords)
@@ -285,18 +285,18 @@ class Agent:
         # Detect style/cloth from message
         style = None
         cloth = None
-        if any(kw in message_lower for kw in ["性感", "sexy", "誘惑"]):
+        if any(kw in message_lower for kw in ["sexy", "seductive", "sensual"]):
             style = "sexy"
-        if any(kw in message_lower for kw in ["裸", "nude", "全裸", "露點"]):
+        if any(kw in message_lower for kw in ["nude", "naked"]):
             cloth = "nude"
             style = "erotic"
-        elif any(kw in message_lower for kw in ["內衣", "lingerie", "underwear"]):
+        elif any(kw in message_lower for kw in ["lingerie", "underwear"]):
             cloth = "sexy_lingerie"
 
         if is_video:
             return {
                 "intent": "generate_video",
-                "reasoning": "本地檢測到影片生成意圖",
+                "reasoning": "Locally detected video generation intent",
                 "parameters": {
                     "content_type": "content_post",
                     "style": style,
@@ -304,12 +304,12 @@ class Agent:
                     "scene_description": message,
                 },
                 "needs_confirmation": True,
-                "response_message": "好的，我來幫你生成影片。請確認以下設定：",
+                "response_message": "Sure, I'll generate a video for you. Please confirm the settings below:",
             }
         elif is_image:
             return {
                 "intent": "generate_image",
-                "reasoning": "本地檢測到圖片生成意圖",
+                "reasoning": "Locally detected image generation intent",
                 "parameters": {
                     "content_type": "content_post",
                     "style": style,
@@ -317,15 +317,15 @@ class Agent:
                     "scene_description": message,
                 },
                 "needs_confirmation": True,
-                "response_message": "好的，我來幫你生成圖片。請確認以下設定：",
+                "response_message": "Sure, I'll generate an image for you. Please confirm the settings below:",
             }
         else:
             return {
                 "intent": "general_chat",
-                "reasoning": "無法識別意圖",
+                "reasoning": "Unable to identify intent",
                 "parameters": {},
                 "needs_confirmation": False,
-                "response_message": "請告訴我你想要生成什麼樣的圖片或影片？",
+                "response_message": "What kind of image or video would you like to generate?",
             }
 
     async def _analyze_intent(
@@ -346,9 +346,8 @@ class Agent:
             # Check if GPT refused (content policy)
             response_msg = result.get("response_message", "").lower()
             refusal_indicators = [
-                "不能協助", "無法協助", "不能幫助", "無法幫助",
                 "cannot", "can't", "unable", "sorry", "apologize",
-                "policy", "inappropriate", "不適當", "違反"
+                "policy", "inappropriate"
             ]
             if any(ind in response_msg for ind in refusal_indicators):
                 logger.warning("GPT refused due to content policy, using fallback")
@@ -437,19 +436,19 @@ class Agent:
         if reference_image_path and reference_image_mode and reference_image_mode != "custom":
             logger.info(f"Quick path: reference image with mode {reference_image_mode}, using generate_image directly")
             mode_descriptions = {
-                "face_swap": "使用參考圖片進行換臉，保持原圖的姿勢、背景和服裝",
-                "pose_background": "參考圖片的姿勢和背景",
-                "clothing_pose": "參考圖片的服裝和姿勢",
+                "face_swap": "face swap using the reference image, keeping the original pose, background and outfit",
+                "pose_background": "reference the pose and background from the image",
+                "clothing_pose": "reference the clothing and pose from the image",
             }
             intent_result = {
                 "intent": "generate_image",
-                "reasoning": f"用戶上傳參考圖片並選擇 {reference_image_mode} 模式",
+                "reasoning": f"User uploaded a reference image and selected {reference_image_mode} mode",
                 "parameters": {
                     "content_type": "content_post",
                     "scene_description": message if message.strip() else mode_descriptions.get(reference_image_mode, ""),
                 },
                 "needs_confirmation": True,
-                "response_message": f"好的，我來幫你{mode_descriptions.get(reference_image_mode, '生成圖片')}。請確認以下設定：",
+                "response_message": f"Sure, I'll {mode_descriptions.get(reference_image_mode, 'generate an image')} for you. Please confirm the settings below:",
             }
         else:
             # Analyze intent with o1-mini
@@ -468,6 +467,50 @@ class Agent:
 
         # Handle different intents
         if intent == "general_chat":
+            # Check if this is a content-policy refusal for a generation request
+            refusal_kw = [
+                # English
+                "cannot", "can't", "unable", "sorry", "apologize", "policy", "inappropriate",
+                # Chinese
+                "抱歉", "無法", "不能", "對不起", "很遺憾", "不允許", "違反", "政策",
+            ]
+            is_refusal = any(kw in response_message.lower() for kw in refusal_kw)
+            if is_refusal and character_id:
+                # Still offer a generation card so the user can confirm directly
+                fallback_prompt = self.prompt_optimizer._build_fallback_prompt(
+                    raw_prompt=message,
+                    style="",
+                    cloth="",
+                    character_description=context.get("character_description", ""),
+                    has_reference_image=bool(reference_image_path),
+                    reference_image_mode=reference_image_mode,
+                )
+                session.pending_generation = PendingGeneration(
+                    skill="image_generator",
+                    params=PendingGenerationParams(
+                        content_type="content_post",
+                        scene_description=message,
+                        aspect_ratio="9:16",
+                        reference_image_path=reference_image_path,
+                        reference_image_mode=reference_image_mode,
+                    ),
+                    optimized_prompt=fallback_prompt,
+                    reasoning="Content policy bypass — using user prompt directly",
+                    suggestions=[
+                        "Make it sexier",
+                        "Change to home scene",
+                        "Use a different outfit",
+                    ],
+                )
+                session.state = ConversationState.AWAITING_CONFIRMATION
+                session.add_message("assistant", response_message)
+                return AgentChatResponse(
+                    message=response_message,
+                    session_id=session.id,
+                    state=ConversationState.AWAITING_CONFIRMATION,
+                    pending_generation=session.pending_generation,
+                )
+
             session.add_message("assistant", response_message)
             session.state = ConversationState.IDLE
             return AgentChatResponse(
@@ -478,7 +521,7 @@ class Agent:
 
         elif intent in ("generate_image", "generate_video"):
             if not character_id:
-                msg = "請先選擇一個角色再進行生成。"
+                msg = "Please select a character first before generating."
                 session.add_message("assistant", msg)
                 return AgentChatResponse(
                     message=msg,
@@ -514,13 +557,14 @@ class Agent:
                     aspect_ratio=parameters.get("aspect_ratio", "9:16"),
                     reference_image_path=reference_image_path,
                     reference_image_mode=reference_image_mode,
+                    video_prompt=parameters.get("video_prompt"),
                 ),
                 optimized_prompt=optimized_prompt,
                 reasoning=reasoning,
                 suggestions=[
-                    "換成更性感的風格",
-                    "改成居家場景",
-                    "使用不同的服裝",
+                    "Make it sexier",
+                    "Change to home scene",
+                    "Use a different outfit",
                 ],
             )
             session.state = ConversationState.AWAITING_CONFIRMATION
@@ -561,9 +605,9 @@ class Agent:
             characters = result.get("characters", [])
             if characters:
                 char_list = "\n".join([f"- {c['name']} ({c['status']})" for c in characters])
-                msg = f"現有角色:\n{char_list}"
+                msg = f"Existing characters:\n{char_list}"
             else:
-                msg = "目前沒有任何角色。請創建一個新角色開始。"
+                msg = "No characters found. Please create a new character to get started."
             session.add_message("assistant", msg)
             session.state = ConversationState.IDLE
             return AgentChatResponse(
@@ -586,12 +630,12 @@ class Agent:
                 image_list = "\n".join(
                     [f"- [{i+1}] {img['full_url']}" for i, img in enumerate(images)]
                 )
-                msg = f"已下載 {len(images)} 張參考圖片:\n{image_list}\n\n請告訴我你想用哪一張來生成，以及想要的效果。"
+                msg = f"Downloaded {len(images)} reference images:\n{image_list}\n\nPlease tell me which one you'd like to use and the desired effect."
 
                 # Store fetched images in session for later use
                 session.fetched_instagram_images = images
             else:
-                msg = result.get("error", "下載失敗")
+                msg = result.get("error", "Download failed")
 
             session.add_message("assistant", msg)
             session.state = ConversationState.IDLE
@@ -607,7 +651,7 @@ class Agent:
             logger.info("=== Handling add_base_image intent ===")
             if not character_id:
                 logger.warning("No character_id provided for add_base_image")
-                msg = "請先選擇一個角色再添加 Base Image。"
+                msg = "Please select a character first before adding a Base Image."
                 session.add_message("assistant", msg)
                 return AgentChatResponse(
                     message=msg,
@@ -619,7 +663,7 @@ class Agent:
             logger.info(f"Image URL from parameters: {image_url}")
             if not image_url:
                 logger.warning("No image_url in parameters")
-                msg = "請提供要添加的圖片 URL。"
+                msg = "Please provide the image URL to add."
                 session.add_message("assistant", msg)
                 return AgentChatResponse(
                     message=msg,
@@ -637,7 +681,7 @@ class Agent:
             logger.info(f"add_base_image result: {result}")
             msg = result.get("message", response_message)
             if not result.get("success"):
-                msg = result.get("error", "添加失敗")
+                msg = result.get("error", "Failed to add")
             session.add_message("assistant", msg)
             session.state = ConversationState.IDLE
             return AgentChatResponse(
@@ -690,7 +734,7 @@ class Agent:
         pending = session.pending_generation
         if not pending:
             return AgentChatResponse(
-                message="沒有待確認的生成任務",
+                message="No pending generation task",
                 session_id=session_id,
                 state=ConversationState.IDLE,
             )
@@ -743,7 +787,7 @@ class Agent:
             )
         )
 
-        msg = "開始生成中... 您可以繼續對話，生成完成後會自動通知。"
+        msg = "Generation started... You can continue chatting, and you'll be notified when it's done."
         session.add_message("assistant", msg)
         return AgentChatResponse(
             message=msg,
@@ -795,6 +839,7 @@ class Agent:
                         type=image_type,
                         status=ImageStatus.GENERATING,
                         task_id=task_id,
+                        image_url="",  # placeholder until generation completes
                         is_approved=False,
                         metadata_json=json.dumps({
                             "prompt": final_prompt,
@@ -821,7 +866,7 @@ class Agent:
                             db=db,
                         )
                         if result.get("success"):
-                            result["message"] = "Base Image 生成成功！請在左側確認後，才能生成內容圖片。"
+                            result["message"] = "Base Image generated successfully! Please approve it on the left before generating content images."
                     else:
                         result = await self.image_generator.generate_content(
                             character_id=character_id,
@@ -851,13 +896,13 @@ class Agent:
                             db=db,
                         )
                         if result.get("success"):
-                            result["message"] = "先生成了 Base Image，請確認後再次嘗試生成視頻。"
+                            result["message"] = "A Base Image was generated first. Please approve it and then try generating the video again."
                     else:
                         result = await self.video_generator.execute(
                             action="generate_with_image",
                             params={
                                 "image_prompt": final_prompt,
-                                "video_prompt": "natural movement, slight motion",
+                                "video_prompt": pending.params.video_prompt or final_prompt,
                                 "aspect_ratio": aspect_ratio,
                                 "style": pending.params.style,
                                 "cloth": pending.params.cloth,
@@ -899,12 +944,12 @@ class Agent:
         """Simple edit type detection without GPT."""
         message_lower = message.lower()
         keywords = {
-            "background": ["背景", "background", "場景", "環境"],
-            "outfit": ["服裝", "衣服", "穿著", "outfit", "cloth", "dress"],
-            "style": ["風格", "style", "轉換", "transform", "動漫", "anime"],
-            "remove": ["移除", "刪除", "去掉", "remove", "delete"],
-            "add": ["添加", "加上", "新增", "add", "put"],
-            "replace": ["換成", "替換", "改成", "replace", "change"],
+            "background": ["background", "scene", "environment"],
+            "outfit": ["outfit", "cloth", "dress", "clothing", "wear"],
+            "style": ["style", "transform", "anime", "artistic"],
+            "remove": ["remove", "delete", "erase"],
+            "add": ["add", "put", "insert"],
+            "replace": ["replace", "change", "swap"],
         }
         for edit_type, kws in keywords.items():
             for kw in kws:
@@ -919,7 +964,7 @@ class Agent:
         """Use GPT to analyze edit intent."""
         messages = [
             {"role": "user", "content": IMAGE_EDIT_SYSTEM_PROMPT},
-            {"role": "user", "content": f"用戶的編輯指令: {message}"},
+            {"role": "user", "content": f"User's edit instruction: {message}"},
         ]
 
         try:
@@ -941,9 +986,9 @@ class Agent:
             edit_type = self._detect_edit_type_simple(message)
             return {
                 "edit_type": edit_type,
-                "reasoning": "使用本地分析",
-                "response_message": f"好的，我來幫你{message}。請確認下方的編輯設定。",
-                "suggestions": ["換成其他背景", "調整服裝", "改變風格"],
+                "reasoning": "Using local analysis",
+                "response_message": f"Sure, I'll help you {message}. Please confirm the edit settings below.",
+                "suggestions": ["Change background", "Adjust outfit", "Change style"],
             }
 
     async def process_edit_message(
@@ -987,9 +1032,9 @@ class Agent:
             optimized_prompt=optimized_prompt,
             reasoning=reasoning or analysis,
             suggestions=suggestions if suggestions else [
-                "換成其他背景",
-                "調整服裝風格",
-                "改變光線氛圍",
+                "Change background",
+                "Adjust outfit style",
+                "Change lighting mood",
             ],
         )
         session.state = ConversationState.AWAITING_CONFIRMATION
@@ -1033,14 +1078,14 @@ class Agent:
         pending = session.pending_edit
         if not pending:
             return AgentChatResponse(
-                message="沒有待確認的編輯任務",
+                message="No pending edit task",
                 session_id=session_id,
                 state=ConversationState.IDLE,
             )
 
         if not session.character_id:
             return AgentChatResponse(
-                message="請先選擇一個角色",
+                message="Please select a character first",
                 session_id=session_id,
                 state=ConversationState.IDLE,
             )
@@ -1067,10 +1112,10 @@ class Agent:
         session.state = ConversationState.IDLE
 
         if result.get("success"):
-            msg = result.get("message", "圖片編輯成功！")
+            msg = result.get("message", "Image edited successfully!")
             action = "edited_image"
         else:
-            msg = f"編輯失敗: {result.get('error', 'Unknown error')}"
+            msg = f"Edit failed: {result.get('error', 'Unknown error')}"
             action = None
 
         session.add_message("assistant", msg)

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Character, Image } from "@/lib/types";
 import { resolveApiUrl } from "@/lib/api";
+import CustomPromptModal from "./CustomPromptModal";
 
 interface CharacterSidebarProps {
   characters: Character[];
@@ -12,6 +13,7 @@ interface CharacterSidebarProps {
   onCreate: (name: string, description: string, gender?: string) => Promise<void>;
   onApproveImage: (imageId: string) => Promise<void>;
   onDeleteImage: (imageId: string) => Promise<void>;
+  onRefresh?: () => void;
   loading: boolean;
 }
 
@@ -23,6 +25,7 @@ export default function CharacterSidebar({
   onCreate,
   onApproveImage,
   onDeleteImage,
+  onRefresh,
   loading,
 }: CharacterSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
@@ -30,6 +33,7 @@ export default function CharacterSidebar({
   const [description, setDescription] = useState("");
   const [gender, setGender] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -180,6 +184,16 @@ export default function CharacterSidebar({
               </div>
             </div>
           )}
+
+          {/* Custom Prompt Generation */}
+          {approvedImages.length > 0 && (
+            <button
+              onClick={() => setShowCustomPrompt(true)}
+              className="mt-4 w-full rounded-lg bg-[#1a1a1a] border border-dashed border-white/20 px-3 py-2.5 text-xs font-mono font-bold uppercase tracking-wide text-gray-400 hover:text-white hover:border-white/40 transition-colors"
+            >
+              Custom Prompt Generation
+            </button>
+          )}
         </div>
       )}
 
@@ -235,6 +249,18 @@ export default function CharacterSidebar({
           </button>
         )}
       </div>
+
+      {/* Custom Prompt Modal */}
+      {showCustomPrompt && selectedCharacter && (
+        <CustomPromptModal
+          characterId={selectedCharacter.id}
+          baseImages={approvedImages}
+          onClose={() => setShowCustomPrompt(false)}
+          onGenerated={() => {
+            onRefresh?.();
+          }}
+        />
+      )}
 
       {/* Lightbox */}
       {selectedImage && (

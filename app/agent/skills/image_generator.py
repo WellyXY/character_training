@@ -150,7 +150,7 @@ class ImageGeneratorSkill(BaseSkill):
                 "success": True,
                 "image_id": image.id,
                 "image_url": saved["full_url"],
-                "message": "Base Image 生成成功！請確認後添加到角色。",
+                "message": "Base Image generated successfully! Please approve it to add to the character.",
             }
 
         except Exception as e:
@@ -189,7 +189,7 @@ class ImageGeneratorSkill(BaseSkill):
         if not base_image_urls:
             return {
                 "success": False,
-                "error": "角色沒有 Base Images。請先生成並確認 Base Images。",
+                "error": "Character has no Base Images. Please generate and approve Base Images first.",
             }
 
         # Build reference_images: base images first, then user reference image (if any)
@@ -292,7 +292,7 @@ class ImageGeneratorSkill(BaseSkill):
                 "success": True,
                 "image_id": image.id,
                 "image_url": saved["full_url"],
-                "message": "圖片生成成功！",
+                "message": "Image generated successfully!",
             }
 
         except Exception as e:

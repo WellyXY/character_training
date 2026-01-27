@@ -110,7 +110,7 @@ class VideoGeneratorSkill(BaseSkill):
                 "video_url": saved["full_url"],
                 "thumbnail_url": result.get("thumbnail_url"),
                 "duration": result.get("duration"),
-                "message": "影片生成成功！",
+                "message": "Video generated successfully!",
             }
 
         except Exception as e:
@@ -144,7 +144,7 @@ class VideoGeneratorSkill(BaseSkill):
         if not image_result.get("success"):
             return {
                 "success": False,
-                "error": f"圖片生成失敗: {image_result.get('error')}",
+                "error": f"Image generation failed: {image_result.get('error')}",
             }
 
         source_image_url = image_result["image_url"]
@@ -163,7 +163,7 @@ class VideoGeneratorSkill(BaseSkill):
         if video_result.get("success"):
             video_result["source_image_id"] = image_result.get("image_id")
             video_result["source_image_url"] = source_image_url
-            video_result["message"] = "圖片和影片都已生成成功！"
+            video_result["message"] = "Both image and video generated successfully!"
 
         return video_result
 

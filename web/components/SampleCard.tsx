@@ -89,7 +89,7 @@ export default function SampleCard({
               e.stopPropagation();
               onApply(sample);
             }}
-            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:from-purple-500 hover:to-pink-500 pointer-events-auto"
+            className="w-full rounded-lg bg-white px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 pointer-events-auto"
           >
             Apply
           </button>
