@@ -179,9 +179,10 @@ class PromptOptimizerSkill(BaseSkill):
 
         # For face_swap mode, use minimal prompt - only face replacement instruction
         if has_reference_image and reference_image_mode == "face_swap":
-            parts.append("[Reference Character] Only replace the face with the character's facial features from base reference images, keep everything else identical")
-            parts.append("photorealistic, natural skin texture, high detail")
-            return ", ".join(parts)
+            parts.append("[Reference Character] Replace the person's face with the character's facial features from the base reference images")
+            parts.append("Keep the pose, clothing, background, lighting, composition, and body position completely identical")
+            parts.append("Seamless face blend, matching skin tone and lighting direction, photorealistic, high detail")
+            return ". ".join(parts) + "."
 
         # Character description - use generic reference to avoid including character names
         # Don't include character_description directly as it may contain the character name
@@ -305,9 +306,11 @@ class PromptOptimizerSkill(BaseSkill):
 
 {user_context}
 
-{"請生成一個簡短的英文 prompt，確保:" if reference_image_mode == "face_swap" else "請生成一個詳細的英文 prompt，確保:"}
-{"""1. 只描述換臉指令，不要描述背景、服裝、姿勢等細節（這些由參考圖自動保留）
-2. 保持 prompt 極簡 (30-50 字)""" if reference_image_mode == "face_swap" else f"""1. 包含主體的詳細描述
+{"請生成一個結構化的英文 prompt，確保:" if reference_image_mode == "face_swap" else "請生成一個詳細的英文 prompt，確保:"}
+{"""1. 使用 REPLACE 模板格式：Replace the face with... Keep [elements] unchanged.
+2. 明確列出所有要保留的元素（pose, clothing, background, lighting, body position）
+3. 強調 seamless blend 和 skin tone matching
+4. 保持 prompt 結構化 (50-100 字)""" if reference_image_mode == "face_swap" else f"""1. 包含主體的詳細描述
 2. 符合指定的風格和服裝
 3. 包含場景和光線描述
 4. 使用專業攝影術語
@@ -372,12 +375,13 @@ class PromptOptimizerSkill(BaseSkill):
         if mode == "face_swap":
             return f"""
 **重要 - Face Swap 模式 (只換臉)**:
-- Prompt 必須極簡，只描述換臉指令
-- 不要描述背景、服裝、姿勢、光線等細節（Seedream 會自動從參考圖保留）
-- 描述越多反而會干擾參考圖的還原
+- 使用類似 image edit 的 REPLACE 模板格式
+- 結構: "Replace the face with [character description]. Keep [preserved elements] unchanged."
+- 必須明確列出要保留的元素：pose, clothing, background, lighting, composition, body position
+- 強調 seamless blend 和 matching skin tone/lighting
 {no_name_warning}
-- 只需使用 [Reference Character] 標記
-- Prompt 範例: [Reference Character] Only replace the face with the character's facial features from base reference images, keep everything else identical, photorealistic, high detail."""
+- 使用 [Reference Character] 標記指向 base images
+- 範例: [Reference Character] Replace the person's face with the character's facial features from the base reference images. Keep the pose, clothing, background, lighting, composition, and body position completely identical. Seamless face blend, matching skin tone and lighting direction, photorealistic, high detail."""
         elif mode == "pose_background":
             return f"""
 **重要 - Pose & Background 模式**:
