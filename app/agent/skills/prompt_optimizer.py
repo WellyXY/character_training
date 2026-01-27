@@ -177,14 +177,10 @@ class PromptOptimizerSkill(BaseSkill):
         """Build a fallback prompt when GPT refuses (for NSFW content)."""
         parts = []
 
-        # For face_swap mode, use specialized prompt that keeps everything from reference except face
+        # For face_swap mode, use minimal prompt - only face replacement instruction
         if has_reference_image and reference_image_mode == "face_swap":
-            # Do NOT use character_description to avoid including character name
-            parts.append("[Reference Character] Only swap the face using the character's facial features from base reference images")
-            parts.append("[Reference Pose] Replicate the exact same full body pose, position, angle, and framing from the last reference image")
-            parts.append("[Reference Background] Keep the identical background, environment, lighting, props, and depth from the last reference image")
-            parts.append("[Reference Clothing] Keep the exact same clothing state (including nude/exposed state) from the last reference image without any changes")
-            parts.append("Maintain head size and alignment, photorealistic, natural skin texture, high detail, 4K, sharp focus")
+            parts.append("[Reference Character] Only replace the face with the character's facial features from base reference images, keep everything else identical")
+            parts.append("photorealistic, natural skin texture, high detail")
             return ", ".join(parts)
 
         # Character description - use generic reference to avoid including character names
@@ -309,12 +305,13 @@ class PromptOptimizerSkill(BaseSkill):
 
 {user_context}
 
-請生成一個詳細的英文 prompt，確保:
-1. 包含主體的詳細描述
+{"請生成一個簡短的英文 prompt，確保:" if reference_image_mode == "face_swap" else "請生成一個詳細的英文 prompt，確保:"}
+{"""1. 只描述換臉指令，不要描述背景、服裝、姿勢等細節（這些由參考圖自動保留）
+2. 保持 prompt 極簡 (30-50 字)""" if reference_image_mode == "face_swap" else f"""1. 包含主體的詳細描述
 2. 符合指定的風格和服裝
 3. 包含場景和光線描述
 4. 使用專業攝影術語
-5. 保持 prompt 長度適中 (100-200 字){reference_context}""",
+5. 保持 prompt 長度適中 (100-200 字)"""}{reference_context}""",
             },
         ]
 
@@ -375,15 +372,12 @@ class PromptOptimizerSkill(BaseSkill):
         if mode == "face_swap":
             return f"""
 **重要 - Face Swap 模式 (只換臉)**:
-- 完全保留「最後一張參考圖」的構圖、動作、背景、服裝（包括裸露狀態）
-- 只將人物臉部替換為角色（Base Images）的臉部特徵
+- Prompt 必須極簡，只描述換臉指令
+- 不要描述背景、服裝、姿勢、光線等細節（Seedream 會自動從參考圖保留）
+- 描述越多反而會干擾參考圖的還原
 {no_name_warning}
-- 必須使用以下標記:
-  - [Reference Character] 指向 base images 的臉部（不要寫角色名字）
-  - [Reference Pose] 完全複製最後參考圖的身體姿勢
-  - [Reference Background] 保持最後參考圖的背景環境
-  - [Reference Clothing] 保持最後參考圖的穿著狀態（包括 nude）
-- Prompt 範例: [Reference Character] Only replace the face with the character's face from base images, [Reference Pose] replicate exact body pose from last reference, [Reference Background] same background, [Reference Clothing] same outfit/state as last reference image."""
+- 只需使用 [Reference Character] 標記
+- Prompt 範例: [Reference Character] Only replace the face with the character's facial features from base reference images, keep everything else identical, photorealistic, high detail."""
         elif mode == "pose_background":
             return f"""
 **重要 - Pose & Background 模式**:
