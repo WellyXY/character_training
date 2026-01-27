@@ -140,5 +140,26 @@ def _run_migrations(conn):
                     except Exception as e:
                         logger.warning(f"Could not convert {table_name}.{col_name}: {e}")
 
+            # Normalize enum values to lowercase
+            # After enum-to-VARCHAR conversion, values may be uppercase (e.g. 'BASE' instead of 'base')
+            lowercase_fixes = [
+                ("images", "type"),
+                ("images", "status"),
+                ("videos", "type"),
+                ("videos", "status"),
+                ("sample_posts", "media_type"),
+                ("characters", "status"),
+            ]
+            for table_name, col_name in lowercase_fixes:
+                if table_name in inspector.get_table_names():
+                    try:
+                        conn.execute(text(f"""
+                            UPDATE {table_name} SET {col_name} = LOWER({col_name})
+                            WHERE {col_name} != LOWER({col_name})
+                        """))
+                        logger.info(f"Normalized {table_name}.{col_name} values to lowercase")
+                    except Exception as e:
+                        logger.warning(f"Could not normalize {table_name}.{col_name}: {e}")
+
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")
