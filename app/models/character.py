@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Enum as SQLEnum
+from sqlalchemy import String, Text, DateTime
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
@@ -22,11 +22,7 @@ class CharacterStatusType(TypeDecorator):
     """Normalize status values to match enum casing."""
 
     cache_ok = True
-    impl = SQLEnum(
-        CharacterStatus,
-        values_callable=lambda x: [e.value for e in x],
-        native_enum=False,
-    )
+    impl = String(16)
 
     def process_bind_param(self, value, dialect):  # type: ignore[override]
         if value is None:
