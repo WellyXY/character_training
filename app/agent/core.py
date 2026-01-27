@@ -786,7 +786,7 @@ class Agent:
                     task.progress = 20
 
                     # Determine image type
-                    is_base_image = content_type == "base" or not has_base_images
+                    is_base_image = content_type == "base"
                     image_type = ImageType.BASE if is_base_image else ImageType.CONTENT
 
                     # Create image record with "generating" status first
