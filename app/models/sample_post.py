@@ -1,16 +1,13 @@
 """SamplePost model for Sample Gallery."""
 import uuid
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 import enum
 
-from sqlalchemy import String, Text, DateTime, Enum as SQLEnum, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, DateTime, Enum as SQLEnum
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-
-if TYPE_CHECKING:
-    from app.models.tag import Tag
 
 
 class MediaType(str, enum.Enum):
@@ -51,14 +48,6 @@ class SamplePost(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
         nullable=False,
-    )
-
-    # Relationship to tags via junction table
-    tags_rel: Mapped[list["Tag"]] = relationship(
-        "Tag",
-        secondary="sample_post_tags",
-        back_populates="sample_posts",
-        lazy="selectin",
     )
 
     def __repr__(self) -> str:
