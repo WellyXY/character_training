@@ -1,0 +1,239 @@
+"""Animate router for image-to-video generation."""
+import json
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.clients.gpt import get_gpt_client
+from app.clients.parrot import get_parrot_client
+from app.services.storage import get_storage_service
+from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+class AnalyzeRequest(BaseModel):
+    """Request for image analysis."""
+    image_id: str
+    image_url: str
+
+
+class AnalyzeResponse(BaseModel):
+    """Response from image analysis."""
+    suggested_prompt: str
+    image_analysis: str
+    suggested_motion_types: list[str]
+
+
+class GenerateRequest(BaseModel):
+    """Request for video generation."""
+    image_id: str
+    image_url: str
+    character_id: str
+    prompt: str
+
+
+class GenerateResponse(BaseModel):
+    """Response from video generation."""
+    success: bool
+    video_id: Optional[str] = None
+    video_url: Optional[str] = None
+    message: str
+
+
+@router.post("/animate/analyze", response_model=AnalyzeResponse)
+async def analyze_image_for_animation(
+    request: AnalyzeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Analyze an image and suggest video generation prompts.
+    Uses GPT-4o Vision to understand the image content.
+    """
+    import base64
+    gpt = get_gpt_client()
+    storage = get_storage_service()
+
+    # Convert local image to base64 data URL for GPT-4o Vision
+    # (GPT cannot access localhost URLs)
+    if request.image_url.startswith("/uploads/"):
+        file_id = request.image_url.replace("/uploads/", "")
+        blob = await storage.get_file_blob(file_id, db)
+        if not blob:
+            raise HTTPException(status_code=404, detail="Image file not found")
+
+        mime_type = blob.content_type or "image/jpeg"
+        base64_data = base64.b64encode(blob.data).decode("utf-8")
+        image_url = f"data:{mime_type};base64,{base64_data}"
+    else:
+        # External URL - use as is
+        image_url = storage.get_full_url(request.image_url)
+
+    analysis_prompt = """Analyze this image and suggest how it could be animated as a short video.
+
+Consider:
+1. The subject's pose and position
+2. Natural movements that would fit the scene
+3. Camera movements that would enhance the composition
+
+Respond in JSON format:
+{
+    "image_description": "Brief description of what's in the image",
+    "suggested_prompt": "A detailed video generation prompt describing the motion/animation",
+    "motion_types": ["list", "of", "suggested", "motion", "types"]
+}
+
+The suggested_prompt should be specific and describe:
+- What movement or action should happen
+- How the camera might move (if applicable)
+- The mood or style of the animation
+
+Keep the prompt concise but descriptive (1-2 sentences)."""
+
+    try:
+        response = await gpt.analyze_image(
+            image_url=image_url,
+            prompt=analysis_prompt,
+            detail="high",
+        )
+
+        # Parse JSON response
+        import re
+
+        # Try to extract JSON from the response
+        try:
+            result = json.loads(response)
+        except json.JSONDecodeError:
+            # Try to find JSON in code blocks
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
+            if json_match:
+                result = json.loads(json_match.group(1))
+            else:
+                # Try to find JSON object pattern
+                json_match = re.search(r'\{[\s\S]*\}', response)
+                if json_match:
+                    result = json.loads(json_match.group(0))
+                else:
+                    raise ValueError(f"Could not parse JSON from response: {response[:500]}")
+
+        return AnalyzeResponse(
+            suggested_prompt=result.get("suggested_prompt", ""),
+            image_analysis=result.get("image_description", ""),
+            suggested_motion_types=result.get("motion_types", []),
+        )
+
+    except Exception as e:
+        logger.error("Failed to analyze image: %s", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze image: {str(e)}"
+        )
+
+
+@router.post("/animate/generate", response_model=GenerateResponse)
+async def generate_animation(
+    request: GenerateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a video from an image using Parrot API.
+    Creates a Video record in the database.
+    """
+    parrot = get_parrot_client()
+    storage = get_storage_service()
+
+    # Get full URL for the image
+    image_url = storage.get_full_url(request.image_url)
+
+    try:
+        logger.info(
+            "Starting video generation for image %s with prompt: %s",
+            request.image_id,
+            request.prompt[:100],
+        )
+
+        # Create video generation job
+        video_job_id = await parrot.create_image_to_video(
+            image_source=image_url,
+            prompt_text=request.prompt,
+        )
+
+        logger.info("Video job created: %s", video_job_id)
+
+        # Wait for video completion (up to 5 minutes)
+        result = await parrot.wait_for_video(
+            video_id=video_job_id,
+            timeout=300,
+            poll_interval=5,
+        )
+
+        video_url = result.get("video_url")
+        if not video_url:
+            raise ValueError("Video generation completed but no URL returned")
+
+        logger.info("Video generated: %s", video_url)
+
+        # Download and save video locally
+        saved = await storage.save_from_url(video_url, db, prefix="animated")
+        local_video_url = saved["url"]
+
+        # Save thumbnail if available
+        thumbnail_url = None
+        if result.get("thumbnail_url"):
+            try:
+                thumb_saved = await storage.save_from_url(
+                    result["thumbnail_url"],
+                    db,
+                    prefix="thumb"
+                )
+                thumbnail_url = thumb_saved["url"]
+            except Exception as e:
+                logger.warning("Failed to save thumbnail: %s", e)
+
+        # Create Video record
+        video = Video(
+            character_id=request.character_id,
+            type=DBVideoType.VLOG,
+            video_url=local_video_url,
+            thumbnail_url=thumbnail_url,
+            duration=result.get("duration"),
+            source_image_id=request.image_id,
+            status=DBVideoStatus.COMPLETED,
+            metadata_json=json.dumps({
+                "prompt": request.prompt,
+                "source_image_id": request.image_id,
+                "parrot_job_id": video_job_id,
+            }),
+        )
+
+        db.add(video)
+        await db.commit()
+        await db.refresh(video)
+
+        logger.info("Video saved to database: %s", video.id)
+
+        return GenerateResponse(
+            success=True,
+            video_id=video.id,
+            video_url=local_video_url,
+            message="Video generated successfully",
+        )
+
+    except TimeoutError as e:
+        logger.error("Video generation timed out: %s", str(e))
+        return GenerateResponse(
+            success=False,
+            message=f"Video generation timed out: {str(e)}",
+        )
+    except Exception as e:
+        logger.error("Failed to generate video: %s", str(e))
+        return GenerateResponse(
+            success=False,
+            message=f"Failed to generate video: {str(e)}",
+        )
