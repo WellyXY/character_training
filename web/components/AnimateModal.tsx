@@ -61,6 +61,11 @@ export default function AnimateModal({
       return;
     }
 
+    if (!image.image_url) {
+      setError("Image URL not available");
+      return;
+    }
+
     setState("generating");
     setError(null);
 
