@@ -41,12 +41,12 @@ class Image(Base):
         nullable=False,
     )
     type: Mapped[ImageType] = mapped_column(
-        SQLEnum(ImageType),
+        SQLEnum(ImageType, values_callable=lambda x: [e.value for e in x]),
         default=ImageType.CONTENT,
         nullable=False,
     )
     status: Mapped[ImageStatus] = mapped_column(
-        SQLEnum(ImageStatus),
+        SQLEnum(ImageStatus, values_callable=lambda x: [e.value for e in x]),
         default=ImageStatus.COMPLETED,
         nullable=False,
     )

@@ -31,7 +31,7 @@ class Character(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[CharacterStatus] = mapped_column(
-        SQLEnum(CharacterStatus),
+        SQLEnum(CharacterStatus, values_callable=lambda x: [e.value for e in x]),
         default=CharacterStatus.DRAFT,
         nullable=False,
     )

@@ -41,7 +41,7 @@ class Video(Base):
         nullable=False,
     )
     type: Mapped[VideoType] = mapped_column(
-        SQLEnum(VideoType),
+        SQLEnum(VideoType, values_callable=lambda x: [e.value for e in x]),
         default=VideoType.VLOG,
         nullable=False,
     )
@@ -51,7 +51,7 @@ class Video(Base):
     source_image_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[VideoStatus] = mapped_column(
-        SQLEnum(VideoStatus),
+        SQLEnum(VideoStatus, values_callable=lambda x: [e.value for e in x]),
         default=VideoStatus.PENDING,
         nullable=False,
     )
