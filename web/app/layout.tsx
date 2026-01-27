@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Character Training",
   description: "AI Character Creation and Content Generation",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
