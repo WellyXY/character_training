@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import String, Text, DateTime, Enum as SQLEnum
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -15,6 +16,41 @@ class CharacterStatus(str, enum.Enum):
     DRAFT = "draft"
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+class CharacterStatusType(TypeDecorator):
+    """Normalize status values to match enum casing."""
+
+    cache_ok = True
+    impl = SQLEnum(
+        CharacterStatus,
+        values_callable=lambda x: [e.value for e in x],
+        native_enum=False,
+    )
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        if isinstance(value, CharacterStatus):
+            return value.value
+        if isinstance(value, str):
+            try:
+                return CharacterStatus(value.lower()).value
+            except ValueError:
+                return CharacterStatus.DRAFT.value
+        return value
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        if isinstance(value, CharacterStatus):
+            return value
+        if isinstance(value, str):
+            try:
+                return CharacterStatus(value.lower())
+            except ValueError:
+                return CharacterStatus.DRAFT
+        return value
 
 
 class Character(Base):
@@ -31,7 +67,7 @@ class Character(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[CharacterStatus] = mapped_column(
-        SQLEnum(CharacterStatus, values_callable=lambda x: [e.value for e in x]),
+        CharacterStatusType(),
         default=CharacterStatus.DRAFT,
         nullable=False,
     )
