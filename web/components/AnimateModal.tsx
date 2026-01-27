@@ -33,6 +33,11 @@ export default function AnimateModal({
   // Analyze image on mount
   useEffect(() => {
     const analyze = async () => {
+      if (!image.image_url) {
+        setError("Image URL not available");
+        setState("error");
+        return;
+      }
       try {
         const result = await analyzeImageForAnimation({
           image_id: image.id,
