@@ -62,7 +62,7 @@ export default function ImageEditPanel({
     try {
       const response: AgentChatResponse = await imageEditChat({
         message,
-        source_image_path: sourceImage.image_url,
+        source_image_path: sourceImage.image_url!,
         character_id: characterId,
         session_id: sessionId,
       });
@@ -105,7 +105,7 @@ export default function ImageEditPanel({
       onTaskStarted({
         task_id: taskId,
         prompt: isPromptEdited ? editedPrompt : pendingEdit.optimized_prompt,
-        reference_image_url: sourceImage.image_url,
+        reference_image_url: sourceImage.image_url ?? undefined,
       });
     }
 

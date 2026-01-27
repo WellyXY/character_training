@@ -391,17 +391,17 @@ export default function ContentGallery({
                     onClick={() =>
                       setSelectedItem({
                         type: "video",
-                        url: resolveApiUrl(item.data.video_url),
+                        url: resolveApiUrl((item.data as Video).video_url),
                         prompt: item.data.metadata?.prompt,
-                        video: item.data,
+                        video: item.data as Video,
                       })
                     }
                   >
-                    {item.data.thumbnail_url ? (
+                    {(item.data as Video).thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={resolveApiUrl(item.data.thumbnail_url)} alt="Video thumbnail" className="h-full w-full object-cover" />
+                      <img src={resolveApiUrl((item.data as Video).thumbnail_url!)} alt="Video thumbnail" className="h-full w-full object-cover" />
                     ) : (
-                      <video src={resolveApiUrl(item.data.video_url)} className="h-full w-full object-cover" muted />
+                      <video src={resolveApiUrl((item.data as Video).video_url)} className="h-full w-full object-cover" muted />
                     )}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:opacity-50 transition-opacity">
