@@ -15,7 +15,7 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#333] bg-black/50 backdrop-blur-md">
-      <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center justify-between">
         {/* Brand */}
         <h1 className="text-sm font-mono font-bold uppercase tracking-widest text-white">
           AI Studio

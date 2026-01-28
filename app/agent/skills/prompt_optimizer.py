@@ -63,6 +63,7 @@ generate [subject description], wearing [clothing description], in [scene descri
 2. Only use "the character" or "the person from base reference images" to refer to the character
 3. Character appearance info is only for understanding visual features, do not copy names into the prompt
 4. Do not mention any person's age or birth year in the prompt
+5. **Lighting and color tone**: Do NOT default to warm/golden lighting or beige tones. Only use warm tones if the user explicitly requests it. Default to neutral/natural lighting unless otherwise specified.
 
 ## Output Format:
 Output the optimized English prompt directly, no other explanations needed.
