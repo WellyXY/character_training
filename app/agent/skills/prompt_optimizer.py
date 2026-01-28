@@ -297,6 +297,24 @@ class PromptOptimizerSkill(BaseSkill):
 
         user_context = "\n".join(context_parts) if context_parts else ""
 
+        if reference_image_mode == "face_swap":
+            instruction_header = "Generate a structured English prompt, ensuring:"
+            instruction_body = (
+                "1. Use the REPLACE template format: Replace the face with... Keep [elements] unchanged.\n"
+                "2. Explicitly list all elements to preserve (pose, clothing, background, lighting, body position)\n"
+                "3. Emphasize seamless blend and skin tone matching\n"
+                "4. Keep the prompt structured (50-100 words)"
+            )
+        else:
+            instruction_header = "Generate a detailed English prompt, ensuring:"
+            instruction_body = (
+                "1. Include a detailed description of the subject\n"
+                "2. Match the specified style and clothing\n"
+                "3. Include scene and lighting descriptions\n"
+                "4. Use professional photography terminology\n"
+                "5. Keep the prompt at a moderate length (100-200 words)"
+            )
+
         messages = [
             {"role": "system", "content": SEEDREAM_PROMPT_GUIDE},
             {
@@ -307,15 +325,8 @@ User request: {raw_prompt}
 
 {user_context}
 
-{"Generate a structured English prompt, ensuring:" if reference_image_mode == "face_swap" else "Generate a detailed English prompt, ensuring:"}
-{"""1. Use the REPLACE template format: Replace the face with... Keep [elements] unchanged.
-2. Explicitly list all elements to preserve (pose, clothing, background, lighting, body position)
-3. Emphasize seamless blend and skin tone matching
-4. Keep the prompt structured (50-100 words)""" if reference_image_mode == "face_swap" else f"""1. Include a detailed description of the subject
-2. Match the specified style and clothing
-3. Include scene and lighting descriptions
-4. Use professional photography terminology
-5. Keep the prompt at a moderate length (100-200 words)"""}{reference_context}""",
+{instruction_header}
+{instruction_body}{reference_context}""",
             },
         ]
 

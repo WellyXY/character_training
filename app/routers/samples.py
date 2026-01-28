@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import instaloader
-
 from app.database import get_db
 from app.models.sample_post import SamplePost, MediaType as DBMediaType
 from app.schemas.sample_post import (
