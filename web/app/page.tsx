@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type {
   Character,
   Image,
@@ -34,9 +34,11 @@ import AppNavbar from "@/components/AppNavbar";
 
 // Wrapper component to handle Suspense for useSearchParams
 function HomeContent() {
-  // URL search params for reference image
+  // URL search params
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialReferenceUrl = searchParams.get("ref");
+  const urlCharacterId = searchParams.get("character");
 
   // State
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -63,6 +65,23 @@ function HomeContent() {
     () => images.filter((img) => img.type === "base"),
     [images]
   );
+
+  // Select character: update state, URL, and cookie
+  const selectCharacter = useCallback((id: string | null) => {
+    setSelectedCharacterId(id);
+    if (id) {
+      document.cookie = `selectedCharacterId=${id};path=/;max-age=${60 * 60 * 24 * 365}`;
+      const params = new URLSearchParams(window.location.search);
+      params.set("character", id);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    } else {
+      document.cookie = "selectedCharacterId=;path=/;max-age=0";
+      const params = new URLSearchParams(window.location.search);
+      params.delete("character");
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : "/", { scroll: false });
+    }
+  }, [router]);
 
   // Load characters on mount
   useEffect(() => {
@@ -190,7 +209,11 @@ function HomeContent() {
       const data = await listCharacters();
       setCharacters(data);
       if (data.length > 0 && !selectedCharacterId) {
-        setSelectedCharacterId(data[0].id);
+        // Restore from URL param first, then cookie, then default to first
+        const cookieId = document.cookie.match(/selectedCharacterId=([^;]+)/)?.[1];
+        const restoreId = urlCharacterId || cookieId;
+        const validId = restoreId && data.some((c) => c.id === restoreId) ? restoreId : data[0].id;
+        selectCharacter(validId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load characters");
@@ -228,7 +251,7 @@ function HomeContent() {
     try {
       const created = await createCharacter({ name, description, gender });
       await loadCharacters();
-      setSelectedCharacterId(created.id);
+      selectCharacter(created.id);
 
       // Auto-generate 3 base images
       try {
@@ -268,7 +291,7 @@ function HomeContent() {
     setLoading(true);
     try {
       await deleteCharacter(characterId);
-      setSelectedCharacterId(null);
+      selectCharacter(null);
       setImages([]);
       setVideos([]);
       await loadCharacters();
@@ -549,7 +572,7 @@ function HomeContent() {
             characters={characters}
             selectedCharacter={selectedCharacter}
             baseImages={baseImages}
-            onSelect={setSelectedCharacterId}
+            onSelect={selectCharacter}
             onCreate={handleCreateCharacter}
             onDeleteCharacter={handleDeleteCharacter}
             onApproveImage={handleApproveImage}
