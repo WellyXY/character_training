@@ -289,7 +289,7 @@ export default function ContentGallery({
                   </div>
 
                   {/* Type Badge */}
-                  <div className="absolute top-2 left-2">
+                  <div className="absolute top-2 left-2 z-20">
                     <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       Generating
@@ -298,12 +298,11 @@ export default function ContentGallery({
 
                   {/* Cancel Button */}
                   {onCancelTask && (
-                    <div className="absolute bottom-2 right-2">
+                    <div className="absolute bottom-2 right-2 z-20">
                       <button
                         type="button"
                         onClick={() => onCancelTask(task.task_id)}
-                        disabled={loading}
-                        className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80 disabled:opacity-50"
+                        className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80"
                       >
                         Cancel
                       </button>
@@ -343,7 +342,7 @@ export default function ContentGallery({
                   </div>
 
                   {/* Type Badge */}
-                  <div className="absolute top-2 left-2">
+                  <div className="absolute top-2 left-2 z-20">
                     <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       {img.type === "base" ? "Base" : "Content"}
@@ -351,12 +350,11 @@ export default function ContentGallery({
                   </div>
 
                   {/* Delete button */}
-                  <div className="absolute bottom-2 right-2">
+                  <div className="absolute bottom-2 right-2 z-20">
                     <button
                       type="button"
                       onClick={() => onDeleteImage(img.id)}
-                      disabled={loading}
-                      className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80 disabled:opacity-50"
+                      className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80"
                     >
                       Cancel
                     </button>
