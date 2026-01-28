@@ -18,6 +18,7 @@ interface ContentGalleryProps {
   onRefresh?: () => void;
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
   onTaskUpdate?: (taskId: string, update: Partial<GenerationTask>) => void;
+  onCancelTask?: (taskId: string) => void;
 }
 
 type TabType = "all" | "base" | "images" | "videos";
@@ -34,6 +35,7 @@ export default function ContentGallery({
   onRefresh,
   onTaskStarted,
   onTaskUpdate,
+  onCancelTask,
 }: ContentGalleryProps) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [selectedItem, setSelectedItem] = useState<{
@@ -293,6 +295,20 @@ export default function ContentGallery({
                       Generating
                     </span>
                   </div>
+
+                  {/* Cancel Button */}
+                  {onCancelTask && (
+                    <div className="absolute bottom-2 right-2">
+                      <button
+                        type="button"
+                        onClick={() => onCancelTask(task.task_id)}
+                        disabled={loading}
+                        className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
 

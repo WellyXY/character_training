@@ -461,6 +461,37 @@ function HomeContent() {
     setError(`Generation failed: ${error}`);
   };
 
+  // Cancel/delete a generating task
+  const handleCancelTask = async (taskId: string) => {
+    // Remove from active tasks
+    setActiveTasks((prev) => prev.filter((t) => t.task_id !== taskId));
+
+    // Find and delete the corresponding DB image by task_id
+    if (selectedCharacterId) {
+      const matchingImage = images.find((img) => img.task_id === taskId);
+      if (matchingImage) {
+        try {
+          await deleteImage(matchingImage.id);
+          await loadMedia(selectedCharacterId);
+        } catch (err) {
+          console.error("Failed to delete generating image:", err);
+        }
+      } else {
+        // Image might not be in current images list yet, try reloading
+        try {
+          const allImages = await listCharacterImages(selectedCharacterId);
+          const img = allImages.find((i) => i.task_id === taskId);
+          if (img) {
+            await deleteImage(img.id);
+            await loadMedia(selectedCharacterId);
+          }
+        } catch (err) {
+          console.error("Failed to delete generating image:", err);
+        }
+      }
+    }
+  };
+
   return (
     <main className="min-h-screen bg-black text-white">
       {/* Navbar */}
@@ -531,6 +562,7 @@ function HomeContent() {
               };
               setActiveTasks((prev) => [...prev, newTask]);
             }}
+            onCancelTask={handleCancelTask}
             onTaskUpdate={(taskId, update) => {
               setActiveTasks((prev) =>
                 prev.map((t) =>
