@@ -108,6 +108,37 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [activeTasks, sessionId]);
 
+  // Auto-timeout tasks generating for over 60 seconds
+  useEffect(() => {
+    const activePending = activeTasks.filter(
+      (t) => t.status === "pending" || t.status === "generating"
+    );
+    if (activePending.length === 0) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      let timedOut = false;
+      setActiveTasks((prev) =>
+        prev.map((t) => {
+          if ((t.status === "pending" || t.status === "generating") &&
+              now - new Date(t.created_at).getTime() > 60_000) {
+            timedOut = true;
+            return { ...t, status: "failed", error: "Generation timed out", progress: 100 };
+          }
+          return t;
+        })
+      );
+      if (timedOut) {
+        // Auto-remove timed-out tasks after 3s
+        setTimeout(() => {
+          setActiveTasks((prev) => prev.filter((t) => !(t.status === "failed" && t.error === "Generation timed out")));
+        }, 3000);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeTasks]);
+
   // Poll base image tasks by checking character images
   useEffect(() => {
     const baseTaskIds = activeTasks
