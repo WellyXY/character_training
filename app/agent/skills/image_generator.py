@@ -54,13 +54,16 @@ class ImageGeneratorSkill(BaseSkill):
         self,
         character_id: str,
         db: AsyncSession,
+        limit: int = 1,
     ) -> list[str]:
-        """Get approved base images for a character."""
+        """Get approved base images for a character (limited to avoid fake-looking faces)."""
         result = await db.execute(
             select(Image)
             .where(Image.character_id == character_id)
             .where(Image.type == ImageType.BASE)
             .where(Image.is_approved == True)
+            .order_by(Image.created_at.desc())
+            .limit(limit)
         )
         images = result.scalars().all()
         return [self.storage.get_full_url(img.image_url) for img in images]
