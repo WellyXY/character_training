@@ -249,6 +249,8 @@ async def retry_image(
         params["cloth"] = metadata.get("cloth")
     if metadata.get("user_reference_path"):
         params["reference_image_path"] = metadata.get("user_reference_path")
+    if metadata.get("reference_image_paths"):
+        params["reference_image_paths"] = metadata.get("reference_image_paths")
 
     action = "generate_base" if image.type == DBImageType.BASE else "generate_content"
     skill = ImageGeneratorSkill()

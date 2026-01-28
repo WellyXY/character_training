@@ -120,6 +120,8 @@ class ImageGeneratorSkill(BaseSkill):
                 "height": height,
                 "seed": result.get("seed"),
             }
+            if user_reference_paths:
+                metadata["reference_image_paths"] = user_reference_paths
 
             # Check if we should update an existing record or create new
             existing_image_id = params.get("existing_image_id")
