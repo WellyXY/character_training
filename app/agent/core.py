@@ -861,6 +861,7 @@ Current State:
                                 "prompt": final_prompt,
                                 "aspect_ratio": aspect_ratio,
                                 "existing_image_id": existing_image_id,
+                                "reference_image_path": pending.params.reference_image_path,
                             },
                             character_id=character_id,
                             db=db,

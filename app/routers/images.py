@@ -136,6 +136,51 @@ async def approve_image(
     return _image_to_response(image)
 
 
+@router.post("/images/{image_id}/set-as-base", response_model=ImageResponse)
+async def set_as_base(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set an image as base, replacing the oldest base image if at the limit."""
+    result = await db.execute(
+        select(Image).where(Image.id == image_id)
+    )
+    image = result.scalar_one_or_none()
+
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    if image.type == DBImageType.BASE:
+        # Already a base image, just ensure approved
+        image.is_approved = True
+        await db.commit()
+        await db.refresh(image)
+        return _image_to_response(image)
+
+    # Get current approved base images ordered by creation date
+    base_result = await db.execute(
+        select(Image)
+        .where(Image.character_id == image.character_id)
+        .where(Image.type == DBImageType.BASE)
+        .where(Image.is_approved == True)
+        .order_by(Image.created_at.desc())
+    )
+    approved_bases = base_result.scalars().all()
+
+    # If at the limit, delete the oldest (last in desc order)
+    if len(approved_bases) >= 3:
+        oldest = approved_bases[-1]
+        await db.delete(oldest)
+
+    # Set current image as base and approve
+    image.type = DBImageType.BASE
+    image.is_approved = True
+    await db.commit()
+    await db.refresh(image)
+
+    return _image_to_response(image)
+
+
 @router.delete("/images/{image_id}")
 async def delete_image(
     image_id: str,

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { Character, Image } from "@/lib/types";
-import { resolveApiUrl } from "@/lib/api";
+import { resolveApiUrl, uploadFile } from "@/lib/api";
 import CustomPromptModal from "./CustomPromptModal";
 
 interface CharacterSidebarProps {
@@ -10,7 +10,8 @@ interface CharacterSidebarProps {
   selectedCharacter: Character | null;
   baseImages: Image[];
   onSelect: (id: string) => void;
-  onCreate: (name: string, description: string, gender?: string) => Promise<void>;
+  onCreate: (name: string, description: string, gender?: string, referenceImagePaths?: string[]) => Promise<void>;
+  onDeleteCharacter: (characterId: string) => Promise<void>;
   onApproveImage: (imageId: string) => Promise<void>;
   onDeleteImage: (imageId: string) => Promise<void>;
   onRefresh?: () => void;
@@ -23,6 +24,7 @@ export default function CharacterSidebar({
   baseImages,
   onSelect,
   onCreate,
+  onDeleteCharacter,
   onApproveImage,
   onDeleteImage,
   onRefresh,
@@ -34,10 +36,51 @@ export default function CharacterSidebar({
   const [gender, setGender] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+  const [referenceFiles, setReferenceFiles] = useState<{ file: File; previewUrl: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddReferenceFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    const newEntries = imageFiles.map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setReferenceFiles((prev) => [...prev, ...newEntries]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleRemoveReferenceFile = (index: number) => {
+    setReferenceFiles((prev) => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await onCreate(name.trim(), description.trim(), gender || undefined);
+
+    // Upload reference images first
+    let uploadedPaths: string[] = [];
+    if (referenceFiles.length > 0) {
+      setUploading(true);
+      try {
+        const results = await Promise.all(
+          referenceFiles.map((rf) => uploadFile(rf.file))
+        );
+        uploadedPaths = results.map((r) => r.url);
+      } catch (err) {
+        console.error("Failed to upload reference images:", err);
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    await onCreate(name.trim(), description.trim(), gender || undefined, uploadedPaths.length > 0 ? uploadedPaths : undefined);
+    // Clean up
+    referenceFiles.forEach((rf) => URL.revokeObjectURL(rf.previewUrl));
+    setReferenceFiles([]);
     setName("");
     setDescription("");
     setGender("");
@@ -77,7 +120,21 @@ export default function CharacterSidebar({
       {/* Selected Character Info */}
       {selectedCharacter && (
         <div className="mb-4 rounded-xl border border-white/10 bg-[#0b0b0b] p-3">
-          <h3 className="font-semibold text-white font-mono">{selectedCharacter.name}</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-white font-mono">{selectedCharacter.name}</h3>
+            <button
+              onClick={() => {
+                if (window.confirm(`Delete "${selectedCharacter.name}"? This will remove all images and videos.`)) {
+                  onDeleteCharacter(selectedCharacter.id);
+                }
+              }}
+              disabled={loading}
+              className="w-6 h-6 rounded bg-red-500/20 text-red-400 text-xs hover:bg-red-500/40 transition-colors disabled:opacity-50"
+              title="Delete character"
+            >
+              ×
+            </button>
+          </div>
           {selectedCharacter.gender && (
             <p className="text-xs text-gray-400 mt-1 font-mono">
               {selectedCharacter.gender === "female" ? "Female" : selectedCharacter.gender === "male" ? "Male" : selectedCharacter.gender}
@@ -224,10 +281,44 @@ export default function CharacterSidebar({
               <option value="female">Female</option>
               <option value="male">Male</option>
             </select>
+            {/* Reference Images Upload */}
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleAddReferenceFiles}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full rounded-lg border border-dashed border-white/20 px-3 py-2 text-xs font-mono text-gray-400 hover:text-white hover:border-white/40 transition-colors"
+              >
+                + Reference Images (optional)
+              </button>
+              {referenceFiles.length > 0 && (
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {referenceFiles.map((rf, i) => (
+                    <div key={i} className="relative w-10 h-10 rounded overflow-hidden group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={rf.previewUrl} alt="" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => handleRemoveReferenceFile(i)}
+                        className="absolute inset-0 bg-black/60 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={handleCreate}
-                disabled={loading || !name.trim()}
+                disabled={loading || uploading || !name.trim()}
                 className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
               >
                 Create

@@ -83,11 +83,24 @@ class ImageGeneratorSkill(BaseSkill):
         width, height = self._parse_aspect_ratio(aspect_ratio)
 
         try:
-            # Generate image with Seedream (no reference images for base)
+            # Build reference images list from user-provided references
+            reference_images = None
+            user_reference_paths = params.get("reference_image_paths") or []
+            # Also support single path for backward compat
+            single_path = params.get("reference_image_path")
+            if single_path and single_path not in user_reference_paths:
+                user_reference_paths.append(single_path)
+            if user_reference_paths:
+                reference_images = [
+                    self.storage.get_full_url(p) for p in user_reference_paths
+                ]
+
+            # Generate image with Seedream
             result = await self.seedream.generate(
                 prompt=prompt,
                 width=width,
                 height=height,
+                reference_images=reference_images,
             )
 
             image_url = result.get("image_url")
@@ -186,16 +199,19 @@ class ImageGeneratorSkill(BaseSkill):
 
         # Get base images for reference (character consistency)
         base_image_urls = await self._get_base_images(character_id, db)
-        if not base_image_urls:
-            return {
-                "success": False,
-                "error": "Character has no Base Images. Please generate and approve Base Images first.",
-            }
 
         # Build reference_images: base images first, then user reference image (if any)
         # - Base images: for face and body shape consistency
         # - User reference image: for pose/composition/atmosphere reference
         user_reference_path = params.get("reference_image_path")
+
+        # If no base images and no user reference, we can't generate content
+        if not base_image_urls and not user_reference_path:
+            return {
+                "success": False,
+                "error": "Character has no Base Images. Please generate and approve Base Images first, or provide a reference image.",
+            }
+
         reference_images = list(base_image_urls)  # Base images first
 
         import logging

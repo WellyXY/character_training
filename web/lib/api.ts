@@ -91,6 +91,17 @@ export async function deleteCharacter(id: string): Promise<void> {
   await apiFetch<void>(`/characters/${id}`, { method: "DELETE" });
 }
 
+// Base image generation
+export async function generateBaseImages(
+  characterId: string,
+  referenceImagePaths?: string[],
+): Promise<{ tasks: { task_id: string; prompt: string }[] }> {
+  return apiFetch(`/characters/${characterId}/generate-base-images`, {
+    method: "POST",
+    body: JSON.stringify({ reference_image_paths: referenceImagePaths }),
+  });
+}
+
 // Image endpoints
 export async function listCharacterImages(
   characterId: string,
@@ -102,6 +113,10 @@ export async function listCharacterImages(
 
 export async function approveImage(imageId: string): Promise<Image> {
   return apiFetch<Image>(`/images/${imageId}/approve`, { method: "POST" });
+}
+
+export async function setImageAsBase(imageId: string): Promise<Image> {
+  return apiFetch<Image>(`/images/${imageId}/set-as-base`, { method: "POST" });
 }
 
 export async function deleteImage(imageId: string): Promise<void> {

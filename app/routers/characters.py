@@ -1,14 +1,18 @@
 """Character management router."""
+import asyncio
 import json
+import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, async_session
 from app.models.character import Character, CharacterStatus as DBCharacterStatus
-from app.models.image import Image, ImageType as DBImageType
+from app.models.image import Image, ImageType as DBImageType, ImageStatus as DBImageStatus
 from app.schemas.character import (
     CharacterCreate,
     CharacterUpdate,
@@ -16,6 +20,8 @@ from app.schemas.character import (
     CharacterStatus,
 )
 from app.services.storage import get_storage_service, StorageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -166,6 +172,125 @@ async def delete_character(
     await db.commit()
 
     return {"status": "deleted"}
+
+
+class GenerateBaseImagesRequest(BaseModel):
+    """Request to generate base images for a character."""
+    reference_image_paths: Optional[list[str]] = None
+
+
+class BaseImageTask(BaseModel):
+    """A single base image generation task."""
+    task_id: str
+    prompt: str
+
+
+class GenerateBaseImagesResponse(BaseModel):
+    """Response with task info for base image generation."""
+    tasks: list[BaseImageTask]
+
+
+async def _generate_single_base_image(
+    character_id: str,
+    image_id: str,
+    prompt: str,
+    reference_image_paths: Optional[list[str]] = None,
+):
+    """Background task: generate one base image and auto-approve it."""
+    from app.agent.skills.image_generator import ImageGeneratorSkill
+
+    skill = ImageGeneratorSkill()
+    async with async_session() as db:
+        try:
+            result = await skill.execute(
+                action="generate_base",
+                params={
+                    "prompt": prompt,
+                    "aspect_ratio": "1:1",
+                    "existing_image_id": image_id,
+                    "reference_image_paths": reference_image_paths,
+                },
+                character_id=character_id,
+                db=db,
+            )
+            if result.get("success"):
+                # Auto-approve
+                from sqlalchemy import select as sel
+                res = await db.execute(sel(Image).where(Image.id == image_id))
+                image = res.scalar_one_or_none()
+                if image:
+                    image.is_approved = True
+                    await db.commit()
+                logger.info(f"Base image {image_id} generated and auto-approved")
+            else:
+                logger.error(f"Base image {image_id} generation failed: {result.get('error')}")
+        except Exception as e:
+            logger.error(f"Base image {image_id} generation error: {e}")
+            try:
+                res = await db.execute(select(Image).where(Image.id == image_id))
+                image = res.scalar_one_or_none()
+                if image:
+                    image.status = DBImageStatus.FAILED
+                    image.error_message = str(e)
+                    await db.commit()
+            except Exception:
+                pass
+
+
+@router.post("/characters/{character_id}/generate-base-images", response_model=GenerateBaseImagesResponse)
+async def generate_base_images(
+    character_id: str,
+    data: GenerateBaseImagesRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate 3 base images for a character (white t-shirt, white bg, different poses)."""
+    # Verify character exists
+    result = await db.execute(
+        select(Character).where(Character.id == character_id)
+    )
+    character = result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    description = character.description or character.name
+    gender = character.gender or "person"
+
+    prompts = [
+        f"A photorealistic portrait of a {gender}, {description}, wearing a plain white t-shirt, standing against a clean white background, facing directly forward, neutral expression, even studio lighting, half-body shot",
+        f"A photorealistic portrait of a {gender}, {description}, wearing a plain white t-shirt, standing against a clean white background, turned slightly to the left at a three-quarter angle, gentle smile, soft studio lighting, half-body shot",
+        f"A photorealistic portrait of a {gender}, {description}, wearing a plain white t-shirt, standing against a clean white background, slight side angle looking over shoulder, natural expression, even studio lighting, half-body shot",
+    ]
+
+    tasks = []
+    for prompt in prompts:
+        task_id = f"base-{uuid.uuid4().hex[:8]}"
+        # Create image record with GENERATING status
+        image = Image(
+            character_id=character_id,
+            type=DBImageType.BASE,
+            status=DBImageStatus.GENERATING,
+            task_id=task_id,
+            image_url="",
+            is_approved=False,
+            metadata_json=json.dumps({"prompt": prompt}),
+        )
+        db.add(image)
+        await db.commit()
+        await db.refresh(image)
+
+        # Spawn background generation
+        asyncio.create_task(
+            _generate_single_base_image(
+                character_id=character_id,
+                image_id=image.id,
+                prompt=prompt,
+                reference_image_paths=data.reference_image_paths,
+            )
+        )
+
+        tasks.append(BaseImageTask(task_id=task_id, prompt=prompt))
+
+    return GenerateBaseImagesResponse(tasks=tasks)
 
 
 @router.post("/uploads")

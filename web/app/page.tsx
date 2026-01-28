@@ -24,6 +24,8 @@ import {
   agentCancel,
   agentClear,
   getGenerationTask,
+  generateBaseImages,
+  deleteCharacter,
 } from "@/lib/api";
 import CharacterSidebar from "@/components/CharacterSidebar";
 import ContentGallery from "@/components/ContentGallery";
@@ -82,7 +84,7 @@ function HomeContent() {
     // Only poll server-tracked tasks (skip locally-created edit/animate tasks)
     const activePendingTasks = activeTasks.filter(
       (t) => (t.status === "pending" || t.status === "generating") &&
-        !t.task_id.startsWith("edit-") && !t.task_id.startsWith("animate-") && !t.task_id.startsWith("retry-")
+        !t.task_id.startsWith("edit-") && !t.task_id.startsWith("animate-") && !t.task_id.startsWith("retry-") && !t.task_id.startsWith("base-")
     );
     if (activePendingTasks.length === 0 || !sessionId) return;
 
@@ -105,6 +107,51 @@ function HomeContent() {
 
     return () => clearInterval(interval);
   }, [activeTasks, sessionId]);
+
+  // Poll base image tasks by checking character images
+  useEffect(() => {
+    const baseTaskIds = activeTasks
+      .filter((t) => t.task_id.startsWith("base-") && (t.status === "pending" || t.status === "generating"))
+      .map((t) => t.task_id);
+    if (baseTaskIds.length === 0 || !selectedCharacterId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const imgs = await listCharacterImages(selectedCharacterId);
+        const completedTaskIds = new Set(
+          imgs
+            .filter((img) => img.task_id && (img.status === "completed" || img.status === "failed"))
+            .map((img) => img.task_id!)
+        );
+
+        const anyDone = baseTaskIds.some((id) => completedTaskIds.has(id));
+        if (anyDone) {
+          setActiveTasks((prev) =>
+            prev.map((t) => {
+              if (t.task_id.startsWith("base-") && completedTaskIds.has(t.task_id)) {
+                const img = imgs.find((i) => i.task_id === t.task_id);
+                if (img?.status === "failed") {
+                  return { ...t, status: "failed", error: img.error_message || "Generation failed", progress: 100 };
+                }
+                return { ...t, status: "completed", progress: 100, result_url: img?.image_url || null };
+              }
+              return t;
+            })
+          );
+          // Reload media to show new images
+          await loadMedia(selectedCharacterId);
+          // Auto-remove completed base tasks after delay
+          setTimeout(() => {
+            setActiveTasks((prev) => prev.filter((t) => !completedTaskIds.has(t.task_id)));
+          }, 2000);
+        }
+      } catch (err) {
+        console.error("Failed to poll base image status:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeTasks, selectedCharacterId]);
 
   // API calls
   const loadCharacters = async () => {
@@ -143,15 +190,59 @@ function HomeContent() {
   const handleCreateCharacter = async (
     name: string,
     description: string,
-    gender?: string
+    gender?: string,
+    referenceImagePaths?: string[],
   ) => {
     setLoading(true);
     try {
       const created = await createCharacter({ name, description, gender });
       await loadCharacters();
       setSelectedCharacterId(created.id);
+
+      // Auto-generate 3 base images
+      try {
+        const baseResult = await generateBaseImages(created.id, referenceImagePaths);
+        const baseTasks: GenerationTask[] = baseResult.tasks.map((t) => ({
+          task_id: t.task_id,
+          status: "generating" as const,
+          progress: 10,
+          stage: "Generating base image...",
+          prompt: t.prompt,
+          reference_image_url: null,
+          result_url: null,
+          error: null,
+          created_at: new Date().toISOString(),
+        }));
+        setActiveTasks((prev) => [...prev, ...baseTasks]);
+      } catch (err) {
+        console.error("Failed to generate base images:", err);
+      }
+
+      // Send welcome message in agent chat
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant" as const,
+          content: `Great, **${created.name}** has been created! I'm generating 3 base images (front, 3/4 angle, and side profile) to establish the character's appearance. They'll appear in the gallery shortly.\n\nWhile those generate, you can start describing content images you'd like to create.`,
+        },
+      ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create character");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCharacter = async (characterId: string) => {
+    setLoading(true);
+    try {
+      await deleteCharacter(characterId);
+      setSelectedCharacterId(null);
+      setImages([]);
+      setVideos([]);
+      await loadCharacters();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete character");
     } finally {
       setLoading(false);
     }
@@ -398,6 +489,7 @@ function HomeContent() {
             baseImages={baseImages}
             onSelect={setSelectedCharacterId}
             onCreate={handleCreateCharacter}
+            onDeleteCharacter={handleDeleteCharacter}
             onApproveImage={handleApproveImage}
             onDeleteImage={handleDeleteImage}
             onRefresh={() => {

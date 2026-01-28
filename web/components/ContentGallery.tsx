@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import type { Image, Video, GenerationTask } from "@/lib/types";
-import { resolveApiUrl, retryImage, retryVideo } from "@/lib/api";
+import { resolveApiUrl, retryImage, retryVideo, setImageAsBase } from "@/lib/api";
 import AnimateModal from "./AnimateModal";
 import ImageEditPanel from "./ImageEditPanel";
 
@@ -870,20 +870,39 @@ export default function ContentGallery({
                       alt="Full size"
                       className="max-h-[85vh] max-w-full object-contain rounded-lg"
                     />
-                    {/* Edit Button in Preview Mode */}
+                    {/* Action Buttons in Preview Mode */}
                     {selectedItem.image && characterId && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedItem({
-                            ...selectedItem,
-                            editMode: true,
-                          })
-                        }
-                        className="mt-4 rounded-lg bg-white px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
-                      >
-                        Edit with AI
-                      </button>
+                      <div className="mt-4 flex gap-2">
+                        {selectedItem.image.type !== "base" && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await setImageAsBase(selectedItem.image!.id);
+                                setSelectedItem(null);
+                                onRefresh?.();
+                              } catch (err) {
+                                console.error("Failed to set as base:", err);
+                              }
+                            }}
+                            className="rounded-lg bg-[#1a1a1a] border border-[#333] px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-gray-300 hover:text-white"
+                          >
+                            Set as Base
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedItem({
+                              ...selectedItem,
+                              editMode: true,
+                            })
+                          }
+                          className="rounded-lg bg-white px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
+                        >
+                          Edit with AI
+                        </button>
+                      </div>
                     )}
                   </>
                 ) : (
