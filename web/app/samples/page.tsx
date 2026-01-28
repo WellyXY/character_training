@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import type { SamplePost } from "@/lib/types";
-import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample } from "@/lib/api";
+import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample } from "@/lib/api";
 import SampleCard from "@/components/SampleCard";
 import AppNavbar from "@/components/AppNavbar";
 
@@ -605,14 +605,32 @@ function SamplesContent() {
               {/* Spacer */}
               <div className="flex-1" />
 
-              {/* Apply Button */}
-              <button
-                type="button"
-                onClick={() => handleApply(selectedSample)}
-                className="w-full rounded-lg bg-white px-4 py-3 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
-              >
-                Apply as Reference
-              </button>
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => handleApply(selectedSample)}
+                  className="w-full rounded-lg bg-white px-4 py-3 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200"
+                >
+                  Apply as Reference
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm("Delete this sample?")) return;
+                    try {
+                      await deleteSample(selectedSample.id);
+                      setSamples((prev) => prev.filter((s) => s.id !== selectedSample.id));
+                      setSelectedSample(null);
+                    } catch (err) {
+                      console.error("Failed to delete sample:", err);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-red-500/20 border border-red-500/30 px-4 py-3 text-xs font-mono font-bold uppercase tracking-wide text-red-400 hover:bg-red-500/40"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
