@@ -369,6 +369,7 @@ Current State:
             "character_id": character_id,
             "character_name": None,
             "character_description": None,
+            "character_gender": None,
             "base_image_count": 0,
             "base_image_urls": [],
         }
@@ -384,6 +385,7 @@ Current State:
                 char = result.get("character", {})
                 context["character_name"] = char.get("name")
                 context["character_description"] = char.get("description")
+                context["character_gender"] = char.get("gender")
                 base_images = result.get("base_images", [])
                 context["base_image_count"] = len(base_images)
                 context["base_image_urls"] = [img["url"] for img in base_images]
@@ -540,6 +542,7 @@ Current State:
                 style=style,
                 cloth=cloth,
                 character_description=context.get("character_description"),
+                character_gender=context.get("character_gender"),
                 reference_image_path=reference_image_path,
                 reference_image_mode=reference_image_mode,
                 reference_description=message if reference_image_path else None,

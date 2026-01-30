@@ -240,12 +240,18 @@ class PromptOptimizerSkill(BaseSkill):
         cloth = params.get("cloth", "")
         scene = params.get("scene_description", "")
         character_description = params.get("character_description", "")
+        character_gender = params.get("character_gender", "")
         reference_image_path = params.get("reference_image_path")
         reference_image_mode = params.get("reference_image_mode")
         reference_description = params.get("reference_description", "")
 
         # Build context for optimization
         context_parts = []
+
+        # Add gender as explicit context - this is critical for correct prompt generation
+        if character_gender:
+            context_parts.append(f"Character gender: {character_gender} (IMPORTANT: The generated image MUST depict a {character_gender})")
+
         if character_description:
             # Remove character name from description to avoid it being rendered as text
             # Character descriptions often start with "Name: description" or just "Name, description"
@@ -428,6 +434,7 @@ User request: {raw_prompt}
         cloth: Optional[str] = None,
         scene_description: Optional[str] = None,
         character_description: Optional[str] = None,
+        character_gender: Optional[str] = None,
         reference_image_path: Optional[str] = None,
         reference_image_mode: Optional[str] = None,
         reference_description: Optional[str] = None,
@@ -442,6 +449,7 @@ User request: {raw_prompt}
             cloth: Clothing setting
             scene_description: Scene description
             character_description: Character description
+            character_gender: Character gender (male/female)
             reference_image_path: Path to user's reference image (will be analyzed by GPT-4V)
             reference_image_mode: How to use the reference image (face_swap, pose_background, clothing_pose, custom)
             reference_description: What user wants to reference from the image
@@ -457,6 +465,7 @@ User request: {raw_prompt}
                 "cloth": cloth or "",
                 "scene_description": scene_description or "",
                 "character_description": character_description or "",
+                "character_gender": character_gender or "",
                 "reference_image_path": reference_image_path,
                 "reference_image_mode": reference_image_mode,
                 "reference_description": reference_description or "",
