@@ -77,10 +77,13 @@ async def analyze_image_for_animation(
 
     analysis_prompt = """Analyze this image and suggest how it could be animated as a short video.
 
+CRITICAL: The person's facial features, face structure, and identity MUST remain completely unchanged during animation. Only suggest body movements and camera motions that will NOT alter or distort the face.
+
 Consider:
 1. The subject's pose and position
-2. Natural movements that would fit the scene
+2. Natural movements that would fit the scene (avoid extreme head movements that could distort facial features)
 3. Camera movements that would enhance the composition
+4. Movements that keep the face stable and recognizable
 
 Respond in JSON format:
 {
@@ -90,11 +93,12 @@ Respond in JSON format:
 }
 
 The suggested_prompt should be specific and describe:
-- What movement or action should happen
+- What movement or action should happen (while preserving facial identity)
 - How the camera might move (if applicable)
 - The mood or style of the animation
+- MUST include instruction to maintain the person's exact facial features and identity
 
-Keep the prompt concise but descriptive (1-2 sentences)."""
+Keep the prompt concise but descriptive (1-2 sentences). Always include "maintain exact facial features" or similar phrasing."""
 
     try:
         response = await gpt.analyze_image(
@@ -152,16 +156,19 @@ async def generate_animation(
     image_url = storage.get_full_url(request.image_url)
 
     try:
+        # Add face preservation emphasis to the prompt
+        enhanced_prompt = f"Maintain exact facial features and identity unchanged. {request.prompt}"
+
         logger.info(
             "Starting video generation for image %s with prompt: %s",
             request.image_id,
-            request.prompt[:100],
+            enhanced_prompt[:150],
         )
 
         # Create video generation job
         video_job_id = await parrot.create_image_to_video(
             image_source=image_url,
-            prompt_text=request.prompt,
+            prompt_text=enhanced_prompt,
         )
 
         logger.info("Video job created: %s", video_job_id)
@@ -206,7 +213,8 @@ async def generate_animation(
             source_image_id=request.image_id,
             status=DBVideoStatus.COMPLETED,
             metadata_json=json.dumps({
-                "prompt": request.prompt,
+                "original_prompt": request.prompt,
+                "enhanced_prompt": enhanced_prompt,
                 "source_image_id": request.image_id,
                 "parrot_job_id": video_job_id,
             }),
