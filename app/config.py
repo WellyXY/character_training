@@ -46,11 +46,14 @@ class Settings(BaseSettings):
     parrot_api_key: str = ""
     parrot_api_url: str = "https://parrot.pika.art/api/v1/generate/v0"
 
-    # Twitter
+    # Twitter OAuth 1.0a (legacy)
     twitter_api_key: str = ""
     twitter_api_secret: str = ""
     twitter_access_token: str = ""
     twitter_access_token_secret: str = ""
+    # Twitter OAuth 2.0
+    twitter_client_id: str = ""
+    twitter_client_secret: str = ""
 
     # Storage
     public_base_url: str = "http://localhost:8000"

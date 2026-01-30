@@ -1,4 +1,4 @@
-"""Twitter posting router."""
+"""Twitter posting router using OAuth 1.0a."""
 import tempfile
 import logging
 import os
@@ -35,22 +35,21 @@ class TwitterPostResponse(BaseModel):
     error: Optional[str] = None
 
 
-def get_twitter_credentials() -> dict:
-    """Get Twitter API credentials from settings."""
-    settings = get_settings()
-    return {
-        "api_key": settings.twitter_api_key,
-        "api_secret": settings.twitter_api_secret,
-        "access_token": settings.twitter_access_token,
-        "access_token_secret": settings.twitter_access_token_secret,
-    }
-
-
 def get_twitter_client():
-    """Get authenticated Twitter client."""
-    creds = get_twitter_credentials()
+    """Get authenticated Twitter client using OAuth 1.0a."""
+    # Use fresh Settings to avoid cache issues
+    from app.config import Settings
+    settings = Settings()
 
-    if not all(creds.values()):
+    logger.info(f"Twitter API Key: {settings.twitter_api_key}")
+    logger.info(f"Twitter Access Token: {settings.twitter_access_token[:20]}...")
+
+    if not all([
+        settings.twitter_api_key,
+        settings.twitter_api_secret,
+        settings.twitter_access_token,
+        settings.twitter_access_token_secret,
+    ]):
         raise HTTPException(
             status_code=500,
             detail="Twitter API credentials not configured"
@@ -58,22 +57,43 @@ def get_twitter_client():
 
     # v2 client for creating tweets
     client = tweepy.Client(
-        consumer_key=creds["api_key"],
-        consumer_secret=creds["api_secret"],
-        access_token=creds["access_token"],
-        access_token_secret=creds["access_token_secret"],
+        consumer_key=settings.twitter_api_key,
+        consumer_secret=settings.twitter_api_secret,
+        access_token=settings.twitter_access_token,
+        access_token_secret=settings.twitter_access_token_secret,
     )
 
-    # v1.1 API for media upload (required for images/videos)
+    # v1.1 API for media upload
     auth = tweepy.OAuth1UserHandler(
-        creds["api_key"],
-        creds["api_secret"],
-        creds["access_token"],
-        creds["access_token_secret"],
+        settings.twitter_api_key,
+        settings.twitter_api_secret,
+        settings.twitter_access_token,
+        settings.twitter_access_token_secret,
     )
     api = tweepy.API(auth)
 
     return client, api
+
+
+@router.get("/twitter/test")
+async def test_twitter_auth():
+    """Test Twitter authentication."""
+    try:
+        client, api = get_twitter_client()
+        user = client.get_me()
+        return {
+            "success": True,
+            "username": user.data.username,
+            "user_id": user.data.id,
+        }
+    except HTTPException:
+        raise
+    except tweepy.TweepyException as e:
+        logger.error(f"Twitter auth test failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
 
 
 @router.post("/twitter/post", response_model=TwitterPostResponse)
@@ -109,7 +129,6 @@ async def post_to_twitter(
                 raise HTTPException(status_code=400, detail="Image URL not available")
 
             # Get the file blob from storage
-            # Extract file_id from URL like "/uploads/{file_id}"
             file_id = image.image_url.split("/")[-1]
             blob = await storage.get_file_blob(file_id, db)
 
@@ -125,8 +144,8 @@ async def post_to_twitter(
                 # Upload media to Twitter
                 media = api.media_upload(filename=tmp_path)
                 media_id = media.media_id
+                logger.info(f"Media uploaded, ID: {media_id}")
             finally:
-                # Clean up temp file
                 os.unlink(tmp_path)
 
         elif request.video_id:
@@ -142,40 +161,41 @@ async def post_to_twitter(
             if not video.video_url:
                 raise HTTPException(status_code=400, detail="Video URL not available")
 
-            # Get the file blob from storage
             file_id = video.video_url.split("/")[-1]
             blob = await storage.get_file_blob(file_id, db)
 
             if not blob:
                 raise HTTPException(status_code=404, detail="Video file not found")
 
-            # Save to temp file for upload
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                 tmp.write(blob.data)
                 tmp_path = tmp.name
 
             try:
-                # Upload video to Twitter (chunked upload for videos)
                 media = api.media_upload(
                     filename=tmp_path,
                     media_category="tweet_video"
                 )
                 media_id = media.media_id
+                logger.info(f"Video uploaded, ID: {media_id}")
             finally:
-                # Clean up temp file
                 os.unlink(tmp_path)
 
         # Create tweet with media
         tweet_text = request.caption if request.caption else ""
 
+        # Truncate caption to Twitter's 280 character limit
+        if len(tweet_text) > 280:
+            tweet_text = tweet_text[:277] + "..."
+            logger.info(f"Caption truncated to 280 characters")
+
         response = client.create_tweet(
-            text=tweet_text,
+            text=tweet_text if tweet_text else None,
             media_ids=[media_id] if media_id else None
         )
 
         # Get tweet URL
         tweet_id = response.data["id"]
-        # Get authenticated user's username for the URL
         user_response = client.get_me()
         username = user_response.data.username
         tweet_url = f"https://twitter.com/{username}/status/{tweet_id}"
@@ -187,8 +207,13 @@ async def post_to_twitter(
             tweet_url=tweet_url
         )
 
+    except HTTPException:
+        raise
     except tweepy.TweepyException as e:
         logger.error(f"Twitter API error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response status: {e.response.status_code}")
+            logger.error(f"Response text: {e.response.text}")
         return TwitterPostResponse(
             success=False,
             error=str(e)
