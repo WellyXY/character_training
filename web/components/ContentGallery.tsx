@@ -958,6 +958,7 @@ export default function ContentGallery({
                               Edit with AI
                             </button>
                           )}
+                          {/* Twitter button hidden for now
                           <button
                             type="button"
                             onClick={(e) => {
@@ -970,6 +971,7 @@ export default function ContentGallery({
                             <TwitterIcon />
                             {postingToTwitter ? "Posting..." : "Post to Twitter"}
                           </button>
+                          */}
                         </div>
                         {/* Twitter Result Feedback */}
                         {twitterResult && (
@@ -1007,6 +1009,7 @@ export default function ContentGallery({
                     {selectedItem.video && (
                       <div className="mt-4 flex flex-col items-center gap-2">
                         <div className="flex gap-2">
+                          {/* Twitter button hidden for now
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1019,6 +1022,7 @@ export default function ContentGallery({
                             <TwitterIcon />
                             {postingToTwitter ? "Posting..." : "Post to Twitter"}
                           </button>
+                          */}
                         </div>
                         {/* Twitter Result Feedback */}
                         {twitterResult && (
