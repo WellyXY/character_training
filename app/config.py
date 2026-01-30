@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     parrot_api_key: str = ""
     parrot_api_url: str = "https://parrot.pika.art/api/v1/generate/v0"
 
+    # Twitter
+    twitter_api_key: str = ""
+    twitter_api_secret: str = ""
+    twitter_access_token: str = ""
+    twitter_access_token_secret: str = ""
+
     # Storage
     public_base_url: str = "http://localhost:8000"
     upload_dir: str = "public/uploads"

@@ -346,3 +346,23 @@ export async function updateSample(
     body: JSON.stringify(data),
   });
 }
+
+// Twitter endpoints
+export interface TwitterPostRequest {
+  image_id?: string;
+  video_id?: string;
+  caption?: string;
+}
+
+export interface TwitterPostResponse {
+  success: boolean;
+  tweet_url?: string;
+  error?: string;
+}
+
+export async function postToTwitter(request: TwitterPostRequest): Promise<TwitterPostResponse> {
+  return apiFetch<TwitterPostResponse>("/twitter/post", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
