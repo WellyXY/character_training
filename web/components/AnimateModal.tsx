@@ -170,19 +170,28 @@ export default function AnimateModal({
     onClose();
 
     // Fire API call in background (continues after unmount)
+    const requestData = {
+      image_id: image.id,
+      image_url: image.image_url,
+      character_id: characterId,
+      prompt: prompt.trim(),
+      reference_video_url: referenceVideo?.url ?? undefined,
+      reference_video_duration: referenceVideo?.duration ?? undefined,
+    };
+    console.log("=== AnimateModal Request ===");
+    console.log("Request data:", requestData);
+    console.log("Reference video:", referenceVideo);
+    console.log("============================");
+
     try {
-      const result = await animateImage({
-        image_id: image.id,
-        image_url: image.image_url,
-        character_id: characterId,
-        prompt: prompt.trim(),
-        reference_video_url: referenceVideo?.url ?? undefined,
-        reference_video_duration: referenceVideo?.duration ?? undefined,
-      });
+      const result = await animateImage(requestData);
+      console.log("AnimateModal response:", result);
 
       if (result.success) {
         // Video saved to DB server-side; refresh parent media
         onVideoCreated();
+      } else {
+        console.error("Video generation failed:", result.message);
       }
     } catch (err) {
       console.error("Video generation failed:", err);

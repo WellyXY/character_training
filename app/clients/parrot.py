@@ -247,6 +247,16 @@ class ParrotClient:
         # Use separate Addition API URL and key
         addition_url = f"{self.addition_api_url}/generate/pikadditions"
 
+        # Debug: print request structure
+        logger.info("=== Addition API Request ===")
+        logger.info("URL: %s", addition_url)
+        logger.info("Files: video=(%s, %d bytes, %s), image=(%s, %d bytes, %s)",
+                    video_filename, len(video_data), video_content_type,
+                    image_filename, len(image_data), image_content_type)
+        logger.info("promptText: %s", prompt_text)
+        logger.info("API Key: %s...%s", self.addition_api_key[:10], self.addition_api_key[-4:])
+        logger.info("============================")
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             logger.info(
                 "Pika Addition API -> url=%s prompt=%s",
@@ -416,6 +426,9 @@ class ParrotClient:
         while elapsed < timeout:
             result = await self.get_video_status(video_id, use_addition_api=use_addition_api)
             status = result.get("status", "").lower()
+
+            # Log full response for debugging
+            logger.info("Poll response: %s", result.get("raw", result))
 
             if status != last_status:
                 logger.info("Parrot video %s status: %s", video_id, status)
