@@ -245,7 +245,7 @@ class ParrotClient:
             data["seed"] = str(seed)
 
         # Use separate Addition API URL and key
-        addition_url = f"{self.addition_api_url}/pikadditions"
+        addition_url = f"{self.addition_api_url}/generate/pikadditions"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             logger.info(
