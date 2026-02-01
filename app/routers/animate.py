@@ -225,6 +225,7 @@ async def generate_animation(
             video_id=video_job_id,
             timeout=300,
             poll_interval=5,
+            use_addition_api=use_addition_api,
         )
 
         video_url = result.get("video_url")

@@ -349,20 +349,28 @@ class ParrotClient:
             logger.info("Parrot job created: %s", video_id)
             return video_id
 
-    async def get_video_status(self, video_id: str) -> dict[str, Any]:
+    async def get_video_status(self, video_id: str, use_addition_api: bool = False) -> dict[str, Any]:
         """
         Get the status of a video generation job.
 
         Args:
             video_id: The video generation ID
+            use_addition_api: If True, poll from Addition API instead of Parrot API
 
         Returns:
             Dictionary with status and video_url (when complete)
         """
+        if use_addition_api:
+            base_url = self.addition_api_url
+            api_key = self.addition_api_key
+        else:
+            base_url = self.base_url
+            api_key = self.api_key
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(
-                f"{self.base_url}/videos/{video_id}",
-                headers=self._build_headers(),
+                f"{base_url}/videos/{video_id}",
+                headers=self._build_headers(api_key=api_key),
             )
             response.raise_for_status()
             result = response.json()
@@ -384,6 +392,7 @@ class ParrotClient:
         video_id: str,
         timeout: int = 300,
         poll_interval: int = 5,
+        use_addition_api: bool = False,
     ) -> dict[str, Any]:
         """
         Poll for video completion.
@@ -392,6 +401,7 @@ class ParrotClient:
             video_id: The video generation ID
             timeout: Maximum time to wait in seconds
             poll_interval: Time between polls in seconds
+            use_addition_api: If True, poll from Addition API instead of Parrot API
 
         Returns:
             Dictionary with video_url and other metadata
@@ -404,7 +414,7 @@ class ParrotClient:
         last_status = None
 
         while elapsed < timeout:
-            result = await self.get_video_status(video_id)
+            result = await self.get_video_status(video_id, use_addition_api=use_addition_api)
             status = result.get("status", "").lower()
 
             if status != last_status:
