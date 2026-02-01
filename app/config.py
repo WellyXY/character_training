@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     parrot_api_key: str = ""
     parrot_api_url: str = "https://parrot.pika.art/api/v1/generate/v0"
 
+    # Pika Addition API (Reference Video Generation)
+    pika_addition_api_key: str = ""
+    pika_addition_api_url: str = "https://parrot.pika.art/api/v1/generate"
+
     # Twitter OAuth 1.0a (legacy)
     twitter_api_key: str = ""
     twitter_api_secret: str = ""

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
-import { useRouter } from "next/navigation";
-import type { SamplePost } from "@/lib/types";
-import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample } from "@/lib/api";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { SamplePost, Image, Character } from "@/lib/types";
+import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, listCharacters } from "@/lib/api";
 import SampleCard from "@/components/SampleCard";
 import AppNavbar from "@/components/AppNavbar";
+import ImagePickerModal from "@/components/ImagePickerModal";
+import AnimateModal from "@/components/AnimateModal";
 
 type FilterType = "all" | "image" | "video";
 
@@ -36,13 +38,31 @@ function SamplesContent() {
   const [editingTagsValue, setEditingTagsValue] = useState("");
   const [savingTags, setSavingTags] = useState(false);
 
-  // Load samples
+  // Video reference for animate flow
+  const [videoRefForAnimate, setVideoRefForAnimate] = useState<{
+    url: string;
+    duration: number;
+  } | null>(null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [selectedImageForAnimate, setSelectedImageForAnimate] = useState<Image | null>(null);
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+
+  // Load samples and characters
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const data = await listSamples();
-        setSamples(data);
+        const [samplesData, charactersData] = await Promise.all([
+          listSamples(),
+          listCharacters(),
+        ]);
+        setSamples(samplesData);
+        setCharacters(charactersData);
+        // Auto-select first character if available
+        if (charactersData.length > 0 && !selectedCharacterId) {
+          setSelectedCharacterId(charactersData[0].id);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load samples");
       } finally {
@@ -50,7 +70,7 @@ function SamplesContent() {
       }
     }
     load();
-  }, []);
+  }, [selectedCharacterId]);
 
   // Extract unique tags with counts
   const tagCounts = useMemo(() => {
@@ -87,9 +107,51 @@ function SamplesContent() {
     });
   }, [samples, filterType, selectedTag, searchQuery]);
 
+  // Get video duration from video element
+  const getVideoDurationFromUrl = (url: string): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        resolve(5); // Default to 5 seconds if can't determine
+      };
+      video.src = resolveApiUrl(url);
+    });
+  };
+
   // Handle Apply
-  const handleApply = (sample: SamplePost) => {
-    router.push(`/?ref=${encodeURIComponent(sample.media_url)}`);
+  const handleApply = async (sample: SamplePost) => {
+    if (sample.media_type === "video") {
+      // Video: get duration and show image picker
+      const duration = await getVideoDurationFromUrl(sample.media_url);
+      setVideoRefForAnimate({ url: sample.media_url, duration });
+      setShowImagePicker(true);
+      setSelectedSample(null); // Close lightbox
+    } else {
+      // Image: navigate with ref param (original behavior)
+      router.push(`/?ref=${encodeURIComponent(sample.media_url)}`);
+    }
+  };
+
+  // Handle image selection for video animate
+  const handleImageSelected = (image: Image) => {
+    setSelectedImageForAnimate(image);
+    setShowImagePicker(false);
+  };
+
+  // Handle animate modal close
+  const handleAnimateModalClose = () => {
+    setSelectedImageForAnimate(null);
+    setVideoRefForAnimate(null);
+  };
+
+  // Handle video created
+  const handleVideoCreated = () => {
+    // Optionally refresh or navigate
+    console.log("Video created successfully");
   };
 
   // Reload samples
@@ -343,38 +405,40 @@ function SamplesContent() {
                 className="w-full px-3 py-2 rounded-lg border border-[#333] bg-[#0b0b0b] text-sm text-white placeholder-gray-500 focus:border-white/30 focus:outline-none mb-3 font-mono"
               />
 
-              {/* Type Filter */}
-              <p className="text-xs text-gray-400 font-mono uppercase tracking-widest mb-2">Type</p>
-              <div className="flex gap-2 mb-4">
-                {(["all", "image", "video"] as FilterType[]).map((type) => {
-                  const isActive = filterType === type;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setFilterType(type)}
-                      className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
-                        isActive
-                          ? "bg-white text-black border-transparent"
-                          : "bg-transparent text-gray-300 border-[#333] hover:text-white"
-                      }`}
-                    >
-                      {type === "all" ? "All" : type === "image" ? "Image" : "Video"}
-                    </button>
-                  );
-                })}
-              </div>
-
             </div>
           </section>
 
           {/* Right: Gallery */}
           <section className="flex flex-col rounded-2xl border border-[#333] bg-[#111] p-4 h-full overflow-hidden">
             <div className="mb-4">
-              <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
-                Gallery
-              </p>
-              <h2 className="text-lg font-semibold font-mono">Reference Content</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
+                    Gallery
+                  </p>
+                  <h2 className="text-lg font-semibold font-mono">Reference Content</h2>
+                </div>
+                {/* Content Type Filter */}
+                <div className="flex gap-1">
+                  {(["all", "image", "video"] as FilterType[]).map((type) => {
+                    const isActive = filterType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setFilterType(type)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-mono font-medium transition-colors ${
+                          isActive
+                            ? "bg-white text-black border-transparent"
+                            : "bg-transparent text-gray-400 border-[#333] hover:text-white hover:border-white/30"
+                        }`}
+                      >
+                        {type === "all" ? "All" : type === "image" ? "Image" : "Video"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Tag Tabs */}
               {allTags.length > 0 && (
@@ -634,6 +698,64 @@ function SamplesContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Image Picker Modal for video animate flow */}
+      {showImagePicker && selectedCharacterId && (
+        <ImagePickerModal
+          characterId={selectedCharacterId}
+          onSelect={handleImageSelected}
+          onClose={() => {
+            setShowImagePicker(false);
+            setVideoRefForAnimate(null);
+          }}
+        />
+      )}
+
+      {/* Character selector when no character selected but video apply attempted */}
+      {showImagePicker && !selectedCharacterId && characters.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => {
+            setShowImagePicker(false);
+            setVideoRefForAnimate(null);
+          }}
+        >
+          <div
+            className="bg-[#1a1a1a] rounded-2xl border border-[#333] max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold font-mono mb-4">Select Character</h2>
+            <p className="text-sm text-gray-400 font-mono mb-4">
+              Choose a character to select an image from
+            </p>
+            <div className="space-y-2">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharacterId(char.id)}
+                  className="w-full text-left px-4 py-3 rounded-lg border border-[#333] hover:border-white/30 transition-colors"
+                >
+                  <p className="text-sm text-white font-mono">{char.name}</p>
+                  {char.description && (
+                    <p className="text-xs text-gray-400 font-mono truncate">{char.description}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Animate Modal with reference video */}
+      {selectedImageForAnimate && videoRefForAnimate && selectedCharacterId && (
+        <AnimateModal
+          image={selectedImageForAnimate}
+          characterId={selectedCharacterId}
+          onClose={handleAnimateModalClose}
+          onVideoCreated={handleVideoCreated}
+          initialReferenceVideo={videoRefForAnimate}
+        />
       )}
     </main>
   );

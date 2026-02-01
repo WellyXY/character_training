@@ -232,12 +232,16 @@ export interface AnimateImageResponse {
   message: string;
 }
 
-export async function animateImage(request: {
+export interface AnimateImageRequest {
   image_id: string;
   image_url: string;
   character_id: string;
   prompt: string;
-}): Promise<AnimateImageResponse> {
+  reference_video_url?: string;
+  reference_video_duration?: number;
+}
+
+export async function animateImage(request: AnimateImageRequest): Promise<AnimateImageResponse> {
   return apiFetch<AnimateImageResponse>("/animate/generate", {
     method: "POST",
     body: JSON.stringify(request),

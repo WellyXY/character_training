@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Image } from "@/lib/types";
 import {
   resolveApiUrl,
   analyzeImageForAnimation,
   animateImage,
+  uploadFile,
   type AnalyzeImageResponse,
 } from "@/lib/api";
+
+interface ReferenceVideo {
+  file: File | null;
+  url: string | null;
+  duration: number | null;
+}
 
 interface AnimateModalProps {
   image: Image;
@@ -15,9 +22,27 @@ interface AnimateModalProps {
   onClose: () => void;
   onVideoCreated: () => void;
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
+  initialReferenceVideo?: { url: string; duration: number } | null;
 }
 
 type ModalState = "analyzing" | "ready" | "error";
+
+// Get video duration from file
+const getVideoDuration = (file: File): Promise<number> => {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(0);
+    };
+    video.src = URL.createObjectURL(file);
+  });
+};
 
 export default function AnimateModal({
   image,
@@ -25,11 +50,20 @@ export default function AnimateModal({
   onClose,
   onVideoCreated,
   onTaskStarted,
+  initialReferenceVideo,
 }: AnimateModalProps) {
   const [state, setState] = useState<ModalState>("analyzing");
   const [analysis, setAnalysis] = useState<AnalyzeImageResponse | null>(null);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [referenceVideo, setReferenceVideo] = useState<ReferenceVideo | null>(
+    initialReferenceVideo
+      ? { file: null, url: initialReferenceVideo.url, duration: initialReferenceVideo.duration }
+      : null
+  );
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Analyze image on mount
   useEffect(() => {
@@ -55,6 +89,61 @@ export default function AnimateModal({
 
     analyze();
   }, [image.id, image.image_url]);
+
+  // Handle video file upload
+  const handleVideoUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (!file.type.startsWith("video/")) {
+      setError("Please select a video file");
+      return;
+    }
+
+    setUploadingVideo(true);
+    setError(null);
+
+    try {
+      // Get video duration
+      const duration = await getVideoDuration(file);
+
+      // Upload the file
+      const uploadResult = await uploadFile(file);
+
+      setReferenceVideo({
+        file,
+        url: uploadResult.url,
+        duration,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload video");
+    } finally {
+      setUploadingVideo(false);
+      if (videoInputRef.current) {
+        videoInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveVideo = () => {
+    setReferenceVideo(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleVideoUpload(e.dataTransfer.files);
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -87,6 +176,8 @@ export default function AnimateModal({
         image_url: image.image_url,
         character_id: characterId,
         prompt: prompt.trim(),
+        reference_video_url: referenceVideo?.url ?? undefined,
+        reference_video_duration: referenceVideo?.duration ?? undefined,
       });
 
       if (result.success) {
@@ -182,6 +273,80 @@ export default function AnimateModal({
                       </div>
                     </div>
                   )}
+
+                  {/* Reference Video Upload */}
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">
+                      Reference Video (Optional)
+                    </p>
+                    {referenceVideo ? (
+                      <div className="relative bg-[#0b0b0b] border border-white/10 rounded-lg p-3">
+                        <div className="flex items-center gap-3">
+                          <video
+                            src={resolveApiUrl(referenceVideo.url || "")}
+                            className="w-20 h-20 object-cover rounded-lg"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-mono truncate">
+                              {referenceVideo.file?.name || "Reference Video"}
+                            </p>
+                            <p className="text-xs text-gray-400 font-mono">
+                              Duration: {referenceVideo.duration?.toFixed(1)}s
+                              {referenceVideo.duration && referenceVideo.duration >= 5 && referenceVideo.duration <= 10 && (
+                                <span className="ml-2 text-blue-400">(--10sec)</span>
+                              )}
+                              {referenceVideo.duration && referenceVideo.duration > 10 && (
+                                <span className="ml-2 text-blue-400">(--15sec)</span>
+                              )}
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleRemoveVideo}
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-red-500/30 text-white flex items-center justify-center"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          ref={videoInputRef}
+                          type="file"
+                          accept="video/*"
+                          onChange={(e) => handleVideoUpload(e.target.files)}
+                          className="hidden"
+                        />
+                        <div
+                          onClick={() => videoInputRef.current?.click()}
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          className={`border border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+                            dragOver
+                              ? "border-blue-500 bg-blue-500/10"
+                              : "border-white/20 hover:border-white/40"
+                          } ${uploadingVideo ? "opacity-50 pointer-events-none" : ""}`}
+                        >
+                          {uploadingVideo ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                              <span className="text-xs text-gray-400 font-mono">Uploading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <svg className="w-6 h-6 mx-auto mb-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <p className="text-xs text-gray-400 font-mono">Drop video or click to upload</p>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
 
                   {/* Prompt Input */}
                   <div className="mb-4">

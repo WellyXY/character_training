@@ -18,6 +18,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def build_addition_prompt(base_prompt: str, video_duration: float) -> str:
+    """
+    Build prompt for Pika Addition API.
+
+    Args:
+        base_prompt: The base prompt text
+        video_duration: Duration of reference video in seconds
+
+    Returns:
+        Formatted prompt with /pika2p5_animate prefix and duration suffix
+    """
+    prompt = f"/pika2p5_animate {base_prompt.strip()}"
+    if video_duration > 10:
+        prompt += " --15sec"
+    elif video_duration >= 5:
+        prompt += " --10sec"
+    return prompt
+
+
 class AnalyzeRequest(BaseModel):
     """Request for image analysis."""
     image_id: str
@@ -37,6 +56,8 @@ class GenerateRequest(BaseModel):
     image_url: str
     character_id: str
     prompt: str
+    reference_video_url: Optional[str] = None
+    reference_video_duration: Optional[float] = None
 
 
 class GenerateResponse(BaseModel):
@@ -147,6 +168,8 @@ async def generate_animation(
 ):
     """
     Generate a video from an image using Parrot API.
+    If reference_video_url is provided, uses Pika Addition API.
+    Otherwise, uses standard image-to-video API.
     Creates a Video record in the database.
     """
     parrot = get_parrot_client()
@@ -155,21 +178,45 @@ async def generate_animation(
     # Get full URL for the image
     image_url = storage.get_full_url(request.image_url)
 
+    # Check if using Addition API (reference video provided)
+    use_addition_api = bool(request.reference_video_url)
+
     try:
-        # Add face preservation emphasis to the prompt
-        enhanced_prompt = f"Maintain exact facial features and identity unchanged. {request.prompt}"
+        if use_addition_api:
+            # Build prompt for Addition API with /pika2p5_animate prefix
+            video_duration = request.reference_video_duration or 0
+            enhanced_prompt = build_addition_prompt(request.prompt, video_duration)
 
-        logger.info(
-            "Starting video generation for image %s with prompt: %s",
-            request.image_id,
-            enhanced_prompt[:150],
-        )
+            # Get full URL for the reference video
+            reference_video_url = storage.get_full_url(request.reference_video_url)
 
-        # Create video generation job
-        video_job_id = await parrot.create_image_to_video(
-            image_source=image_url,
-            prompt_text=enhanced_prompt,
-        )
+            logger.info(
+                "Starting Addition API video generation for image %s with ref video, prompt: %s",
+                request.image_id,
+                enhanced_prompt[:150],
+            )
+
+            # Create video generation job using Addition API
+            video_job_id = await parrot.create_addition_video(
+                video_source=reference_video_url,
+                image_source=image_url,
+                prompt_text=enhanced_prompt,
+            )
+        else:
+            # Add face preservation emphasis to the prompt
+            enhanced_prompt = f"Maintain exact facial features and identity unchanged. {request.prompt}"
+
+            logger.info(
+                "Starting video generation for image %s with prompt: %s",
+                request.image_id,
+                enhanced_prompt[:150],
+            )
+
+            # Create video generation job using standard API
+            video_job_id = await parrot.create_image_to_video(
+                image_source=image_url,
+                prompt_text=enhanced_prompt,
+            )
 
         logger.info("Video job created: %s", video_job_id)
 
@@ -203,6 +250,18 @@ async def generate_animation(
             except Exception as e:
                 logger.warning("Failed to save thumbnail: %s", e)
 
+        # Build metadata
+        metadata = {
+            "original_prompt": request.prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "source_image_id": request.image_id,
+            "parrot_job_id": video_job_id,
+        }
+        if use_addition_api:
+            metadata["api_type"] = "addition"
+            metadata["reference_video_url"] = request.reference_video_url
+            metadata["reference_video_duration"] = request.reference_video_duration
+
         # Create Video record
         video = Video(
             character_id=request.character_id,
@@ -212,12 +271,7 @@ async def generate_animation(
             duration=result.get("duration"),
             source_image_id=request.image_id,
             status=DBVideoStatus.COMPLETED,
-            metadata_json=json.dumps({
-                "original_prompt": request.prompt,
-                "enhanced_prompt": enhanced_prompt,
-                "source_image_id": request.image_id,
-                "parrot_job_id": video_job_id,
-            }),
+            metadata_json=json.dumps(metadata),
         )
 
         db.add(video)

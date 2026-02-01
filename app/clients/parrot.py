@@ -18,19 +18,23 @@ class ParrotClient:
         settings = get_settings()
         self.base_url = settings.parrot_api_url.strip().rstrip("/")
         self.api_key = settings.parrot_api_key
+        # Pika Addition API (separate credentials)
+        self.addition_api_url = settings.pika_addition_api_url.strip().rstrip("/")
+        self.addition_api_key = settings.pika_addition_api_key
         self.timeout = httpx.Timeout(60.0)  # 60 seconds for initial request
         self.long_timeout = httpx.Timeout(300.0)  # 5 minutes for polling
 
-    def _build_headers(self, auth_mode: str = "x-api-key") -> dict[str, str]:
+    def _build_headers(self, auth_mode: str = "x-api-key", api_key: Optional[str] = None) -> dict[str, str]:
         """Build request headers with API key."""
+        key = api_key if api_key is not None else self.api_key
         headers: dict[str, str] = {}
-        if not self.api_key:
+        if not key:
             return headers
         mode = auth_mode.lower()
         if mode in ("authorization", "bearer"):
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["Authorization"] = f"Bearer {key}"
         else:
-            headers["X-API-KEY"] = self.api_key
+            headers["X-API-KEY"] = key
         return headers
 
     async def _post_with_auth_fallback(
@@ -41,13 +45,15 @@ class ParrotClient:
         files: dict,
         data: dict,
         log_prefix: str,
+        api_key: Optional[str] = None,
     ) -> httpx.Response:
         """POST request with X-API-KEY, retry with Authorization if auth fails."""
+        key = api_key if api_key is not None else self.api_key
         response = await client.post(
             url,
             files=files,
             data=data,
-            headers=self._build_headers("x-api-key"),
+            headers=self._build_headers("x-api-key", api_key=key),
         )
         try:
             response.raise_for_status()
@@ -58,13 +64,13 @@ class ParrotClient:
                 body = response.text
             except Exception:
                 body = "<unreadable>"
-            if "AUTHENTICATION_FAILED" in body and self.api_key:
+            if "AUTHENTICATION_FAILED" in body and key:
                 logger.warning("%s auth failed with X-API-KEY, retrying Bearer", log_prefix)
                 retry = await client.post(
                     url,
                     files=files,
                     data=data,
-                    headers=self._build_headers("authorization"),
+                    headers=self._build_headers("authorization", api_key=key),
                 )
                 retry.raise_for_status()
                 return retry
@@ -164,6 +170,105 @@ class ParrotClient:
                 raise ValueError("Parrot did not return a video ID")
 
             logger.info("Parrot job created: %s", video_id)
+            return video_id
+
+    async def create_addition_video(
+        self,
+        video_source: str,
+        image_source: str,
+        prompt_text: str,
+        negative_prompt: Optional[str] = None,
+        seed: Optional[int] = None,
+    ) -> str:
+        """
+        Create a video using Pika Addition API (reference video + image).
+
+        Args:
+            video_source: Reference video file path or URL
+            image_source: Image file path, URL, or base64 data URL
+            prompt_text: Prompt for generation (should start with /pika2p5_animate)
+            negative_prompt: Optional negative prompt
+            seed: Optional seed for reproducibility
+
+        Returns:
+            Video generation ID for polling
+        """
+        import base64
+
+        # Prepare video data
+        video_content_type = "video/mp4"
+        if video_source.startswith("http://") or video_source.startswith("https://"):
+            video_data = await self._download_binary(video_source)
+            video_filename = "video.mp4"
+        else:
+            # Local file path
+            path = Path(video_source)
+            video_data = path.read_bytes()
+            video_filename = path.name
+            ext = path.suffix.lower()
+            if ext == ".webm":
+                video_content_type = "video/webm"
+            elif ext == ".mov":
+                video_content_type = "video/quicktime"
+
+        # Prepare image data
+        image_content_type = "image/jpeg"
+        if image_source.startswith("http://") or image_source.startswith("https://"):
+            image_data = await self._download_binary(image_source)
+            image_filename = "image.jpg"
+        elif image_source.startswith("data:"):
+            header, encoded = image_source.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            image_content_type = header.split(";")[0].split(":")[1]
+            ext = image_content_type.split("/")[1]
+            image_filename = f"image.{ext}"
+        else:
+            path = Path(image_source)
+            image_data = path.read_bytes()
+            image_filename = path.name
+            ext = path.suffix.lower()
+            if ext == ".png":
+                image_content_type = "image/png"
+            elif ext in (".jpg", ".jpeg"):
+                image_content_type = "image/jpeg"
+            elif ext == ".webp":
+                image_content_type = "image/webp"
+
+        files = {
+            "video": (video_filename, video_data, video_content_type),
+            "image": (image_filename, image_data, image_content_type),
+        }
+        data: dict[str, str] = {"promptText": prompt_text}
+        if negative_prompt:
+            data["negativePrompt"] = negative_prompt
+        if seed is not None:
+            data["seed"] = str(seed)
+
+        # Use separate Addition API URL and key
+        addition_url = f"{self.addition_api_url}/pikadditions"
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            logger.info(
+                "Pika Addition API -> url=%s prompt=%s",
+                addition_url,
+                prompt_text[:100],
+            )
+            response = await self._post_with_auth_fallback(
+                client,
+                addition_url,
+                files=files,
+                data=data,
+                log_prefix="Pika Addition",
+                api_key=self.addition_api_key,
+            )
+
+            result = response.json()
+            video_id = result.get("id") or result.get("video_id") or result.get("jobId")
+            if not video_id:
+                logger.error("Pika Addition response missing video ID: %s", result)
+                raise ValueError("Pika Addition did not return a video ID")
+
+            logger.info("Pika Addition job created: %s", video_id)
             return video_id
 
     async def create_audio_to_video(
