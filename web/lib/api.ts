@@ -281,6 +281,17 @@ export async function getSample(id: string): Promise<SamplePost> {
   return apiFetch<SamplePost>(`/samples/${id}`);
 }
 
+export interface SampleStats {
+  total: number;
+  image_count: number;
+  video_count: number;
+  tag_counts: Record<string, number>;
+}
+
+export async function getSamplesStats(): Promise<SampleStats> {
+  return apiFetch<SampleStats>("/samples/stats");
+}
+
 export async function uploadSample(
   file: File,
   creatorName?: string,

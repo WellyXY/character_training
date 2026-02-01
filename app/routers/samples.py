@@ -54,6 +54,37 @@ def _sample_to_response(sample: SamplePost) -> SamplePostResponse:
     )
 
 
+@router.get("/samples/stats")
+async def get_samples_stats(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get sample statistics including total count and tag counts."""
+    result = await db.execute(select(SamplePost))
+    samples = result.scalars().all()
+
+    total = len(samples)
+    image_count = sum(1 for s in samples if s.media_type == DBMediaType.IMAGE)
+    video_count = sum(1 for s in samples if s.media_type == DBMediaType.VIDEO)
+
+    # Aggregate tag counts
+    tag_counts: dict[str, int] = {}
+    for sample in samples:
+        if sample.tags:
+            try:
+                tags = json.loads(sample.tags)
+                for tag in tags:
+                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return {
+        "total": total,
+        "image_count": image_count,
+        "video_count": video_count,
+        "tag_counts": tag_counts,
+    }
+
+
 @router.get("/samples", response_model=list[SamplePostResponse])
 async def list_samples(
     db: AsyncSession = Depends(get_db),

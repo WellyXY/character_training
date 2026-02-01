@@ -3,18 +3,22 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SamplePost, Image, Character } from "@/lib/types";
-import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, listCharacters } from "@/lib/api";
+import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, listCharacters, getSamplesStats, type SampleStats } from "@/lib/api";
 import SampleCard from "@/components/SampleCard";
 import AppNavbar from "@/components/AppNavbar";
 import ImagePickerModal from "@/components/ImagePickerModal";
 import AnimateModal from "@/components/AnimateModal";
 
 type FilterType = "all" | "image" | "video";
+const PAGE_SIZE = 50;
 
 function SamplesContent() {
   const router = useRouter();
   const [samples, setSamples] = useState<SamplePost[]>([]);
+  const [stats, setStats] = useState<SampleStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -48,16 +52,19 @@ function SamplesContent() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
 
-  // Load samples and characters
+  // Load samples, stats, and characters
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const [samplesData, charactersData] = await Promise.all([
-          listSamples(),
+        const [samplesData, statsData, charactersData] = await Promise.all([
+          listSamples({ limit: PAGE_SIZE, offset: 0 }),
+          getSamplesStats(),
           listCharacters(),
         ]);
         setSamples(samplesData);
+        setStats(statsData);
+        setHasMore(samplesData.length === PAGE_SIZE);
         setCharacters(charactersData);
         // Auto-select first character if available
         if (charactersData.length > 0 && !selectedCharacterId) {
@@ -72,14 +79,26 @@ function SamplesContent() {
     load();
   }, [selectedCharacterId]);
 
-  // Extract unique tags with counts
+  // Load more samples
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const moreSamples = await listSamples({ limit: PAGE_SIZE, offset: samples.length });
+      setSamples((prev) => [...prev, ...moreSamples]);
+      setHasMore(moreSamples.length === PAGE_SIZE);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more samples");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Get tag counts from stats (total from DB)
   const tagCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    samples.forEach((s) => s.tags.forEach((t) => {
-      counts.set(t, (counts.get(t) || 0) + 1);
-    }));
-    return counts;
-  }, [samples]);
+    if (!stats) return new Map<string, number>();
+    return new Map(Object.entries(stats.tag_counts));
+  }, [stats]);
 
   const allTags = useMemo(() => {
     return Array.from(tagCounts.keys()).sort();
@@ -154,11 +173,16 @@ function SamplesContent() {
     console.log("Video created successfully");
   };
 
-  // Reload samples
+  // Reload samples and stats
   const reloadSamples = async () => {
     try {
-      const data = await listSamples();
+      const [data, statsData] = await Promise.all([
+        listSamples({ limit: PAGE_SIZE, offset: 0 }),
+        getSamplesStats(),
+      ]);
       setSamples(data);
+      setStats(statsData);
+      setHasMore(data.length === PAGE_SIZE);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reload samples");
     }
@@ -454,7 +478,7 @@ function SamplesContent() {
                   >
                     All
                     <span className={`ml-2 text-xs ${selectedTag === null ? "text-gray-600" : "text-gray-500"}`}>
-                      {samples.length}
+                      {stats?.total ?? samples.length}
                     </span>
                   </button>
                   {allTags.map((tag) => {
@@ -500,15 +524,37 @@ function SamplesContent() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {filteredSamples.map((sample) => (
-                    <SampleCard
-                      key={sample.id}
-                      sample={sample}
-                      onSelect={setSelectedSample}
-                      onApply={handleApply}
-                    />
-                  ))}
+                <div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {filteredSamples.map((sample) => (
+                      <SampleCard
+                        key={sample.id}
+                        sample={sample}
+                        onSelect={setSelectedSample}
+                        onApply={handleApply}
+                      />
+                    ))}
+                  </div>
+                  {/* Load More Button */}
+                  {hasMore && !searchQuery && !selectedTag && filterType === "all" && (
+                    <div className="flex justify-center mt-6 pb-4">
+                      <button
+                        type="button"
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="rounded-lg border border-[#333] px-6 py-2 text-sm font-mono text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingMore ? (
+                          <span className="flex items-center gap-2">
+                            <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></span>
+                            Loading...
+                          </span>
+                        ) : (
+                          `Load More (${samples.length} loaded)`
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
