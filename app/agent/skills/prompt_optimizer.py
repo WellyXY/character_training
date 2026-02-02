@@ -179,11 +179,12 @@ class PromptOptimizerSkill(BaseSkill):
         parts = []
 
         # For face_swap mode, use detailed prompt following Seedream guide
+        # Image order: [user_reference (image 1), base_image_1, base_image_2, base_image_3]
         if has_reference_image and reference_image_mode == "face_swap":
-            parts.append("[Reference Character] Only replace the face with the character's facial features from the base reference images (keep the same head size, angle, expression intensity, skin texture, and natural pores), ensuring seamless blending at the jawline, hairline, and neck with consistent color grading")
-            parts.append("[Reference Pose] Replicate the exact full-body pose, gesture, and camera framing from the last reference image")
-            parts.append("[Reference Background] Keep the identical environment, props, depth, and perspective from the last reference image")
-            parts.append("[Reference Clothing] Preserve the exact clothing or nude state exactly as in the last reference image, with identical coverage, fit, folds, and fabric/skin contact")
+            parts.append("Use the first reference image (image 1) as the main composition - keep its exact pose, body position, clothing, background, lighting, and camera angle unchanged")
+            parts.append("Extract ONLY the facial features (face shape, eyes, nose, mouth, skin texture) from the subsequent reference images (images 2-4) and seamlessly blend onto the face in image 1")
+            parts.append("Face replacement details: maintain the head size, angle, and expression intensity from image 1, apply facial features from images 2-4 with seamless blending at jawline, hairline, and neck, match skin tone and lighting direction")
+            parts.append("Preserve from image 1: exact full-body pose, gesture, camera framing, environment, props, depth, perspective, clothing/nude state with identical coverage, fit, folds, and fabric/skin contact")
             parts.append("Photorealistic high-end editorial look, 4K detail, sharp focus on face, realistic skin shading, accurate shadows, matching lighting direction and softness, natural lens perspective, no text, no watermark, no extra limbs")
             return ". ".join(parts) + "."
 
@@ -395,18 +396,19 @@ User request: {raw_prompt}
         if mode == "face_swap":
             return f"""
 **Important - Face Swap Mode (face only)**:
-- Only replace the face, keep everything else from the reference image unchanged
-- Use multiple Reference tags to explicitly preserve each element:
-  - [Reference Character] → face replacement with seamless blending details
-  - [Reference Pose] → preserve exact pose, gesture, camera framing
-  - [Reference Background] → preserve environment, props, depth, perspective
-  - [Reference Clothing] → preserve exact clothing/nude state with all details
-- Face blending must specify: head size, angle, expression intensity, skin texture, natural pores
-- Blending areas: jawline, hairline, neck, consistent color grading
-- Quality: 4K detail, sharp focus on face, realistic skin shading, accurate shadows, matching lighting direction
+- Reference images order: [image 1 = user reference photo, images 2-4 = character base images]
+- Image 1 (user reference) is the MAIN composition: keep its exact pose, body, clothing, background, lighting, camera angle UNCHANGED
+- Images 2-4 (base images) are ONLY for extracting facial features (face shape, eyes, nose, mouth, skin texture)
+- The prompt must clearly instruct:
+  1. Use image 1 as the main composition base
+  2. Extract ONLY facial features from images 2-4
+  3. Seamlessly blend the extracted face onto image 1's body
+- Face blending details: maintain head size/angle/expression from image 1, blend at jawline/hairline/neck, match skin tone and lighting
+- Preserve from image 1: pose, gesture, camera framing, environment, props, clothing/nude state
+- Quality: 4K detail, sharp focus on face, realistic skin shading, accurate shadows
 - Negative prompts: no text, no watermark, no extra limbs
 {no_name_warning}
-- Example: [Reference Character] Only replace the face with the character's facial features from the base reference images (keep the same head size, angle, expression intensity, skin texture, and natural pores), ensuring seamless blending at the jawline, hairline, and neck with consistent color grading. [Reference Pose] Replicate the exact full-body pose, gesture, and camera framing from the last reference image. [Reference Background] Keep the identical environment, props, depth, and perspective from the last reference image. [Reference Clothing] Preserve the exact clothing or nude state exactly as in the last reference image, with identical coverage, fit, folds, and fabric/skin contact. Photorealistic high-end editorial look, 4K detail, sharp focus on face, realistic skin shading, accurate shadows, matching lighting direction and softness, natural lens perspective, no text, no watermark, no extra limbs."""
+- Example: Use the first reference image (image 1) as the main composition - keep its exact pose, body position, clothing, background, lighting, and camera angle unchanged. Extract ONLY the facial features (face shape, eyes, nose, mouth, skin texture) from the subsequent reference images (images 2-4) and seamlessly blend onto the face in image 1. Face replacement details: maintain the head size, angle, and expression intensity from image 1, apply facial features from images 2-4 with seamless blending at jawline, hairline, and neck, match skin tone and lighting direction. Preserve from image 1: exact full-body pose, gesture, camera framing, environment, props, depth, perspective, clothing/nude state with identical coverage, fit, folds, and fabric/skin contact. Photorealistic high-end editorial look, 4K detail, sharp focus on face, realistic skin shading, accurate shadows, matching lighting direction and softness, natural lens perspective, no text, no watermark, no extra limbs."""
         elif mode == "pose_background":
             return f"""
 **Important - Pose & Background Mode**:
