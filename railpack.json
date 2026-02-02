@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.railway.com/railpack.json",
+  "packages": {
+    "ffmpeg": "*"
+  }
+}
