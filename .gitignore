@@ -16,3 +16,5 @@ dist/
 public/uploads/
 *.db
 *.tsbuildinfo
+data/cookies.txt
+twitter_key
