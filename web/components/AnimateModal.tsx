@@ -63,6 +63,7 @@ export default function AnimateModal({
   );
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [addSubtitles, setAddSubtitles] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Analyze image on mount
@@ -177,6 +178,7 @@ export default function AnimateModal({
       prompt: prompt.trim(),
       reference_video_url: referenceVideo?.url ?? undefined,
       reference_video_duration: referenceVideo?.duration ?? undefined,
+      add_subtitles: addSubtitles,
     };
     console.log("=== AnimateModal Request ===");
     console.log("Request data:", requestData);
@@ -378,6 +380,20 @@ export default function AnimateModal({
                       <p className="text-sm text-red-300 font-mono">{error}</p>
                     </div>
                   )}
+
+                  {/* Subtitle Toggle */}
+                  <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={addSubtitles}
+                      onChange={(e) => setAddSubtitles(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm text-white font-mono">Add Subtitles</span>
+                      <p className="text-xs text-gray-500 font-mono mt-0.5">Auto-generate captions using AI</p>
+                    </div>
+                  </label>
 
                   {/* Generate Button */}
                   <button

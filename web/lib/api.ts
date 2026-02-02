@@ -239,6 +239,7 @@ export interface AnimateImageRequest {
   prompt: string;
   reference_video_url?: string;
   reference_video_duration?: number;
+  add_subtitles?: boolean;
 }
 
 export async function animateImage(request: AnimateImageRequest): Promise<AnimateImageResponse> {

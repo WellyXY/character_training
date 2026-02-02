@@ -63,6 +63,7 @@ class GenerateRequest(BaseModel):
     prompt: str
     reference_video_url: Optional[str] = None
     reference_video_duration: Optional[float] = None
+    add_subtitles: bool = False
 
 
 class GenerateResponse(BaseModel):
@@ -231,6 +232,7 @@ async def generate_animation(
             "enhanced_prompt": enhanced_prompt,
             "source_image_id": request.image_id,
             "parrot_job_id": video_job_id,
+            "add_subtitles": request.add_subtitles,
         }
         if use_addition_api:
             metadata["api_type"] = "addition"
@@ -263,6 +265,7 @@ async def generate_animation(
                 parrot_job_id=video_job_id,
                 use_addition_api=use_addition_api,
                 metadata=metadata,
+                add_subtitles=request.add_subtitles,
             )
         )
         # Keep reference to prevent garbage collection
@@ -290,6 +293,7 @@ async def _poll_video_completion(
     parrot_job_id: str,
     use_addition_api: bool,
     metadata: dict,
+    add_subtitles: bool = False,
 ):
     """Background task to poll for video completion and update database."""
     parrot = get_parrot_client()
@@ -312,8 +316,31 @@ async def _poll_video_completion(
 
         # Use a new database session for the background task
         async with async_session() as db:
-            # Download and save video locally
-            saved = await storage.save_from_url(video_url, db, prefix="animated")
+            # Download video
+            import httpx
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(video_url)
+                response.raise_for_status()
+                video_bytes = response.content
+                content_type = response.headers.get("content-type", "video/mp4")
+
+            # Add subtitles if requested
+            if add_subtitles:
+                logger.info("Adding subtitles to video...")
+                try:
+                    from app.services.subtitle import process_video_with_subtitles
+                    video_bytes = await process_video_with_subtitles(video_bytes, "video.mp4")
+                    logger.info("Subtitles added successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to add subtitles, using original video: {e}")
+
+            # Save video to storage
+            saved = await storage.save_bytes(
+                video_bytes,
+                "animated.mp4",
+                content_type,
+                db,
+            )
             local_video_url = saved["url"]
 
             # Save thumbnail if available
