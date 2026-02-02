@@ -366,37 +366,46 @@ async def _import_from_tiktok(
     db: AsyncSession,
 ) -> SamplePost:
     """Import a sample from TikTok using yt-dlp."""
+    import tempfile
+    import os
+    import uuid
+
+    # Create temp directory for download
+    temp_dir = tempfile.mkdtemp()
+    video_id = str(uuid.uuid4())[:8]
+    output_template = os.path.join(temp_dir, f"{video_id}.%(ext)s")
+
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
-        "extract_flat": False,
+        "outtmpl": output_template,
+        "format": "best[ext=mp4]/best",  # Prefer mp4
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            info = ydl.extract_info(url, download=True)
     except yt_dlp.utils.DownloadError as e:
         logger.error(f"TikTok fetch error: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to fetch TikTok video: {str(e)}")
     except Exception as e:
         logger.error(f"TikTok fetch error: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to fetch TikTok video: {str(e)}")
+    finally:
+        pass  # Cleanup handled below
 
     if not info:
         raise HTTPException(status_code=400, detail="Could not extract video info")
 
-    # Get video URL - yt-dlp provides the direct video URL
-    video_url = info.get("url")
-    if not video_url:
-        # Try to get from formats
-        formats = info.get("formats", [])
-        for fmt in reversed(formats):
-            if fmt.get("url"):
-                video_url = fmt["url"]
-                break
+    # Find downloaded file
+    downloaded_file = None
+    for f in os.listdir(temp_dir):
+        if f.startswith(video_id):
+            downloaded_file = os.path.join(temp_dir, f)
+            break
 
-    if not video_url:
-        raise HTTPException(status_code=400, detail="Could not find video URL")
+    if not downloaded_file or not os.path.exists(downloaded_file):
+        raise HTTPException(status_code=500, detail="Failed to download video file")
 
     creator_name = info.get("uploader") or info.get("channel") or "unknown"
     caption = info.get("description") or info.get("title") or ""
@@ -404,15 +413,28 @@ async def _import_from_tiktok(
 
     storage = get_storage_service()
 
+    # Upload downloaded video file
     try:
-        saved = await storage.save_from_url(
-            video_url,
-            db,
-            prefix=f"sample_{creator_name}",
+        with open(downloaded_file, "rb") as f:
+            file_content = f.read()
+
+        # Determine extension
+        ext = os.path.splitext(downloaded_file)[1] or ".mp4"
+        filename = f"sample_{creator_name}_{video_id}{ext}"
+
+        saved = await storage.save_bytes(
+            file_content,
+            filename,
+            content_type="video/mp4",
+            db=db,
         )
     except Exception as e:
-        logger.error(f"Failed to download TikTok video: {e}")
-        raise HTTPException(status_code=500, detail="Failed to download video")
+        logger.error(f"Failed to save TikTok video: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save video")
+    finally:
+        # Cleanup temp files
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     media_url = saved["url"]
     thumbnail_url = media_url

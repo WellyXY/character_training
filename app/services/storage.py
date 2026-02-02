@@ -103,6 +103,40 @@ class StorageService:
                 "created_at": datetime.utcnow().isoformat(),
             }
 
+    async def save_bytes(
+        self,
+        content: bytes,
+        filename: str,
+        content_type: str,
+        db: AsyncSession,
+    ) -> dict:
+        """
+        Save raw bytes to the database.
+
+        Returns:
+            Dictionary with file info including URL
+        """
+        generated_filename = self._generate_filename(filename)
+        size = len(content)
+        blob = FileBlob(
+            filename=generated_filename,
+            content_type=content_type,
+            size=size,
+            data=content,
+        )
+        db.add(blob)
+        await db.flush()
+        return {
+            "id": blob.id,
+            "filename": generated_filename,
+            "original_name": filename,
+            "content_type": content_type,
+            "size": size,
+            "url": f"/uploads/{blob.id}",
+            "full_url": f"{self.public_base_url}/uploads/{blob.id}",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
     async def get_file_blob(self, file_id: str, db: AsyncSession) -> Optional[FileBlob]:
         """Fetch a file blob by ID."""
         result = await db.execute(
