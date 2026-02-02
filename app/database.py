@@ -109,6 +109,15 @@ def _run_migrations(conn):
                 except Exception as e:
                     logger.warning(f"Could not make image_url nullable: {e}")
 
+        # Make video_url nullable in videos table (needed for processing state)
+        if "videos" in inspector.get_table_names():
+            if dialect == "postgresql":
+                try:
+                    conn.execute(text("ALTER TABLE videos ALTER COLUMN video_url DROP NOT NULL"))
+                    logger.info("Made video_url nullable in videos table")
+                except Exception as e:
+                    logger.warning(f"Could not make video_url nullable: {e}")
+
         # Convert PostgreSQL enum columns to VARCHAR for compatibility
         # This fixes the "operator does not exist: imagetype = character varying" error
         if dialect == "postgresql":
