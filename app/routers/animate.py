@@ -104,6 +104,8 @@ async def _extract_video_first_frame(
             content_type="image/png",
             db=db,
         )
+        # Commit so the frame is available for Seedream to fetch via HTTP
+        await db.commit()
         return saved["url"]
     finally:
         if os.path.exists(tmp_video_path):
