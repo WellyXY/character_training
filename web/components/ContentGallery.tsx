@@ -135,21 +135,25 @@ export default function ContentGallery({
   const generatingImages = sortedImages.filter((img) => img.status === "generating");
   const completedImages = sortedImages.filter((img) => img.status !== "generating");
 
+  // Filter out processing videos to show them separately with spinner
+  const processingVideos = sortedVideos.filter((v) => v.status === "processing" || !v.video_url);
+  const completedVideos = sortedVideos.filter((v) => v.status !== "processing" && v.video_url);
+
   // Filter images by type (from completed list)
   const baseImages = completedImages.filter((img) => img.type === "base");
   const contentImages = completedImages.filter((img) => img.type !== "base");
 
-  // Combined and sorted list for "all" tab (completed images + videos sorted by created_at)
+  // Combined and sorted list for "all" tab (completed images + completed videos sorted by created_at)
   type ContentItem = { type: "image"; data: Image } | { type: "video"; data: Video };
   const allContentSorted = useMemo<ContentItem[]>(() => {
     const items: ContentItem[] = [
       ...completedImages.map((img): ContentItem => ({ type: "image", data: img })),
-      ...videos.map((vid): ContentItem => ({ type: "video", data: vid })),
+      ...completedVideos.map((vid): ContentItem => ({ type: "video", data: vid })),
     ];
     return items.sort((a, b) =>
       new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime()
     );
-  }, [completedImages, videos]);
+  }, [completedImages, completedVideos]);
 
   // Filter active tasks (pending or generating)
   const pendingTasks = activeTasks.filter(
@@ -157,7 +161,7 @@ export default function ContentGallery({
   );
 
   const tabs: { key: TabType; label: string; count: number }[] = [
-    { key: "all", label: "All", count: completedImages.length + sortedVideos.length + pendingTasks.length + generatingImages.length },
+    { key: "all", label: "All", count: completedImages.length + sortedVideos.length + pendingTasks.length + generatingImages.length + processingVideos.length },
     { key: "base", label: "Base", count: baseImages.length },
     { key: "images", label: "Content", count: contentImages.length },
     { key: "videos", label: "Videos", count: sortedVideos.length },
@@ -423,6 +427,57 @@ export default function ContentGallery({
                 </div>
               ))}
 
+            {/* Processing Videos (from database - persisted) */}
+            {activeTab === "all" &&
+              processingVideos.map((video) => (
+                <div
+                  key={video.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-amber-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  {/* Content */}
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    {/* Spinner */}
+                    <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
+
+                    {/* Status */}
+                    <p className="text-sm font-medium text-amber-400 mb-1 font-mono uppercase tracking-wide">
+                      Processing...
+                    </p>
+
+                    {/* Progress Bar (indeterminate) */}
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full w-1/3 bg-amber-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                    </div>
+
+                    {/* Prompt Preview */}
+                    {(video.metadata?.original_prompt || video.metadata?.prompt) && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
+                        {video.metadata.original_prompt || video.metadata.prompt}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2 z-20">
+                    <span className="rounded-full bg-amber-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Video
+                    </span>
+                  </div>
+
+                  {/* Delete button */}
+                  <div className="absolute bottom-2 right-2 z-20">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteVideo(video.id)}
+                      className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ))}
+
             {/* All Content (sorted by time) */}
             {activeTab === "all" &&
               allContentSorted.map((item) =>
@@ -509,7 +564,7 @@ export default function ContentGallery({
                     onClick={() =>
                       setSelectedItem({
                         type: "video",
-                        url: resolveApiUrl((item.data as Video).video_url),
+                        url: resolveApiUrl((item.data as Video).video_url!),
                         prompt: item.data.metadata?.prompt,
                         video: item.data as Video,
                       })
@@ -519,7 +574,7 @@ export default function ContentGallery({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={resolveApiUrl((item.data as Video).thumbnail_url!)} alt="Video thumbnail" className="h-full w-full object-cover" />
                     ) : (
-                      <video src={resolveApiUrl((item.data as Video).video_url)} className="h-full w-full object-cover" muted />
+                      <video src={resolveApiUrl((item.data as Video).video_url!)} className="h-full w-full object-cover" muted />
                     )}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center group-hover:opacity-50 transition-opacity">
@@ -747,16 +802,67 @@ export default function ContentGallery({
                 </div>
               ))}
 
-            {/* Videos (only for videos tab) */}
+            {/* Processing Videos (for videos tab) */}
             {activeTab === "videos" &&
-              sortedVideos.map((video) => (
+              processingVideos.map((video) => (
+                <div
+                  key={video.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-amber-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  {/* Content */}
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    {/* Spinner */}
+                    <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
+
+                    {/* Status */}
+                    <p className="text-sm font-medium text-amber-400 mb-1 font-mono uppercase tracking-wide">
+                      Processing...
+                    </p>
+
+                    {/* Progress Bar (indeterminate) */}
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full w-1/3 bg-amber-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                    </div>
+
+                    {/* Prompt Preview */}
+                    {(video.metadata?.original_prompt || video.metadata?.prompt) && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
+                        {video.metadata.original_prompt || video.metadata.prompt}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Type Badge */}
+                  <div className="absolute top-2 left-2 z-20">
+                    <span className="rounded-full bg-amber-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Video
+                    </span>
+                  </div>
+
+                  {/* Delete button */}
+                  <div className="absolute bottom-2 right-2 z-20">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteVideo(video.id)}
+                      className="rounded-full bg-red-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-red-500/80"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+            {/* Completed Videos (only for videos tab) */}
+            {activeTab === "videos" &&
+              completedVideos.map((video) => (
                 <div
                   key={video.id}
                   className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
                   onClick={() =>
                     setSelectedItem({
                       type: "video",
-                      url: resolveApiUrl(video.video_url),
+                      url: resolveApiUrl(video.video_url!),
                       prompt: video.metadata?.prompt,
                       video: video,
                     })
@@ -771,7 +877,7 @@ export default function ContentGallery({
                     />
                   ) : (
                     <video
-                      src={resolveApiUrl(video.video_url)}
+                      src={resolveApiUrl(video.video_url!)}
                       className="h-full w-full object-cover"
                       muted
                     />

@@ -77,6 +77,8 @@ export interface UploadResponse {
 // Video types
 export interface VideoMetadata {
   prompt?: string;
+  original_prompt?: string;
+  enhanced_prompt?: string;
   style?: string;
   cloth?: string;
   content_type?: string;
@@ -96,7 +98,7 @@ export interface Video {
   id: string;
   character_id: string;
   type: VideoType;
-  video_url: string;
+  video_url?: string | null;
   thumbnail_url?: string | null;
   duration?: number | null;
   metadata: VideoMetadata;
