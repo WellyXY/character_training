@@ -259,6 +259,11 @@ async def generate_animation(
 
         # Start background task to poll for completion
         # This allows the request to return immediately
+        logger.info(
+            "Starting background task for video %s, add_subtitles=%s",
+            video.id,
+            request.add_subtitles,
+        )
         task = asyncio.create_task(
             _poll_video_completion(
                 video_id=video.id,
