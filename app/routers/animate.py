@@ -461,7 +461,7 @@ async def _poll_video_completion(
         while elapsed < timeout:
             poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
             status = poll_result.get("status", "").lower()
-            progress = poll_result.get("raw", {}).get("progress", 0)
+            progress = poll_result.get("raw", {}).get("progress") or 0
 
             logger.info("Video %s poll: status=%s, progress=%d%%", video_id, status, progress)
 
