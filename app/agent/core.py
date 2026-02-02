@@ -550,10 +550,12 @@ Current State:
             )
 
             # Create pending generation
+            # Force content_post when reference image is provided (don't generate base image)
+            effective_content_type = "content_post" if reference_image_path else parameters.get("content_type", "content_post")
             session.pending_generation = PendingGeneration(
                 skill="image_generator" if intent == "generate_image" else "video_generator",
                 params=PendingGenerationParams(
-                    content_type=parameters.get("content_type", "content_post"),
+                    content_type=effective_content_type,
                     style=style,
                     cloth=cloth,
                     scene_description=scene_desc,
