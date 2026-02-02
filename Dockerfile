@@ -16,5 +16,4 @@ COPY . .
 
 # Run the application
 EXPOSE 8000
-RUN chmod +x start.sh
-CMD ["./start.sh"]
+CMD ["python", "run.py"]
