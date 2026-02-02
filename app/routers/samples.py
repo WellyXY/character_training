@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import instaloader
+import yt_dlp
 from app.database import get_db
 from app.models.sample_post import SamplePost, MediaType as DBMediaType
 from app.schemas.sample_post import (
@@ -228,6 +229,16 @@ def _extract_shortcode(url: str) -> Optional[str]:
     return None
 
 
+def _is_tiktok_url(url: str) -> bool:
+    """Check if URL is a TikTok URL."""
+    return bool(re.search(r"tiktok\.com/", url, re.IGNORECASE))
+
+
+def _is_instagram_url(url: str) -> bool:
+    """Check if URL is an Instagram URL."""
+    return bool(re.search(r"instagram\.com/", url, re.IGNORECASE))
+
+
 @router.post("/samples/upload", response_model=SamplePostResponse)
 async def upload_sample(
     file: UploadFile = File(...),
@@ -271,25 +282,13 @@ async def upload_sample(
     return _sample_to_response(sample)
 
 
-@router.post("/samples/import-url", response_model=SamplePostResponse)
-async def import_from_url(
-    url: str = Form(...),
-    tags: str = Form(default=""),  # comma-separated tags
-    db: AsyncSession = Depends(get_db),
-):
-    """Import a sample from Instagram URL."""
-    shortcode = _extract_shortcode(url)
-    if not shortcode:
-        raise HTTPException(status_code=400, detail="Invalid Instagram URL")
-
-    # Check if already exists
-    result = await db.execute(
-        select(SamplePost).where(SamplePost.source_url == url)
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="This URL has already been imported")
-
-    # Initialize instaloader
+async def _import_from_instagram(
+    url: str,
+    shortcode: str,
+    tags: str,
+    db: AsyncSession,
+) -> SamplePost:
+    """Import a sample from Instagram using instaloader."""
     loader = instaloader.Instaloader(
         download_pictures=False,
         download_videos=False,
@@ -311,12 +310,10 @@ async def import_from_url(
         logger.error(f"Instagram fetch error: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to fetch post: {str(e)}")
 
-    # Determine media type and URL
     is_video = post.is_video
     media_download_url = post.video_url if is_video else post.url
     media_type = DBMediaType.VIDEO if is_video else DBMediaType.IMAGE
 
-    # Download media
     storage = get_storage_service()
 
     try:
@@ -332,7 +329,6 @@ async def import_from_url(
     media_url = saved["url"]
     thumbnail_url = media_url
 
-    # For videos, try to use Instagram thumbnail URL
     if is_video and post.url:
         try:
             thumb_saved = await storage.save_from_url(
@@ -344,10 +340,8 @@ async def import_from_url(
         except Exception as e:
             logger.warning(f"Failed to download thumbnail: {e}")
 
-    # Parse tags
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
-    # Create sample record
     sample = SamplePost(
         creator_name=post.owner_username,
         source_url=url,
@@ -360,8 +354,129 @@ async def import_from_url(
             "likes": post.likes,
             "shortcode": shortcode,
             "post_date": post.date_utc.isoformat() if post.date_utc else None,
+            "source": "instagram",
         }),
     )
+    return sample
+
+
+async def _import_from_tiktok(
+    url: str,
+    tags: str,
+    db: AsyncSession,
+) -> SamplePost:
+    """Import a sample from TikTok using yt-dlp."""
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except yt_dlp.utils.DownloadError as e:
+        logger.error(f"TikTok fetch error: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch TikTok video: {str(e)}")
+    except Exception as e:
+        logger.error(f"TikTok fetch error: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch TikTok video: {str(e)}")
+
+    if not info:
+        raise HTTPException(status_code=400, detail="Could not extract video info")
+
+    # Get video URL - yt-dlp provides the direct video URL
+    video_url = info.get("url")
+    if not video_url:
+        # Try to get from formats
+        formats = info.get("formats", [])
+        for fmt in reversed(formats):
+            if fmt.get("url"):
+                video_url = fmt["url"]
+                break
+
+    if not video_url:
+        raise HTTPException(status_code=400, detail="Could not find video URL")
+
+    creator_name = info.get("uploader") or info.get("channel") or "unknown"
+    caption = info.get("description") or info.get("title") or ""
+    thumbnail = info.get("thumbnail")
+
+    storage = get_storage_service()
+
+    try:
+        saved = await storage.save_from_url(
+            video_url,
+            db,
+            prefix=f"sample_{creator_name}",
+        )
+    except Exception as e:
+        logger.error(f"Failed to download TikTok video: {e}")
+        raise HTTPException(status_code=500, detail="Failed to download video")
+
+    media_url = saved["url"]
+    thumbnail_url = media_url
+
+    if thumbnail:
+        try:
+            thumb_saved = await storage.save_from_url(
+                thumbnail,
+                db,
+                prefix=f"thumb_{creator_name}",
+            )
+            thumbnail_url = thumb_saved["url"]
+        except Exception as e:
+            logger.warning(f"Failed to download thumbnail: {e}")
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+    sample = SamplePost(
+        creator_name=creator_name,
+        source_url=url,
+        media_type=DBMediaType.VIDEO,
+        media_url=media_url,
+        thumbnail_url=thumbnail_url,
+        caption=caption[:1000] if caption else None,
+        tags=json.dumps(tag_list) if tag_list else None,
+        metadata_json=json.dumps({
+            "likes": info.get("like_count"),
+            "views": info.get("view_count"),
+            "video_id": info.get("id"),
+            "duration": info.get("duration"),
+            "source": "tiktok",
+        }),
+    )
+    return sample
+
+
+@router.post("/samples/import-url", response_model=SamplePostResponse)
+async def import_from_url(
+    url: str = Form(...),
+    tags: str = Form(default=""),  # comma-separated tags
+    db: AsyncSession = Depends(get_db),
+):
+    """Import a sample from Instagram or TikTok URL."""
+    # Check if already exists
+    result = await db.execute(
+        select(SamplePost).where(SamplePost.source_url == url)
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="This URL has already been imported")
+
+    # Determine platform and import
+    if _is_tiktok_url(url):
+        sample = await _import_from_tiktok(url, tags, db)
+    elif _is_instagram_url(url):
+        shortcode = _extract_shortcode(url)
+        if not shortcode:
+            raise HTTPException(status_code=400, detail="Invalid Instagram URL")
+        sample = await _import_from_instagram(url, shortcode, tags, db)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported URL. Please use Instagram or TikTok links."
+        )
+
     db.add(sample)
     await db.commit()
     await db.refresh(sample)
