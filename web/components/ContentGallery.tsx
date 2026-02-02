@@ -2,18 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { Image, Video, GenerationTask } from "@/lib/types";
-import { resolveApiUrl, retryImage, retryVideo, setImageAsBase, postToTwitter } from "@/lib/api";
+import { resolveApiUrl, retryImage, retryVideo, setImageAsBase } from "@/lib/api";
 import AnimateModal from "./AnimateModal";
 import ImageEditPanel from "./ImageEditPanel";
-
-// Twitter icon component
-function TwitterIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
 
 interface ContentGalleryProps {
   images: Image[];
@@ -62,8 +53,6 @@ export default function ContentGallery({
   const [animatingImage, setAnimatingImage] = useState<Image | null>(null);
   const [videoRefForAnimate, setVideoRefForAnimate] = useState<{ url: string; duration: number } | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [postingToTwitter, setPostingToTwitter] = useState(false);
-  const [twitterResult, setTwitterResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
 
   // Handle initial video reference from URL
   useEffect(() => {
@@ -251,34 +240,6 @@ export default function ContentGallery({
           error: message,
         });
       }
-    }
-  };
-
-  const handlePostToTwitter = async (imageId?: string, videoId?: string) => {
-    if (postingToTwitter) return;
-
-    setPostingToTwitter(true);
-    setTwitterResult(null);
-
-    try {
-      const caption = selectedItem?.prompt || "";
-      const result = await postToTwitter({
-        image_id: imageId,
-        video_id: videoId,
-        caption,
-      });
-
-      if (result.success) {
-        setTwitterResult({ success: true, url: result.tweet_url });
-      } else {
-        setTwitterResult({ success: false, error: result.error || "Failed to post" });
-      }
-    } catch (err) {
-      console.error("Failed to post to Twitter:", err);
-      const message = err instanceof Error ? err.message : "Failed to post to Twitter";
-      setTwitterResult({ success: false, error: message });
-    } finally {
-      setPostingToTwitter(false);
     }
   };
 
@@ -900,11 +861,11 @@ export default function ContentGallery({
       {selectedItem && (
         <div
           className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
-          onClick={() => { setSelectedItem(null); setTwitterResult(null); }}
+          onClick={() => setSelectedItem(null)}
         >
           <button
             type="button"
-            onClick={() => { setSelectedItem(null); setTwitterResult(null); }}
+            onClick={() => setSelectedItem(null)}
             className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 z-10"
           >
             ×
@@ -998,42 +959,7 @@ export default function ContentGallery({
                               Edit with AI
                             </button>
                           )}
-                          {/* Twitter button hidden for now
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePostToTwitter(selectedItem.image!.id, undefined);
-                            }}
-                            disabled={postingToTwitter}
-                            className="flex items-center gap-1.5 rounded-lg bg-black px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <TwitterIcon />
-                            {postingToTwitter ? "Posting..." : "Post to Twitter"}
-                          </button>
-                          */}
                         </div>
-                        {/* Twitter Result Feedback */}
-                        {twitterResult && (
-                          <div className={`mt-2 px-4 py-2 rounded-lg text-xs font-mono max-w-md text-center ${
-                            twitterResult.success
-                              ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                              : "bg-red-500/20 text-red-400 border border-red-500/30"
-                          }`}>
-                            {twitterResult.success ? (
-                              <a
-                                href={twitterResult.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="underline hover:no-underline"
-                              >
-                                Posted successfully! View tweet
-                              </a>
-                            ) : (
-                              <span className="break-words">{twitterResult.error}</span>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )}
                   </>
@@ -1045,48 +971,6 @@ export default function ContentGallery({
                       autoPlay
                       className="max-h-[70vh] max-w-full rounded-lg"
                     />
-                    {/* Action Buttons for Video */}
-                    {selectedItem.video && (
-                      <div className="mt-4 flex flex-col items-center gap-2">
-                        <div className="flex gap-2">
-                          {/* Twitter button hidden for now
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePostToTwitter(undefined, selectedItem.video!.id);
-                            }}
-                            disabled={postingToTwitter}
-                            className="flex items-center gap-1.5 rounded-lg bg-black px-6 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <TwitterIcon />
-                            {postingToTwitter ? "Posting..." : "Post to Twitter"}
-                          </button>
-                          */}
-                        </div>
-                        {/* Twitter Result Feedback */}
-                        {twitterResult && (
-                          <div className={`mt-2 px-4 py-2 rounded-lg text-xs font-mono max-w-md text-center ${
-                            twitterResult.success
-                              ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                              : "bg-red-500/20 text-red-400 border border-red-500/30"
-                          }`}>
-                            {twitterResult.success ? (
-                              <a
-                                href={twitterResult.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="underline hover:no-underline"
-                              >
-                                Posted successfully! View tweet
-                              </a>
-                            ) : (
-                              <span className="break-words">{twitterResult.error}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </>
                 )}
               </div>
