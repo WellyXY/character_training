@@ -265,6 +265,28 @@ export async function imageEditConfirm(request: ImageEditConfirmRequest): Promis
   });
 }
 
+// Direct Image Edit (simplified flow without agent)
+export interface DirectEditRequest {
+  prompt: string;
+  source_image_path: string;
+  character_id: string;
+  aspect_ratio?: string;
+}
+
+export interface DirectEditResponse {
+  success: boolean;
+  image_id?: string;
+  image_url?: string;
+  message: string;
+}
+
+export async function directImageEdit(request: DirectEditRequest): Promise<DirectEditResponse> {
+  return apiFetch<DirectEditResponse>("/agent/image-edit/direct", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
 // Sample Gallery endpoints
 export async function listSamples(params?: SampleListParams): Promise<SamplePost[]> {
   const searchParams = new URLSearchParams();

@@ -193,3 +193,120 @@ async def get_task_status(
             created_at=datetime.utcnow().isoformat(),
         )
     return task
+
+
+# --- Direct Image Edit (Simplified Flow) ---
+
+class DirectEditRequest(BaseModel):
+    """Request for direct image edit without agent analysis."""
+    prompt: str
+    source_image_path: str
+    character_id: str
+    aspect_ratio: str = "9:16"
+
+
+class DirectEditResponse(BaseModel):
+    """Response from direct image edit."""
+    success: bool
+    image_id: Optional[str] = None
+    image_url: Optional[str] = None
+    message: str
+
+
+def _parse_aspect_ratio(aspect_ratio: str) -> tuple[int, int]:
+    """Parse aspect ratio string to width, height."""
+    ratios = {
+        "9:16": (1024, 1820),
+        "1:1": (1024, 1024),
+        "16:9": (1820, 1024),
+    }
+    return ratios.get(aspect_ratio, (1024, 1820))
+
+
+@router.post("/agent/image-edit/direct", response_model=DirectEditResponse)
+async def direct_image_edit(
+    request: DirectEditRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Direct image edit: use prompt + source image to generate a new image.
+
+    This is a simplified flow that bypasses the agent GPT analysis.
+    The source image is used as a reference for the generation.
+    """
+    logger.info(f"=== /agent/image-edit/direct request ===")
+    logger.info(f"Prompt: {request.prompt}")
+    logger.info(f"Character ID: {request.character_id}")
+    logger.info(f"Aspect ratio: {request.aspect_ratio}")
+    # Only show filename for source image
+    source_display = request.source_image_path.split("/")[-1] if "/" in request.source_image_path else request.source_image_path[:50]
+    logger.info(f"Source image: {source_display}")
+
+    try:
+        seedream = get_seedream_client()
+        storage = get_storage_service()
+
+        width, height = _parse_aspect_ratio(request.aspect_ratio)
+
+        # Use the source image as reference for generation
+        source_full_url = storage.get_full_url(request.source_image_path)
+        reference_images = [source_full_url]
+
+        logger.info(f"Generating with reference image: {source_display}")
+
+        # Generate image with Seedream
+        result = await seedream.generate(
+            prompt=request.prompt,
+            width=width,
+            height=height,
+            reference_images=reference_images,
+        )
+
+        image_url = result.get("image_url")
+        if not image_url:
+            return DirectEditResponse(
+                success=False,
+                message="No image URL in generation response",
+            )
+
+        # Download and save the image locally
+        saved = await storage.save_from_url(image_url, db, prefix="edit")
+
+        # Build metadata
+        metadata = {
+            "prompt": request.prompt,
+            "width": width,
+            "height": height,
+            "seed": result.get("seed"),
+            "source_image_path": request.source_image_path,
+            "edit_type": "direct",
+        }
+
+        # Create new image record
+        image = Image(
+            character_id=request.character_id,
+            type=ImageType.CONTENT,
+            image_url=saved["url"],
+            status=ImageStatus.COMPLETED,
+            is_approved=False,
+            metadata_json=json.dumps(metadata),
+        )
+        db.add(image)
+        await db.commit()
+        await db.refresh(image)
+
+        logger.info(f"Direct edit successful: image_id={image.id}")
+
+        return DirectEditResponse(
+            success=True,
+            image_id=image.id,
+            image_url=saved["full_url"],
+            message="Image generated successfully",
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in direct_image_edit: {e}")
+        return DirectEditResponse(
+            success=False,
+            message=f"Generation failed: {str(e)}",
+        )

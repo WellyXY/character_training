@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { Image, PendingEdit, AgentChatResponse } from "@/lib/types";
-import { imageEditChat, imageEditConfirm } from "@/lib/api";
+import type { Image } from "@/lib/types";
+import { directImageEdit, resolveApiUrl } from "@/lib/api";
 
-interface Message {
+interface EditMessage {
+  id: string;
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
+  timestamp: Date;
 }
 
 interface ImageEditPanelProps {
@@ -17,29 +20,21 @@ interface ImageEditPanelProps {
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
 }
 
-const QUICK_EDIT_BUTTONS = [
-  { label: "Change Background", icon: "🏞️", prompt: "Change to a different background" },
-  { label: "Change Outfit", icon: "👗", prompt: "Change to a different outfit" },
-  { label: "Style Transfer", icon: "🎨", prompt: "Transform into a different style" },
-  { label: "Remove Element", icon: "✂️", prompt: "Remove an element from the image" },
-  { label: "Add Element", icon: "➕", prompt: "Add an element to the image" },
-];
+const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 
 export default function ImageEditPanel({
   sourceImage,
   characterId,
   onImageGenerated,
   onClose,
-  onTaskStarted,
 }: ImageEditPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<EditMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [selectedRatio, setSelectedRatio] = useState<string>("9:16");
-  const [editedPrompt, setEditedPrompt] = useState<string>("");
-  const [isPromptEdited, setIsPromptEdited] = useState(false);
+  const [currentSourceImage, setCurrentSourceImage] = useState<string>(
+    sourceImage.image_url || ""
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -50,98 +45,88 @@ export default function ImageEditPanel({
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim() || isLoading) return;
+  const handleSend = async () => {
+    if (!inputValue.trim() || isGenerating || !characterId) return;
+
+    const userMessage = inputValue.trim();
+    setInputValue("");
 
     // Add user message
-    setMessages((prev) => [...prev, { role: "user", content: message }]);
-    setInputValue("");
-    setIsLoading(true);
-    setPendingEdit(null);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        role: "user",
+        content: userMessage,
+        timestamp: new Date(),
+      },
+    ]);
+
+    setIsGenerating(true);
 
     try {
-      const response: AgentChatResponse = await imageEditChat({
-        message,
-        source_image_path: sourceImage.image_url!,
+      // Direct API call for generation
+      const result = await directImageEdit({
+        prompt: userMessage,
+        source_image_path: currentSourceImage,
         character_id: characterId,
-        session_id: sessionId,
+        aspect_ratio: selectedRatio,
       });
 
-      setSessionId(response.session_id);
+      if (result.success && result.image_url) {
+        // Add assistant message with generated image
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "Generated new image",
+            imageUrl: result.image_url,
+            timestamp: new Date(),
+          },
+        ]);
 
-      // Add assistant message
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response.message },
-      ]);
+        // Update current source image for next edit
+        // Use the relative path for consistency
+        const newSourcePath = result.image_url.includes("/uploads/")
+          ? `/uploads/${result.image_url.split("/uploads/")[1]}`
+          : result.image_url;
+        setCurrentSourceImage(newSourcePath);
 
-      // If awaiting confirmation, show the pending edit
-      if (response.state === "awaiting_confirmation" && response.pending_edit) {
-        setPendingEdit(response.pending_edit);
-        setEditedPrompt(response.pending_edit.optimized_prompt || "");
-        setIsPromptEdited(false);
+        // Notify parent to refresh gallery
+        onImageGenerated();
+      } else {
+        // Show error message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: `Error: ${result.message}`,
+            timestamp: new Date(),
+          },
+        ]);
       }
     } catch (error) {
       setMessages((prev) => [
         ...prev,
         {
+          id: Date.now().toString(),
           role: "assistant",
           content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+          timestamp: new Date(),
         },
       ]);
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
 
-  const handleConfirm = async () => {
-    if (!pendingEdit || !sessionId || isLoading) return;
-
-    setIsLoading(true);
-
-    // Create a task and notify parent immediately, then close
-    if (onTaskStarted) {
-      const taskId = `edit-${Date.now()}`;
-      onTaskStarted({
-        task_id: taskId,
-        prompt: isPromptEdited ? editedPrompt : pendingEdit.optimized_prompt,
-        reference_image_url: sourceImage.image_url ?? undefined,
-      });
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
-
-    // Close modal immediately after task submission
-    onClose();
-
-    try {
-      const response: AgentChatResponse = await imageEditConfirm({
-        session_id: sessionId,
-        aspect_ratio: selectedRatio,
-        edited_prompt: isPromptEdited ? editedPrompt : undefined,
-        character_id: characterId,
-        pending_edit: pendingEdit,
-      });
-
-      // Refresh gallery when done
-      if (response.action_taken === "edited_image" || response.active_task) {
-        onImageGenerated();
-      }
-    } catch (error) {
-      console.error("Image edit failed:", error);
-    }
-  };
-
-  const handleCancel = () => {
-    setPendingEdit(null);
-    setEditedPrompt("");
-    setIsPromptEdited(false);
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: "Edit cancelled. You can enter a new edit instruction." },
-    ]);
-  };
-
-  const handleQuickEdit = (prompt: string) => {
-    setInputValue(prompt);
   };
 
   return (
@@ -149,34 +134,31 @@ export default function ImageEditPanel({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[#333]">
         <div>
-          <h3 className="text-lg font-semibold text-white font-mono">AI Image Editor</h3>
-          <p className="text-xs text-gray-400 font-mono">Describe the edit you want in natural language</p>
+          <h3 className="text-lg font-semibold text-white font-mono">
+            Image Editor
+          </h3>
+          <p className="text-xs text-gray-400 font-mono">
+            Describe the edit you want
+          </p>
         </div>
         <button
           onClick={onClose}
           className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
-      </div>
-
-      {/* Quick Edit Buttons */}
-      <div className="p-3 border-b border-[#333]">
-        <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Quick edits</p>
-        <div className="flex flex-wrap gap-2">
-          {QUICK_EDIT_BUTTONS.map((btn) => (
-            <button
-              key={btn.label}
-              onClick={() => handleQuickEdit(btn.prompt)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1a1a1a] border border-[#333] text-xs font-mono font-bold uppercase tracking-wide text-gray-300 hover:text-white transition-colors"
-            >
-              <span>{btn.icon}</span>
-              <span>{btn.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Messages */}
@@ -184,13 +166,15 @@ export default function ImageEditPanel({
         {messages.length === 0 && (
           <div className="text-center text-gray-500 py-8">
             <p className="text-sm font-mono">Enter the edit you want</p>
-            <p className="text-xs mt-1 font-mono">For example: &quot;Change the background to a beach&quot;</p>
+            <p className="text-xs mt-1 font-mono">
+              For example: &quot;Change the background to a beach&quot;
+            </p>
           </div>
         )}
 
-        {messages.map((msg, idx) => (
+        {messages.map((msg) => (
           <div
-            key={idx}
+            key={msg.id}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
@@ -200,102 +184,45 @@ export default function ImageEditPanel({
                   : "bg-white/10 text-gray-200"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap font-mono">{msg.content}</p>
+              <p className="text-sm whitespace-pre-wrap font-mono">
+                {msg.content}
+              </p>
+              {msg.imageUrl && (
+                <div className="mt-2">
+                  <img
+                    src={resolveApiUrl(msg.imageUrl)}
+                    alt="Generated"
+                    className="rounded-lg max-w-full max-h-64 object-contain"
+                  />
+                </div>
+              )}
             </div>
           </div>
         ))}
 
-        {/* Pending Edit Confirmation Card */}
-        {pendingEdit && (
-          <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-xl p-4 border border-[#333]">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              <span className="text-sm font-medium text-white font-mono uppercase tracking-wider">Confirm Edit</span>
-            </div>
-
-            {/* Optimized Prompt - Editable */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-gray-500 font-mono uppercase tracking-wider">Optimized Prompt</p>
-                {isPromptEdited && (
-                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wider">Edited</span>
-                )}
-              </div>
-              <textarea
-                value={editedPrompt}
-                onChange={(e) => {
-                  setEditedPrompt(e.target.value);
-                  setIsPromptEdited(true);
-                }}
-                disabled={isLoading}
-                className="w-full text-sm text-gray-300 bg-black/30 rounded-lg p-2 h-20 resize-none border border-transparent focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
-                placeholder="Enter or edit prompt..."
-              />
-            </div>
-
-            {/* Edit Type */}
-            {pendingEdit.params.edit_type && (
-              <div className="mb-3">
-                <span className="text-xs bg-white/10 text-gray-300 px-2 py-0.5 rounded-full font-mono uppercase tracking-wide">
-                  {pendingEdit.params.edit_type}
+        {/* Loading indicator */}
+        {isGenerating && (
+          <div className="flex justify-start">
+            <div className="bg-white/10 rounded-2xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div
+                    className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
+                </div>
+                <span className="text-sm text-gray-400 font-mono">
+                  Generating...
                 </span>
               </div>
-            )}
-
-            {/* Aspect Ratio Selection */}
-            <div className="mb-4">
-              <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Output Aspect Ratio</p>
-              <div className="flex gap-2">
-                {["9:16", "1:1", "16:9"].map((ratio) => (
-                  <button
-                    key={ratio}
-                    onClick={() => setSelectedRatio(ratio)}
-                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
-                      selectedRatio === ratio
-                        ? "bg-white text-black"
-                        : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
-                    }`}
-                  >
-                    {ratio}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Suggestions */}
-            {pendingEdit.suggestions.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2 font-mono uppercase tracking-wider">Other suggestions</p>
-                <div className="flex flex-wrap gap-2">
-                  {pendingEdit.suggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSendMessage(suggestion)}
-                      className="text-xs px-2 py-1 rounded-full bg-[#1a1a1a] border border-[#333] font-mono font-bold uppercase tracking-wide text-gray-400 hover:text-white transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleCancel}
-                disabled={isLoading}
-                className="flex-1 py-2 rounded-lg bg-[#1a1a1a] border border-[#333] text-xs font-mono font-bold uppercase tracking-wide text-gray-300 hover:text-white transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={isLoading}
-                className="flex-1 py-2 rounded-lg bg-white text-black hover:bg-gray-200 text-xs font-mono font-bold uppercase tracking-wide transition-colors disabled:opacity-50"
-              >
-                {isLoading ? "Generating..." : "Confirm"}
-              </button>
             </div>
           </div>
         )}
@@ -303,12 +230,47 @@ export default function ImageEditPanel({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Current Reference Image + Aspect Ratio */}
+      <div className="px-4 py-3 border-t border-[#333]">
+        <div className="flex items-center gap-3">
+          {/* Reference thumbnail */}
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+              <img
+                src={resolveApiUrl(currentSourceImage)}
+                alt="Reference"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <span className="text-xs text-gray-500 font-mono">Reference</span>
+          </div>
+
+          {/* Aspect ratio selector */}
+          <div className="flex gap-1 ml-auto">
+            {ASPECT_RATIOS.map((ratio) => (
+              <button
+                key={ratio}
+                onClick={() => setSelectedRatio(ratio)}
+                disabled={isGenerating}
+                className={`px-2 py-1 rounded text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                  selectedRatio === ratio
+                    ? "bg-white text-black"
+                    : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
+                } disabled:opacity-50`}
+              >
+                {ratio}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Input */}
       <div className="p-4 border-t border-[#333]">
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleSendMessage(inputValue);
+            handleSend();
           }}
           className="flex gap-2"
         >
@@ -316,16 +278,17 @@ export default function ImageEditPanel({
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Describe the edit you want..."
-            disabled={isLoading}
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 disabled:opacity-50 font-mono"
+            disabled={isGenerating}
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 disabled:opacity-50 font-mono"
           />
           <button
             type="submit"
-            disabled={isLoading || !inputValue.trim()}
+            disabled={isGenerating || !inputValue.trim()}
             className="px-4 py-2 rounded-xl bg-white text-black text-xs font-mono font-bold uppercase tracking-wide hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isLoading ? (
+            {isGenerating ? (
               <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
@@ -342,7 +305,12 @@ export default function ImageEditPanel({
                 />
               </svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
