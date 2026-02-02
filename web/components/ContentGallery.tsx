@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Image, Video, GenerationTask } from "@/lib/types";
 import { resolveApiUrl, retryImage, retryVideo, setImageAsBase, postToTwitter } from "@/lib/api";
 import AnimateModal from "./AnimateModal";
@@ -28,6 +28,8 @@ interface ContentGalleryProps {
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
   onTaskUpdate?: (taskId: string, update: Partial<GenerationTask>) => void;
   onCancelTask?: (taskId: string) => void;
+  initialVideoRef?: string | null;
+  onClearVideoRef?: () => void;
 }
 
 type TabType = "all" | "base" | "images" | "videos";
@@ -45,6 +47,8 @@ export default function ContentGallery({
   onTaskStarted,
   onTaskUpdate,
   onCancelTask,
+  initialVideoRef,
+  onClearVideoRef,
 }: ContentGalleryProps) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [selectedItem, setSelectedItem] = useState<{
@@ -56,9 +60,28 @@ export default function ContentGallery({
     editMode?: boolean;
   } | null>(null);
   const [animatingImage, setAnimatingImage] = useState<Image | null>(null);
+  const [videoRefForAnimate, setVideoRefForAnimate] = useState<{ url: string; duration: number } | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [postingToTwitter, setPostingToTwitter] = useState(false);
   const [twitterResult, setTwitterResult] = useState<{ success: boolean; url?: string; error?: string } | null>(null);
+
+  // Handle initial video reference from URL
+  useEffect(() => {
+    if (initialVideoRef) {
+      // Get video duration
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        setVideoRefForAnimate({ url: initialVideoRef, duration: video.duration || 5 });
+      };
+      video.onerror = () => {
+        setVideoRefForAnimate({ url: initialVideoRef, duration: 5 });
+      };
+      video.src = resolveApiUrl(initialVideoRef);
+    } else {
+      setVideoRefForAnimate(null);
+    }
+  }, [initialVideoRef]);
 
   // Helper function to get readable aspect ratio
   const getAspectRatio = (width: number, height: number): string => {
@@ -86,6 +109,22 @@ export default function ContentGallery({
     return ratio > 1
       ? `${ratio.toFixed(2)}:1`
       : `1:${(1/ratio).toFixed(2)}`;
+  };
+
+  // Handle image click - either open preview or animate modal if in video ref mode
+  const handleImageClick = (img: Image) => {
+    if (videoRefForAnimate && characterId) {
+      // Video ref mode: directly open animate modal
+      setAnimatingImage(img);
+    } else {
+      // Normal mode: open preview
+      setSelectedItem({
+        type: "image",
+        url: resolveApiUrl(img.image_url!),
+        prompt: img.metadata?.prompt,
+        image: img,
+      });
+    }
   };
 
   // Sort images and videos by creation time (newest first)
@@ -274,6 +313,28 @@ export default function ContentGallery({
         })}
       </div>
 
+      {/* Video Reference Mode Banner */}
+      {videoRefForAnimate && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span className="text-sm text-amber-200 font-mono">Select an image to animate with reference video</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setVideoRefForAnimate(null);
+              onClearVideoRef?.();
+            }}
+            className="text-amber-400 hover:text-amber-200 text-sm font-mono"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Content Grid */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {completedImages.length === 0 && sortedVideos.length === 0 && pendingTasks.length === 0 && generatingImages.length === 0 ? (
@@ -410,14 +471,7 @@ export default function ContentGallery({
                     className={`relative aspect-[9/16] overflow-hidden rounded-xl border bg-[#0b0b0b] group cursor-pointer ${
                       item.data.status === "failed" ? "border-red-500/30" : "border-white/10"
                     }`}
-                    onClick={() =>
-                      setSelectedItem({
-                        type: "image",
-                        url: resolveApiUrl(item.data.image_url!),
-                        prompt: item.data.metadata?.prompt,
-                        image: item.data,
-                      })
-                    }
+                    onClick={() => handleImageClick(item.data)}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -555,14 +609,7 @@ export default function ContentGallery({
                 <div
                   key={img.id}
                   className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
-                  onClick={() =>
-                    setSelectedItem({
-                      type: "image",
-                      url: resolveApiUrl(img.image_url!),
-                      prompt: img.metadata?.prompt,
-                      image: img,
-                    })
-                  }
+                  onClick={() => handleImageClick(img)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -651,14 +698,7 @@ export default function ContentGallery({
                 <div
                   key={img.id}
                   className="relative aspect-[9/16] overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b] group cursor-pointer"
-                  onClick={() =>
-                    setSelectedItem({
-                      type: "image",
-                      url: resolveApiUrl(img.image_url!),
-                      prompt: img.metadata?.prompt,
-                      image: img,
-                    })
-                  }
+                  onClick={() => handleImageClick(img)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -1296,11 +1336,18 @@ export default function ContentGallery({
         <AnimateModal
           image={animatingImage}
           characterId={characterId}
-          onClose={() => setAnimatingImage(null)}
+          onClose={() => {
+            setAnimatingImage(null);
+            setVideoRefForAnimate(null);
+            onClearVideoRef?.();
+          }}
           onVideoCreated={() => {
+            setVideoRefForAnimate(null);
+            onClearVideoRef?.();
             onVideoCreated?.();
           }}
           onTaskStarted={onTaskStarted}
+          initialReferenceVideo={videoRefForAnimate}
         />
       )}
     </section>

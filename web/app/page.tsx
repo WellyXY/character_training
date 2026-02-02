@@ -38,6 +38,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialReferenceUrl = searchParams.get("ref");
+  const initialVideoRefUrl = searchParams.get("videoRef");
   const urlCharacterId = searchParams.get("character");
 
   // State
@@ -630,6 +631,14 @@ function HomeContent() {
                   setActiveTasks((prev) => prev.filter((t) => t.task_id !== taskId));
                 }, delay);
               }
+            }}
+            initialVideoRef={initialVideoRefUrl}
+            onClearVideoRef={() => {
+              // Clear videoRef from URL
+              const params = new URLSearchParams(window.location.search);
+              params.delete("videoRef");
+              const qs = params.toString();
+              router.replace(qs ? `?${qs}` : "/", { scroll: false });
             }}
           />
 

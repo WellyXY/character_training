@@ -363,6 +363,10 @@ export async function updateSample(
 }
 
 // Twitter endpoints
+export interface TwitterCaptionResponse {
+  suggested_caption: string;
+}
+
 export interface TwitterPostRequest {
   image_id?: string;
   video_id?: string;
@@ -373,6 +377,11 @@ export interface TwitterPostResponse {
   success: boolean;
   tweet_url?: string;
   error?: string;
+}
+
+export async function generateTwitterCaption(imageId: string): Promise<TwitterCaptionResponse> {
+  // No backend endpoint for this, return empty caption
+  return { suggested_caption: "" };
 }
 
 export async function postToTwitter(request: TwitterPostRequest): Promise<TwitterPostResponse> {

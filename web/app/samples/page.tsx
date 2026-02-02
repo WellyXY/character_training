@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { SamplePost, Image, Character } from "@/lib/types";
-import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, listCharacters, getSamplesStats, type SampleStats } from "@/lib/api";
+import type { SamplePost } from "@/lib/types";
+import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, getSamplesStats, type SampleStats } from "@/lib/api";
 import SampleCard from "@/components/SampleCard";
 import AppNavbar from "@/components/AppNavbar";
-import ImagePickerModal from "@/components/ImagePickerModal";
-import AnimateModal from "@/components/AnimateModal";
 
 type FilterType = "all" | "image" | "video";
 const PAGE_SIZE = 50;
@@ -42,34 +40,18 @@ function SamplesContent() {
   const [editingTagsValue, setEditingTagsValue] = useState("");
   const [savingTags, setSavingTags] = useState(false);
 
-  // Video reference for animate flow
-  const [videoRefForAnimate, setVideoRefForAnimate] = useState<{
-    url: string;
-    duration: number;
-  } | null>(null);
-  const [showImagePicker, setShowImagePicker] = useState(false);
-  const [selectedImageForAnimate, setSelectedImageForAnimate] = useState<Image | null>(null);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-
-  // Load samples, stats, and characters
+  // Load samples and stats
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const [samplesData, statsData, charactersData] = await Promise.all([
+        const [samplesData, statsData] = await Promise.all([
           listSamples({ limit: PAGE_SIZE, offset: 0 }),
           getSamplesStats(),
-          listCharacters(),
         ]);
         setSamples(samplesData);
         setStats(statsData);
         setHasMore(samplesData.length === PAGE_SIZE);
-        setCharacters(charactersData);
-        // Auto-select first character if available
-        if (charactersData.length > 0 && !selectedCharacterId) {
-          setSelectedCharacterId(charactersData[0].id);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load samples");
       } finally {
@@ -77,14 +59,45 @@ function SamplesContent() {
       }
     }
     load();
-  }, [selectedCharacterId]);
+  }, []);
+
+  // Reload samples when tag or media type filter changes
+  useEffect(() => {
+    async function loadFiltered() {
+      try {
+        setLoading(true);
+        const params: { limit: number; offset: number; tag?: string; media_type?: "image" | "video" } = {
+          limit: PAGE_SIZE,
+          offset: 0,
+        };
+        if (selectedTag) params.tag = selectedTag;
+        if (filterType !== "all") params.media_type = filterType;
+
+        const samplesData = await listSamples(params);
+        setSamples(samplesData);
+        setHasMore(samplesData.length === PAGE_SIZE);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load samples");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadFiltered();
+  }, [selectedTag, filterType]);
 
   // Load more samples
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const moreSamples = await listSamples({ limit: PAGE_SIZE, offset: samples.length });
+      const params: { limit: number; offset: number; tag?: string; media_type?: "image" | "video" } = {
+        limit: PAGE_SIZE,
+        offset: samples.length,
+      };
+      if (selectedTag) params.tag = selectedTag;
+      if (filterType !== "all") params.media_type = filterType;
+
+      const moreSamples = await listSamples(params);
       setSamples((prev) => [...prev, ...moreSamples]);
       setHasMore(moreSamples.length === PAGE_SIZE);
     } catch (err) {
@@ -104,73 +117,27 @@ function SamplesContent() {
     return Array.from(tagCounts.keys()).sort();
   }, [tagCounts]);
 
-  // Filtered samples
+  // Filtered samples (only search query is client-side, tag/type are server-side)
   const filteredSamples = useMemo(() => {
+    if (!searchQuery) return samples;
     return samples.filter((sample) => {
-      if (filterType !== "all" && sample.media_type !== filterType) {
-        return false;
-      }
-      if (selectedTag && !sample.tags.includes(selectedTag)) {
-        return false;
-      }
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesCreator = sample.creator_name.toLowerCase().includes(query);
-        const matchesTags = sample.tags.some((t) => t.toLowerCase().includes(query));
-        const matchesCaption = sample.caption?.toLowerCase().includes(query);
-        if (!matchesCreator && !matchesTags && !matchesCaption) {
-          return false;
-        }
-      }
-      return true;
+      const query = searchQuery.toLowerCase();
+      const matchesCreator = sample.creator_name.toLowerCase().includes(query);
+      const matchesTags = sample.tags.some((t) => t.toLowerCase().includes(query));
+      const matchesCaption = sample.caption?.toLowerCase().includes(query);
+      return matchesCreator || matchesTags || matchesCaption;
     });
-  }, [samples, filterType, selectedTag, searchQuery]);
+  }, [samples, searchQuery]);
 
-  // Get video duration from video element
-  const getVideoDurationFromUrl = (url: string): Promise<number> => {
-    return new Promise((resolve) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        resolve(video.duration);
-      };
-      video.onerror = () => {
-        resolve(5); // Default to 5 seconds if can't determine
-      };
-      video.src = resolveApiUrl(url);
-    });
-  };
-
-  // Handle Apply
-  const handleApply = async (sample: SamplePost) => {
+  // Handle Apply - navigate to main page
+  const handleApply = (sample: SamplePost) => {
     if (sample.media_type === "video") {
-      // Video: get duration and show image picker
-      const duration = await getVideoDurationFromUrl(sample.media_url);
-      setVideoRefForAnimate({ url: sample.media_url, duration });
-      setShowImagePicker(true);
-      setSelectedSample(null); // Close lightbox
+      // Video: navigate to main page with videoRef param
+      router.push(`/?videoRef=${encodeURIComponent(sample.media_url)}`);
     } else {
-      // Image: navigate with ref param (original behavior)
+      // Image: navigate with ref param
       router.push(`/?ref=${encodeURIComponent(sample.media_url)}`);
     }
-  };
-
-  // Handle image selection for video animate
-  const handleImageSelected = (image: Image) => {
-    setSelectedImageForAnimate(image);
-    setShowImagePicker(false);
-  };
-
-  // Handle animate modal close
-  const handleAnimateModalClose = () => {
-    setSelectedImageForAnimate(null);
-    setVideoRefForAnimate(null);
-  };
-
-  // Handle video created
-  const handleVideoCreated = () => {
-    // Optionally refresh or navigate
-    console.log("Video created successfully");
   };
 
   // Reload samples and stats
@@ -536,7 +503,7 @@ function SamplesContent() {
                     ))}
                   </div>
                   {/* Load More Button */}
-                  {hasMore && !searchQuery && !selectedTag && filterType === "all" && (
+                  {hasMore && !searchQuery && (
                     <div className="flex justify-center mt-6 pb-4">
                       <button
                         type="button"
@@ -746,63 +713,6 @@ function SamplesContent() {
         </div>
       )}
 
-      {/* Image Picker Modal for video animate flow */}
-      {showImagePicker && selectedCharacterId && (
-        <ImagePickerModal
-          characterId={selectedCharacterId}
-          onSelect={handleImageSelected}
-          onClose={() => {
-            setShowImagePicker(false);
-            setVideoRefForAnimate(null);
-          }}
-        />
-      )}
-
-      {/* Character selector when no character selected but video apply attempted */}
-      {showImagePicker && !selectedCharacterId && characters.length > 0 && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => {
-            setShowImagePicker(false);
-            setVideoRefForAnimate(null);
-          }}
-        >
-          <div
-            className="bg-[#1a1a1a] rounded-2xl border border-[#333] max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold font-mono mb-4">Select Character</h2>
-            <p className="text-sm text-gray-400 font-mono mb-4">
-              Choose a character to select an image from
-            </p>
-            <div className="space-y-2">
-              {characters.map((char) => (
-                <button
-                  key={char.id}
-                  onClick={() => setSelectedCharacterId(char.id)}
-                  className="w-full text-left px-4 py-3 rounded-lg border border-[#333] hover:border-white/30 transition-colors"
-                >
-                  <p className="text-sm text-white font-mono">{char.name}</p>
-                  {char.description && (
-                    <p className="text-xs text-gray-400 font-mono truncate">{char.description}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Animate Modal with reference video */}
-      {selectedImageForAnimate && videoRefForAnimate && selectedCharacterId && (
-        <AnimateModal
-          image={selectedImageForAnimate}
-          characterId={selectedCharacterId}
-          onClose={handleAnimateModalClose}
-          onVideoCreated={handleVideoCreated}
-          initialReferenceVideo={videoRefForAnimate}
-        />
-      )}
     </main>
   );
 }
