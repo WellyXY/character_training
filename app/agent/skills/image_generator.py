@@ -54,9 +54,9 @@ class ImageGeneratorSkill(BaseSkill):
         self,
         character_id: str,
         db: AsyncSession,
-        limit: int = 1,
+        limit: int = 3,
     ) -> list[str]:
-        """Get approved base images for a character (limited to avoid fake-looking faces)."""
+        """Get approved base images for a character."""
         result = await db.execute(
             select(Image)
             .where(Image.character_id == character_id)
