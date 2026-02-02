@@ -105,8 +105,13 @@ async def transcribe_video(video_path: str) -> list:
 
     Returns list of segments with start, end, and text.
     """
+    logger.info(f"Starting transcription for: {video_path}")
+
     def _transcribe():
+        logger.info("Loading Whisper model...")
         model = _get_whisper_model()
+        logger.info("Whisper model loaded, starting transcription...")
+
         segments, info = model.transcribe(
             video_path,
             beam_size=5,
@@ -218,6 +223,8 @@ async def process_video_with_subtitles(video_bytes: bytes, filename: str) -> byt
 
     Returns new video bytes with subtitles burned in.
     """
+    logger.info(f"Starting subtitle processing for video ({len(video_bytes)} bytes)")
+
     # Create temp files
     temp_dir = tempfile.mkdtemp()
     input_path = os.path.join(temp_dir, "input.mp4")
@@ -227,8 +234,10 @@ async def process_video_with_subtitles(video_bytes: bytes, filename: str) -> byt
         # Write input video
         with open(input_path, "wb") as f:
             f.write(video_bytes)
+        logger.info(f"Saved input video to {input_path}")
 
         # Add subtitles
+        logger.info("Starting transcription and subtitle burn...")
         success = await add_subtitles_to_video(input_path, output_path)
 
         if not success or not os.path.exists(output_path):
@@ -237,7 +246,15 @@ async def process_video_with_subtitles(video_bytes: bytes, filename: str) -> byt
 
         # Read output video
         with open(output_path, "rb") as f:
-            return f.read()
+            result = f.read()
+        logger.info(f"Subtitle processing complete, output size: {len(result)} bytes")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in process_video_with_subtitles: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return video_bytes
 
     finally:
         # Clean up temp dir
