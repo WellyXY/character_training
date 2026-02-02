@@ -188,20 +188,25 @@ class PromptOptimizerSkill(BaseSkill):
             parts.append("Photorealistic high-end editorial look, 4K detail, sharp focus on face, realistic skin shading, accurate shadows, matching lighting direction and softness, natural lens perspective, no text, no watermark, no extra limbs")
             return ". ".join(parts) + "."
 
-        # Character description - use generic reference to avoid including character names
-        # Don't include character_description directly as it may contain the character name
-        parts.append("[Reference Character] Use the face and body features from the base reference images")
-
-        # Reference instructions based on mode (face_swap already handled above)
+        # For other modes with reference image:
+        # Image order: [base_image_1, base_image_2, base_image_3, user_reference (last)]
+        # Images 1-3 = base images for character face/body consistency
+        # Image 4 (last) = user reference for pose/background/clothing
         if has_reference_image:
             if reference_image_mode == "pose_background":
-                parts.append("[Reference Pose] Follow the body pose and position from the last reference image")
-                parts.append("[Reference Background] Use the same background setting and lighting from the last reference image")
+                parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
+                parts.append("Use image 4 (last reference image) for the exact pose, body position, camera angle, background environment, and lighting")
+                parts.append("Generate clothing based on the style/cloth parameters, do not copy clothing from any reference image")
             elif reference_image_mode == "clothing_pose":
-                parts.append("[Reference Pose] Follow the body pose and position from the last reference image")
-                parts.append("[Reference Clothing] Wear the same outfit/clothing as shown in the last reference image")
+                parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
+                parts.append("Use image 4 (last reference image) for the exact pose, body position, and clothing/outfit details")
+                parts.append("Generate background based on the scene description")
             else:  # custom or default
-                parts.append("[Reference Pose] Follow the pose, composition, and atmosphere from the last reference image")
+                parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
+                parts.append("Use image 4 (last reference image) for pose, composition, and atmosphere reference")
+        else:
+            # No reference image - just use base images
+            parts.append("Use the base reference images (images 1-3) for the character's face and body features")
 
         # Style mapping (only for non-face_swap modes)
         style_desc = {
@@ -412,29 +417,29 @@ User request: {raw_prompt}
         elif mode == "pose_background":
             return f"""
 **Important - Pose & Background Mode**:
-- Reference the pose and background composition from the last reference image
-- Adjust clothing based on user description (do not inherit from reference image)
+- Reference images order: [images 1-3 = character base images, image 4 (last) = user reference photo]
+- Images 1-3 (base images): Use for character's face and body features to maintain identity consistency
+- Image 4 (user reference): Use for exact pose, body position, camera angle, background environment, and lighting
+- Clothing: Generate based on user's style/cloth parameters, do NOT copy from any reference image
 {no_name_warning}
-- Must use the following tags:
-  - [Reference Character] points to base images (face and body), do not write character name
-  - [Reference Pose] reference the pose from the last reference image
-  - [Reference Background] reference the background from the last reference image"""
+- Example: Use images 1-3 (base images) for the character's face and body features to maintain identity consistency. Use image 4 (last reference image) for the exact pose, body position, camera angle, background environment, and lighting. Generate clothing based on the style/cloth parameters."""
         elif mode == "clothing_pose":
             return f"""
 **Important - Clothing & Pose Mode**:
-- Reference the clothing and pose from the last reference image
-- Generate background based on user description
+- Reference images order: [images 1-3 = character base images, image 4 (last) = user reference photo]
+- Images 1-3 (base images): Use for character's face and body features to maintain identity consistency
+- Image 4 (user reference): Use for exact pose, body position, and clothing/outfit details
+- Background: Generate based on user's scene description
 {no_name_warning}
-- Must use the following tags:
-  - [Reference Character] points to base images (face and body), do not write character name
-  - [Reference Pose] reference the pose from the last reference image
-  - [Reference Clothing] reference the clothing from the last reference image"""
+- Example: Use images 1-3 (base images) for the character's face and body features to maintain identity consistency. Use image 4 (last reference image) for the exact pose, body position, and clothing/outfit details. Generate background based on the scene description."""
         else:  # custom or None
             return f"""
 **Custom Mode**:
-- Freely reference relevant elements from the image based on user description
+- Reference images order: [images 1-3 = character base images, image 4 (last) = user reference photo]
+- Images 1-3 (base images): Use for character's face and body features
+- Image 4 (user reference): Freely reference based on user description
 {no_name_warning}
-- Flexibly use [Reference Pose], [Reference Background], [Reference Clothing] and other tags"""
+- Flexibly describe what to take from each image based on user's intent"""
 
     async def optimize(
         self,
