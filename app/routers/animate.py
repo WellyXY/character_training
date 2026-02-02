@@ -324,6 +324,39 @@ async def _poll_video_completion(
                 video_bytes = response.content
                 content_type = response.headers.get("content-type", "video/mp4")
 
+            # Get video dimensions using ffprobe
+            video_width = None
+            video_height = None
+            video_duration = None
+            try:
+                import tempfile
+                import subprocess
+                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                    tmp.write(video_bytes)
+                    tmp_path = tmp.name
+
+                probe_cmd = [
+                    "ffprobe", "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "stream=width,height,duration",
+                    "-of", "csv=p=0",
+                    tmp_path
+                ]
+                probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+                if probe_result.returncode == 0:
+                    parts = probe_result.stdout.strip().split(",")
+                    if len(parts) >= 2:
+                        video_width = int(parts[0]) if parts[0] else None
+                        video_height = int(parts[1]) if parts[1] else None
+                    if len(parts) >= 3 and parts[2]:
+                        video_duration = float(parts[2])
+                    logger.info(f"Video dimensions: {video_width}x{video_height}, duration: {video_duration}s")
+
+                import os
+                os.unlink(tmp_path)
+            except Exception as e:
+                logger.warning(f"Could not get video dimensions: {e}")
+
             # Add subtitles if requested
             if add_subtitles:
                 logger.info("Adding subtitles to video...")
@@ -364,8 +397,17 @@ async def _poll_video_completion(
             if video:
                 video.video_url = local_video_url
                 video.thumbnail_url = thumbnail_url
-                video.duration = result.get("duration")
+                video.duration = video_duration or result.get("duration")
                 video.status = DBVideoStatus.COMPLETED
+
+                # Update metadata with video dimensions
+                if video_width and video_height:
+                    metadata["width"] = video_width
+                    metadata["height"] = video_height
+                if video_duration:
+                    metadata["duration"] = video_duration
+                video.metadata_json = json.dumps(metadata)
+
                 await db.commit()
                 logger.info("Video completed and saved: %s", video.id)
             else:

@@ -565,7 +565,7 @@ export default function ContentGallery({
                       setSelectedItem({
                         type: "video",
                         url: resolveApiUrl((item.data as Video).video_url!),
-                        prompt: item.data.metadata?.prompt,
+                        prompt: (item.data as Video).metadata?.original_prompt || item.data.metadata?.prompt,
                         video: item.data as Video,
                       })
                     }
@@ -863,7 +863,7 @@ export default function ContentGallery({
                     setSelectedItem({
                       type: "video",
                       url: resolveApiUrl(video.video_url!),
-                      prompt: video.metadata?.prompt,
+                      prompt: video.metadata?.original_prompt || video.metadata?.prompt,
                       video: video,
                     })
                   }
@@ -898,12 +898,12 @@ export default function ContentGallery({
 
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none group-hover:pointer-events-auto">
-                    {video.metadata?.prompt && (
+                    {(video.metadata?.original_prompt || video.metadata?.prompt) && (
                       <p className="text-[10px] text-gray-200 line-clamp-4 mb-1 font-mono">
-                        {video.metadata.prompt}
+                        {video.metadata.original_prompt || video.metadata.prompt}
                       </p>
                     )}
-                    {!video.metadata?.prompt && video.duration && (
+                    {!(video.metadata?.original_prompt || video.metadata?.prompt) && video.duration && (
                       <span className="text-[10px] text-gray-300 mb-1 font-mono">
                         {Math.round(video.duration)}s
                       </span>
