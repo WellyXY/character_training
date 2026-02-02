@@ -2,8 +2,12 @@
 import asyncio
 import json
 import logging
+import os
+import subprocess
+import tempfile
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +16,10 @@ from sqlalchemy import select
 from app.database import get_db, async_session
 from app.clients.gpt import get_gpt_client
 from app.clients.parrot import get_parrot_client
-from app.services.storage import get_storage_service
+from app.clients.seedream import get_seedream_client
+from app.services.storage import get_storage_service, StorageService
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
+from app.models.image import Image, ImageType, ImageStatus
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +48,70 @@ def build_addition_prompt(base_prompt: str, video_duration: float) -> str:
     return prompt
 
 
+async def _extract_video_first_frame(
+    video_url: str,
+    db: AsyncSession,
+    storage: StorageService,
+) -> str:
+    """
+    Extract first frame from video and save to storage.
+
+    Args:
+        video_url: URL of the video (can be relative or absolute)
+        db: Database session
+        storage: Storage service instance
+
+    Returns:
+        Storage URL of the extracted frame
+    """
+    # Get full URL for the video
+    full_video_url = storage.get_full_url(video_url)
+
+    # Download video to temp file
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.get(full_video_url)
+        resp.raise_for_status()
+        video_bytes = resp.content
+
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_video:
+        tmp_video.write(video_bytes)
+        tmp_video_path = tmp_video.name
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_frame:
+        tmp_frame_path = tmp_frame.name
+
+    try:
+        # Extract first frame with ffmpeg
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", tmp_video_path,
+                "-vframes", "1",
+                "-f", "image2",
+                tmp_frame_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        # Read frame bytes and save to storage
+        with open(tmp_frame_path, "rb") as f:
+            frame_bytes = f.read()
+
+        saved = await storage.save_bytes(
+            frame_bytes,
+            filename="first_frame.png",
+            content_type="image/png",
+            db=db,
+        )
+        return saved["url"]
+    finally:
+        if os.path.exists(tmp_video_path):
+            os.unlink(tmp_video_path)
+        if os.path.exists(tmp_frame_path):
+            os.unlink(tmp_frame_path)
+
+
 class AnalyzeRequest(BaseModel):
     """Request for image analysis."""
     image_id: str
@@ -64,6 +134,7 @@ class GenerateRequest(BaseModel):
     reference_video_url: Optional[str] = None
     reference_video_duration: Optional[float] = None
     add_subtitles: bool = False
+    match_reference_pose: bool = False
 
 
 class GenerateResponse(BaseModel):
@@ -174,7 +245,7 @@ async def generate_animation(
 ):
     """
     Generate a video from an image using Parrot API.
-    If reference_video_url is provided, uses Pika Addition API.
+    If reference_video_url is provided, uses Pika Addition API with pose-matching.
     Otherwise, uses standard image-to-video API.
     Creates a Video record in the database.
     """
@@ -187,6 +258,10 @@ async def generate_animation(
     # Check if using Addition API (reference video provided)
     use_addition_api = bool(request.reference_video_url)
 
+    # Track intermediate image for metadata
+    intermediate_image_id = None
+    first_frame_url = None
+
     try:
         if use_addition_api:
             # Build prompt for Addition API with /pika2p5_animate prefix
@@ -196,16 +271,78 @@ async def generate_animation(
             # Get full URL for the reference video
             reference_video_url = storage.get_full_url(request.reference_video_url)
 
+            # Determine which image to use for Addition API
+            image_url_for_addition = image_url
+
+            # === Optional pose-matching pre-processing ===
+            if request.match_reference_pose:
+                # 1. Extract first frame from reference video
+                logger.info("Extracting first frame from reference video...")
+                first_frame_url = await _extract_video_first_frame(
+                    request.reference_video_url,
+                    db,
+                    storage,
+                )
+                logger.info("First frame extracted: %s", first_frame_url)
+
+                # 2. Generate pose-matched image using Seedream
+                # Reference 1: user's selected image (person/clothing/background)
+                # Reference 2: first frame (pose/composition)
+                seedream = get_seedream_client()
+                pose_prompt = (
+                    f"Same person, same clothing, same style as reference. "
+                    f"Match the exact pose, body position, and framing from the second reference image. "
+                    f"{request.prompt}"
+                )
+                logger.info("Generating pose-matched image with Seedream...")
+
+                pose_matched_result = await seedream.generate(
+                    prompt=pose_prompt,
+                    width=1024,
+                    height=1024,
+                    reference_images=[image_url, storage.get_full_url(first_frame_url)],
+                )
+
+                pose_matched_image_url = pose_matched_result.get("image_url")
+                if not pose_matched_image_url:
+                    raise ValueError("Seedream did not return an image URL for pose matching")
+
+                logger.info("Pose-matched image generated: %s", pose_matched_image_url[:100])
+
+                # 3. Save intermediate image to database as content image
+                saved = await storage.save_from_url(pose_matched_image_url, db, prefix="content")
+                intermediate_image = Image(
+                    character_id=request.character_id,
+                    type=ImageType.CONTENT,
+                    image_url=saved["url"],
+                    status=ImageStatus.COMPLETED,
+                    is_approved=False,
+                    metadata_json=json.dumps({
+                        "prompt": pose_prompt,
+                        "source": "video_pose_match",
+                        "reference_video_first_frame": first_frame_url,
+                        "original_image_id": request.image_id,
+                    }),
+                )
+                db.add(intermediate_image)
+                await db.commit()
+                await db.refresh(intermediate_image)
+                intermediate_image_id = intermediate_image.id
+                logger.info("Intermediate pose-matched image saved: %s", intermediate_image.id)
+
+                # 4. Use the new image for Addition API (instead of original)
+                image_url_for_addition = storage.get_full_url(saved["url"])
+
             logger.info(
                 "Starting Addition API video generation for image %s with ref video, prompt: %s",
-                request.image_id,
+                intermediate_image_id or request.image_id,
                 enhanced_prompt[:150],
             )
 
             # Create video generation job using Addition API
             video_job_id = await parrot.create_addition_video(
                 video_source=reference_video_url,
-                image_source=image_url,
+                image_source=image_url_for_addition,
                 prompt_text=enhanced_prompt,
             )
         else:
@@ -238,15 +375,22 @@ async def generate_animation(
             metadata["api_type"] = "addition"
             metadata["reference_video_url"] = request.reference_video_url
             metadata["reference_video_duration"] = request.reference_video_duration
+            metadata["match_reference_pose"] = request.match_reference_pose
+            # Include pose-matching intermediate image info when enabled
+            if intermediate_image_id:
+                metadata["intermediate_image_id"] = intermediate_image_id
+            if first_frame_url:
+                metadata["reference_video_first_frame"] = first_frame_url
 
         # Create Video record immediately with PROCESSING status
+        # For Addition API with pose matching, use the intermediate image as source
         video = Video(
             character_id=request.character_id,
             type=DBVideoType.VLOG,
             video_url=None,  # Will be set when complete
             thumbnail_url=None,
             duration=None,
-            source_image_id=request.image_id,
+            source_image_id=intermediate_image_id if intermediate_image_id else request.image_id,
             status=DBVideoStatus.PROCESSING,
             metadata_json=json.dumps(metadata),
         )
