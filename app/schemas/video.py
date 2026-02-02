@@ -42,7 +42,7 @@ class VideoResponse(BaseModel):
     id: str
     character_id: str
     type: VideoType
-    video_url: str
+    video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     duration: Optional[float] = None
     metadata: VideoMetadata = Field(default_factory=VideoMetadata)
