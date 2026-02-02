@@ -879,6 +879,7 @@ Current State:
                             style=pending.params.style,
                             cloth=pending.params.cloth,
                             reference_image_path=pending.params.reference_image_path,
+                            reference_image_mode=pending.params.reference_image_mode.value if pending.params.reference_image_mode else None,
                             db=db,
                             existing_image_id=existing_image_id,
                         )

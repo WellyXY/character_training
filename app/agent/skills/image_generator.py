@@ -217,8 +217,6 @@ class ImageGeneratorSkill(BaseSkill):
                 "error": "Character has no Base Images. Please generate and approve Base Images first, or provide a reference image.",
             }
 
-        reference_images = list(base_image_urls)  # Base images first
-
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"[ImageGenerator] Base images count: {len(base_image_urls)}")
@@ -226,10 +224,25 @@ class ImageGeneratorSkill(BaseSkill):
         ref_display = user_reference_path.split("/")[-1] if user_reference_path and "/" in user_reference_path else (user_reference_path[:30] + "..." if user_reference_path and len(user_reference_path) > 30 else user_reference_path)
         logger.info(f"[ImageGenerator] User reference: {ref_display}")
 
+        # Get reference image mode to determine order
+        reference_image_mode = params.get("reference_image_mode")
+        logger.info(f"[ImageGenerator] Reference image mode: {reference_image_mode}")
+
         if user_reference_path:
             user_reference_url = self.storage.get_full_url(user_reference_path)
-            reference_images.append(user_reference_url)  # User reference last
+
+            if reference_image_mode == "face_swap":
+                # Face swap: user reference first (preserve pose/background/outfit),
+                # base image for face extraction only
+                reference_images = [user_reference_url] + list(base_image_urls)
+                logger.info(f"[ImageGenerator] Face swap mode: user reference first")
+            else:
+                # Other modes: base images first for character consistency
+                reference_images = list(base_image_urls)
+                reference_images.append(user_reference_url)  # User reference last
             logger.info(f"[ImageGenerator] Total reference images: {len(reference_images)}")
+        else:
+            reference_images = list(base_image_urls)
 
         aspect_ratio = params.get("aspect_ratio", "9:16")
         width, height = self._parse_aspect_ratio(aspect_ratio)
@@ -341,6 +354,7 @@ class ImageGeneratorSkill(BaseSkill):
         style: Optional[str] = None,
         cloth: Optional[str] = None,
         reference_image_path: Optional[str] = None,
+        reference_image_mode: Optional[str] = None,
         db: AsyncSession = None,
         existing_image_id: Optional[str] = None,
     ) -> dict[str, Any]:
@@ -357,6 +371,7 @@ class ImageGeneratorSkill(BaseSkill):
                 "style": style,
                 "cloth": cloth,
                 "reference_image_path": reference_image_path,
+                "reference_image_mode": reference_image_mode,
                 "existing_image_id": existing_image_id,
             },
             character_id=character_id,
