@@ -280,6 +280,8 @@ async def direct_image_edit(
 
         # Download and save the image locally (but don't create DB record yet)
         saved = await storage.save_from_url(image_url, db, prefix="edit")
+        # Commit so the image is available for frontend to display
+        await db.commit()
 
         # Build metadata for later saving
         metadata = {
