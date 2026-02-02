@@ -211,6 +211,15 @@ class DirectEditResponse(BaseModel):
     image_id: Optional[str] = None
     image_url: Optional[str] = None
     message: str
+    # Metadata for saving later (when not auto-saved)
+    metadata: Optional[dict] = None
+
+
+class SaveEditRequest(BaseModel):
+    """Request to save a generated edit to the gallery."""
+    image_url: str
+    character_id: str
+    metadata: dict
 
 
 def _parse_aspect_ratio(aspect_ratio: str) -> tuple[int, int]:
@@ -269,10 +278,10 @@ async def direct_image_edit(
                 message="No image URL in generation response",
             )
 
-        # Download and save the image locally
+        # Download and save the image locally (but don't create DB record yet)
         saved = await storage.save_from_url(image_url, db, prefix="edit")
 
-        # Build metadata
+        # Build metadata for later saving
         metadata = {
             "prompt": request.prompt,
             "width": width,
@@ -280,28 +289,19 @@ async def direct_image_edit(
             "seed": result.get("seed"),
             "source_image_path": request.source_image_path,
             "edit_type": "direct",
+            "character_id": request.character_id,
+            "local_url": saved["url"],  # Store the local path for saving
         }
 
-        # Create new image record
-        image = Image(
-            character_id=request.character_id,
-            type=ImageType.CONTENT,
-            image_url=saved["url"],
-            status=ImageStatus.COMPLETED,
-            is_approved=False,
-            metadata_json=json.dumps(metadata),
-        )
-        db.add(image)
-        await db.commit()
-        await db.refresh(image)
+        logger.info(f"Direct edit successful, image ready for save: {saved['url']}")
 
-        logger.info(f"Direct edit successful: image_id={image.id}")
-
+        # Return image without saving to gallery - user must click Save
         return DirectEditResponse(
             success=True,
-            image_id=image.id,
+            image_id=None,  # No ID yet - not saved to gallery
             image_url=saved["full_url"],
-            message="Image generated successfully",
+            message="Image generated. Click Save to add to gallery.",
+            metadata=metadata,
         )
 
     except Exception as e:
@@ -309,4 +309,57 @@ async def direct_image_edit(
         return DirectEditResponse(
             success=False,
             message=f"Generation failed: {str(e)}",
+        )
+
+
+@router.post("/agent/image-edit/save", response_model=DirectEditResponse)
+async def save_edited_image(
+    request: SaveEditRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Save a generated edit image to the gallery.
+
+    This is called when user clicks "Save" on a generated image.
+    """
+    logger.info(f"=== /agent/image-edit/save request ===")
+    logger.info(f"Character ID: {request.character_id}")
+    logger.info(f"Image URL: {request.image_url}")
+
+    try:
+        # Get the local URL from metadata
+        local_url = request.metadata.get("local_url")
+        if not local_url:
+            return DirectEditResponse(
+                success=False,
+                message="Missing local_url in metadata",
+            )
+
+        # Create new image record in database
+        image = Image(
+            character_id=request.character_id,
+            type=ImageType.CONTENT,
+            image_url=local_url,
+            status=ImageStatus.COMPLETED,
+            is_approved=False,
+            metadata_json=json.dumps(request.metadata),
+        )
+        db.add(image)
+        await db.commit()
+        await db.refresh(image)
+
+        logger.info(f"Image saved to gallery: image_id={image.id}")
+
+        return DirectEditResponse(
+            success=True,
+            image_id=image.id,
+            image_url=request.image_url,
+            message="Image saved to gallery",
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in save_edited_image: {e}")
+        return DirectEditResponse(
+            success=False,
+            message=f"Save failed: {str(e)}",
         )

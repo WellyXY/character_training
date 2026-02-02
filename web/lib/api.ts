@@ -278,10 +278,24 @@ export interface DirectEditResponse {
   image_id?: string;
   image_url?: string;
   message: string;
+  metadata?: Record<string, unknown>;
 }
 
 export async function directImageEdit(request: DirectEditRequest): Promise<DirectEditResponse> {
   return apiFetch<DirectEditResponse>("/agent/image-edit/direct", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export interface SaveEditRequest {
+  image_url: string;
+  character_id: string;
+  metadata: Record<string, unknown>;
+}
+
+export async function saveEditedImage(request: SaveEditRequest): Promise<DirectEditResponse> {
+  return apiFetch<DirectEditResponse>("/agent/image-edit/save", {
     method: "POST",
     body: JSON.stringify(request),
   });

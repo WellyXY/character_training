@@ -2,13 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Image } from "@/lib/types";
-import { directImageEdit, resolveApiUrl } from "@/lib/api";
+import { directImageEdit, saveEditedImage, resolveApiUrl } from "@/lib/api";
 
 interface EditMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  metadata?: Record<string, unknown>;
+  isSaved?: boolean;
   timestamp: Date;
 }
 
@@ -31,6 +33,7 @@ export default function ImageEditPanel({
   const [messages, setMessages] = useState<EditMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setSaving] = useState<string | null>(null);
   const [selectedRatio, setSelectedRatio] = useState<string>("9:16");
   const [currentSourceImage, setCurrentSourceImage] = useState<string>(
     sourceImage.image_url || ""
@@ -75,14 +78,16 @@ export default function ImageEditPanel({
       });
 
       if (result.success && result.image_url) {
-        // Add assistant message with generated image
+        // Add assistant message with generated image (not saved yet)
         setMessages((prev) => [
           ...prev,
           {
             id: Date.now().toString(),
             role: "assistant",
-            content: "Generated new image",
+            content: "Image generated. Click Save to add to gallery.",
             imageUrl: result.image_url,
+            metadata: result.metadata,
+            isSaved: false,
             timestamp: new Date(),
           },
         ]);
@@ -93,9 +98,6 @@ export default function ImageEditPanel({
           ? `/uploads/${result.image_url.split("/uploads/")[1]}`
           : result.image_url;
         setCurrentSourceImage(newSourcePath);
-
-        // Notify parent to refresh gallery
-        onImageGenerated();
       } else {
         // Show error message
         setMessages((prev) => [
@@ -120,6 +122,53 @@ export default function ImageEditPanel({
       ]);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSave = async (messageId: string) => {
+    const message = messages.find((m) => m.id === messageId);
+    if (!message || !message.imageUrl || !message.metadata || !characterId) return;
+
+    setSaving(messageId);
+
+    try {
+      const result = await saveEditedImage({
+        image_url: message.imageUrl,
+        character_id: characterId,
+        metadata: message.metadata,
+      });
+
+      if (result.success) {
+        // Mark message as saved
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, isSaved: true, content: "Saved to gallery" }
+              : m
+          )
+        );
+        // Notify parent to refresh gallery
+        onImageGenerated();
+      } else {
+        // Show error
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, content: `Save failed: ${result.message}` }
+              : m
+          )
+        );
+      }
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, content: `Save failed: ${error instanceof Error ? error.message : "Unknown error"}` }
+            : m
+        )
+      );
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -189,7 +238,7 @@ export default function ImageEditPanel({
                 {msg.content}
               </p>
               {msg.imageUrl && (
-                <div className="mt-2">
+                <div className="mt-2 relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={resolveApiUrl(msg.imageUrl)}
@@ -197,6 +246,49 @@ export default function ImageEditPanel({
                     className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => setEnlargedImage(msg.imageUrl!)}
                   />
+                  {/* Save button overlay */}
+                  {msg.metadata && !msg.isSaved && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSave(msg.id);
+                      }}
+                      disabled={isSaving === msg.id}
+                      className="absolute top-2 right-2 px-3 py-1.5 bg-white text-black text-xs font-mono font-bold uppercase tracking-wide rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors shadow-lg"
+                    >
+                      {isSaving === msg.id ? (
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                          Saving
+                        </span>
+                      ) : (
+                        "Save"
+                      )}
+                    </button>
+                  )}
+                  {/* Saved indicator */}
+                  {msg.isSaved && (
+                    <div className="absolute top-2 right-2 px-3 py-1.5 bg-green-500/90 text-white text-xs font-mono font-bold uppercase tracking-wide rounded-lg shadow-lg flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Saved
+                    </div>
+                  )}
                 </div>
               )}
             </div>
