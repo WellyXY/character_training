@@ -287,23 +287,52 @@ async def generate_animation(
                 )
                 logger.info("First frame extracted: %s", first_frame_url)
 
-                # 2. Generate pose-matched image using Seedream
-                # Image order: [image 1 = user's selected image, image 2 = first frame from reference video]
-                # NOTE: Do NOT include request.prompt here - that's for video animation, not image generation
-                seedream = get_seedream_client()
-                pose_prompt = (
-                    f"Use image 1 (first reference image) for the character's face, body features, clothing, and style. "
-                    f"Use image 2 (second reference image) for the exact pose, body position, camera angle, and framing. "
-                    f"Combine: character identity from image 1 with pose/composition from image 2. "
-                    f"Photorealistic, seamless blend, matching lighting and skin tone, no text, no watermark, no extra limbs."
+                # 2. Get base images for character consistency (up to 3)
+                base_images_result = await db.execute(
+                    select(Image)
+                    .where(Image.character_id == request.character_id)
+                    .where(Image.type == ImageType.BASE)
+                    .where(Image.is_approved == True)
+                    .order_by(Image.created_at.desc())
+                    .limit(3)
                 )
-                logger.info("Generating pose-matched image with Seedream...")
+                base_images = base_images_result.scalars().all()
+                base_image_urls = [storage.get_full_url(img.image_url) for img in base_images]
+                logger.info("Found %d approved base images for character", len(base_image_urls))
+
+                # 3. Generate pose-matched image using Seedream
+                # Image order: [base_images (1-3) for character identity, first_frame (last) for pose]
+                seedream = get_seedream_client()
+
+                # Build reference images list: base images first, then first frame for pose
+                reference_images_for_pose = base_image_urls + [storage.get_full_url(first_frame_url)]
+                num_base = len(base_image_urls)
+
+                # Build prompt with explicit image order
+                if num_base > 0:
+                    pose_prompt = (
+                        f"Use images 1-{num_base} (base reference images) for the character's face and body features to maintain identity consistency. "
+                        f"Use image {num_base + 1} (last reference image) for the exact pose, body position, camera angle, and framing. "
+                        f"Combine: character identity from images 1-{num_base} with pose/composition from image {num_base + 1}. "
+                        f"Photorealistic, seamless blend, matching lighting and skin tone, no text, no watermark, no extra limbs."
+                    )
+                else:
+                    # Fallback if no base images - use selected image
+                    reference_images_for_pose = [image_url, storage.get_full_url(first_frame_url)]
+                    pose_prompt = (
+                        f"Use image 1 (first reference image) for the character's face, body features, clothing, and style. "
+                        f"Use image 2 (second reference image) for the exact pose, body position, camera angle, and framing. "
+                        f"Combine: character identity from image 1 with pose/composition from image 2. "
+                        f"Photorealistic, seamless blend, matching lighting and skin tone, no text, no watermark, no extra limbs."
+                    )
+
+                logger.info("Generating pose-matched image with Seedream using %d reference images...", len(reference_images_for_pose))
 
                 pose_matched_result = await seedream.generate(
                     prompt=pose_prompt,
                     width=1024,
                     height=1024,
-                    reference_images=[image_url, storage.get_full_url(first_frame_url)],
+                    reference_images=reference_images_for_pose,
                 )
 
                 pose_matched_image_url = pose_matched_result.get("image_url")
