@@ -130,14 +130,18 @@ class VideoGeneratorSkill(BaseSkill):
         video_prompt = params.get("video_prompt", "natural movement, slight motion")
         aspect_ratio = params.get("aspect_ratio", "9:16")
         resolution = params.get("resolution")
+        reference_image_path = params.get("reference_image_path")
+        reference_image_mode = params.get("reference_image_mode")
 
-        # Step 1: Generate the image first
+        # Step 1: Generate the image first (with reference image if provided)
         image_result = await self.image_skill.generate_content(
             character_id=character_id,
             prompt=image_prompt,
             aspect_ratio=aspect_ratio,
             style=params.get("style"),
             cloth=params.get("cloth"),
+            reference_image_path=reference_image_path,
+            reference_image_mode=reference_image_mode,
             db=db,
         )
 

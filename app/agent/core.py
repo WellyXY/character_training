@@ -913,6 +913,8 @@ Current State:
                                 "aspect_ratio": aspect_ratio,
                                 "style": pending.params.style,
                                 "cloth": pending.params.cloth,
+                                "reference_image_path": pending.params.reference_image_path,
+                                "reference_image_mode": pending.params.reference_image_mode.value if pending.params.reference_image_mode else None,
                             },
                             character_id=character_id,
                             db=db,
