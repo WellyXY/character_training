@@ -296,37 +296,53 @@ class PromptOptimizerSkill(BaseSkill):
             if reference_analysis:
                 context_parts.append(f"Reference image analysis (pose/composition/atmosphere):\n{reference_analysis}")
                 context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
-                reference_context = f"""
+                if reference_image_mode == "face_swap":
+                    reference_context = f"""
 6. {mode_instructions}
-   - The system will pass Base Images + user reference image together to Seedream
-   - Incorporate the pose/composition/atmosphere from the reference image analysis above into the prompt"""
+   - Image order sent to Seedream: [image 1 = user reference, images 2-4 = base images]
+   - Your prompt MUST explicitly state this image order and what to extract from each"""
+                else:
+                    reference_context = f"""
+6. {mode_instructions}
+   - Image order sent to Seedream: [images 1-3 = base images, image 4 = user reference]
+   - Your prompt MUST explicitly state this image order and what to extract from each"""
             else:
                 # GPT-4V analysis failed (likely NSFW content), but still need to tell GPT about reference image
                 context_parts.append("Reference image: A reference image was provided but its content could not be analyzed")
                 context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
-                reference_context = f"""
+                if reference_image_mode == "face_swap":
+                    reference_context = f"""
 6. {mode_instructions}
-   - The system will pass Base Images + user reference image together to Seedream
-   - Since the reference image content could not be analyzed, generate appropriate tags based on the reference mode"""
+   - Image order sent to Seedream: [image 1 = user reference, images 2-4 = base images]
+   - Generate prompt with explicit image order instructions based on the mode"""
+                else:
+                    reference_context = f"""
+6. {mode_instructions}
+   - Image order sent to Seedream: [images 1-3 = base images, image 4 = user reference]
+   - Generate prompt with explicit image order instructions based on the mode"""
 
         user_context = "\n".join(context_parts) if context_parts else ""
 
         if reference_image_mode == "face_swap":
-            instruction_header = "Generate a structured English prompt, ensuring:"
+            instruction_header = "Generate a structured English prompt with EXPLICIT image order instructions:"
             instruction_body = (
-                "1. Use the REPLACE template format: Replace the face with... Keep [elements] unchanged.\n"
-                "2. Explicitly list all elements to preserve (pose, clothing, background, lighting, body position)\n"
-                "3. Emphasize seamless blend and skin tone matching\n"
-                "4. Keep the prompt structured (50-100 words)"
+                "1. Image order: [image 1 = user reference photo, images 2-4 = character base images]\n"
+                "2. State that image 1 is the MAIN composition - keep its pose, body, clothing, background, lighting unchanged\n"
+                "3. State that images 2-4 are ONLY for extracting facial features (face shape, eyes, nose, mouth, skin texture)\n"
+                "4. Specify face blending: seamless blend at jawline, hairline, neck, match skin tone and lighting\n"
+                "5. Add quality tags and negative prompts (no text, no watermark, no extra limbs)\n"
+                "6. Keep the prompt structured (80-150 words)"
             )
         else:
-            instruction_header = "Generate a detailed English prompt, ensuring:"
+            # For other modes: [images 1-3 = base images, image 4 = user reference]
+            instruction_header = "Generate a detailed English prompt with EXPLICIT image order instructions:"
             instruction_body = (
-                "1. Include a detailed description of the subject\n"
-                "2. Match the specified style and clothing\n"
-                "3. Include scene and lighting descriptions\n"
-                "4. Use professional photography terminology\n"
-                "5. Keep the prompt at a moderate length (100-200 words)"
+                "1. Image order: [images 1-3 = character base images, image 4 = user reference photo]\n"
+                "2. State that images 1-3 are for character's face and body features (identity consistency)\n"
+                "3. State what to take from image 4 based on the reference mode\n"
+                "4. Include scene and lighting descriptions\n"
+                "5. Use professional photography terminology\n"
+                "6. Keep the prompt at a moderate length (100-200 words)"
             )
 
         messages = [
