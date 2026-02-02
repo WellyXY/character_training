@@ -305,13 +305,50 @@ async def _poll_video_completion(
     storage = get_storage_service()
 
     try:
-        # Wait for video completion (up to 5 minutes)
-        result = await parrot.wait_for_video(
-            video_id=parrot_job_id,
-            timeout=300,
-            poll_interval=5,
-            use_addition_api=use_addition_api,
-        )
+        # Poll for video completion with progress updates (up to 5 minutes)
+        timeout = 300
+        poll_interval = 5
+        elapsed = 0
+        last_progress = 0
+        result = None
+
+        while elapsed < timeout:
+            poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
+            status = poll_result.get("status", "").lower()
+            progress = poll_result.get("raw", {}).get("progress", 0)
+
+            logger.info("Video %s poll: status=%s, progress=%d%%", video_id, status, progress)
+
+            # Update progress in DB if changed
+            if progress != last_progress:
+                last_progress = progress
+                async with async_session() as progress_db:
+                    video_result = await progress_db.execute(
+                        select(Video).where(Video.id == video_id)
+                    )
+                    video = video_result.scalar_one_or_none()
+                    if video:
+                        metadata["progress"] = progress
+                        video.metadata_json = json.dumps(metadata)
+                        await progress_db.commit()
+
+            if status in ("finished", "completed", "done", "success"):
+                if poll_result.get("video_url"):
+                    result = poll_result
+                    break
+                else:
+                    logger.warning("Video completed but no URL: %s", poll_result)
+
+            if status in ("failed", "error"):
+                raw = poll_result.get("raw", {})
+                error_msg = raw.get("error") or raw.get("message") or str(raw)
+                raise ValueError(f"Video generation failed: {error_msg}")
+
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+        if not result:
+            raise TimeoutError(f"Video generation timed out after {timeout} seconds")
 
         video_url = result.get("video_url")
         if not video_url:
@@ -373,6 +410,7 @@ async def _poll_video_completion(
                     logger.warning(f"Failed to add subtitles, using original video: {e}")
 
             # Save video to storage
+            logger.info("Saving video to storage, size: %d bytes", len(video_bytes))
             saved = await storage.save_bytes(
                 video_bytes,
                 "animated.mp4",
@@ -380,6 +418,7 @@ async def _poll_video_completion(
                 db,
             )
             local_video_url = saved["url"]
+            logger.info("Video saved to storage: %s", local_video_url)
 
             # Save thumbnail if available
             thumbnail_url = None
@@ -395,6 +434,7 @@ async def _poll_video_completion(
                     logger.warning("Failed to save thumbnail: %s", e)
 
             # Update video record with completed status
+            logger.info("Updating video record %s to COMPLETED", video_id)
             video_result = await db.execute(
                 select(Video).where(Video.id == video_id)
             )
@@ -411,10 +451,12 @@ async def _poll_video_completion(
                     metadata["height"] = video_height
                 if video_duration:
                     metadata["duration"] = video_duration
+                metadata["progress"] = 100
                 video.metadata_json = json.dumps(metadata)
 
                 await db.commit()
-                logger.info("Video completed and saved: %s", video.id)
+                await db.refresh(video)
+                logger.info("Video completed and saved: %s, status=%s", video.id, video.status)
             else:
                 logger.error("Video record not found: %s", video_id)
 

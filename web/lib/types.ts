@@ -90,6 +90,7 @@ export interface VideoMetadata {
   duration?: number;
   width?: number;
   height?: number;
+  progress?: number;  // Video generation progress 0-100
 }
 
 export type VideoStatus = "pending" | "processing" | "completed" | "failed";

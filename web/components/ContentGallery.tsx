@@ -439,14 +439,23 @@ export default function ContentGallery({
                     {/* Spinner */}
                     <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
 
-                    {/* Status */}
+                    {/* Status with Progress */}
                     <p className="text-sm font-medium text-amber-400 mb-1 font-mono uppercase tracking-wide">
-                      Processing...
+                      {video.metadata?.progress !== undefined
+                        ? `${video.metadata.progress}%`
+                        : "Processing..."}
                     </p>
 
-                    {/* Progress Bar (indeterminate) */}
+                    {/* Progress Bar */}
                     <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
-                      <div className="h-full w-1/3 bg-amber-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                      {video.metadata?.progress !== undefined ? (
+                        <div
+                          className="h-full bg-amber-500 transition-all duration-300"
+                          style={{ width: `${video.metadata.progress}%` }}
+                        />
+                      ) : (
+                        <div className="h-full w-1/3 bg-amber-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                      )}
                     </div>
 
                     {/* Prompt Preview */}

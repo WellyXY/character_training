@@ -204,6 +204,34 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [activeTasks, selectedCharacterId]);
 
+  // Poll processing videos for progress/completion
+  useEffect(() => {
+    const processingVideoIds = videos
+      .filter((v) => v.status === "processing")
+      .map((v) => v.id);
+    if (processingVideoIds.length === 0 || !selectedCharacterId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const vids = await listCharacterVideos(selectedCharacterId);
+        const hasChange = vids.some((v) => {
+          const prev = videos.find((pv) => pv.id === v.id);
+          if (!prev) return true;
+          // Check if status changed or progress updated
+          return prev.status !== v.status ||
+            prev.metadata?.progress !== v.metadata?.progress;
+        });
+        if (hasChange) {
+          setVideos(vids);
+        }
+      } catch (err) {
+        console.error("Failed to poll video status:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [videos, selectedCharacterId]);
+
   // API calls
   const loadCharacters = async () => {
     try {
