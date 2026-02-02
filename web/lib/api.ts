@@ -242,38 +242,11 @@ export interface AnimateImageRequest {
 }
 
 export async function animateImage(request: AnimateImageRequest): Promise<AnimateImageResponse> {
-  // Video generation can take up to 5 minutes, use AbortController with 6 min timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 360000); // 6 minutes
-
-  try {
-    const res = await fetch(`${API_ROOT}/animate/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      let detail = "";
-      try {
-        const data = await res.json();
-        detail = data?.detail ? String(data.detail) : JSON.stringify(data);
-      } catch {
-        detail = await res.text();
-      }
-      throw new Error(detail || `Request failed (${res.status})`);
-    }
-
-    return (await res.json()) as AnimateImageResponse;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Video generation timed out. Please check the gallery for status.");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  // Backend now returns immediately with video_id, polling happens server-side
+  return apiFetch<AnimateImageResponse>("/animate/generate", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }
 
 // Image Edit endpoints

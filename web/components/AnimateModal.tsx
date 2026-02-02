@@ -188,13 +188,16 @@ export default function AnimateModal({
       console.log("AnimateModal response:", result);
 
       if (result.success) {
-        // Video saved to DB server-side; refresh parent media
+        // Video generation started - close modal and refresh to show processing status
         onVideoCreated();
+        onClose();
       } else {
         console.error("Video generation failed:", result.message);
+        alert(`Failed to start video generation: ${result.message}`);
       }
     } catch (err) {
       console.error("Video generation failed:", err);
+      alert(`Failed to start video generation: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   };
 

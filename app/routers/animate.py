@@ -1,4 +1,5 @@
 """Animate router for image-to-video generation."""
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -6,14 +7,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.database import get_db
+from app.database import get_db, async_session
 from app.clients.gpt import get_gpt_client
 from app.clients.parrot import get_parrot_client
 from app.services.storage import get_storage_service
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
 
 logger = logging.getLogger(__name__)
+
+# Track background tasks to prevent garbage collection
+_background_tasks: set = set()
 
 router = APIRouter()
 
@@ -250,21 +255,63 @@ async def generate_animation(
 
         logger.info("Video record created with PROCESSING status: %s", video.id)
 
-        # Wait for video completion (up to 5 minutes)
-        try:
-            result = await parrot.wait_for_video(
-                video_id=video_job_id,
-                timeout=300,
-                poll_interval=5,
+        # Start background task to poll for completion
+        # This allows the request to return immediately
+        task = asyncio.create_task(
+            _poll_video_completion(
+                video_id=video.id,
+                parrot_job_id=video_job_id,
                 use_addition_api=use_addition_api,
+                metadata=metadata,
             )
+        )
+        # Keep reference to prevent garbage collection
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
-            video_url = result.get("video_url")
-            if not video_url:
-                raise ValueError("Video generation completed but no URL returned")
+        # Return immediately - frontend will poll for status
+        return GenerateResponse(
+            success=True,
+            video_id=video.id,
+            video_url=None,  # Not ready yet
+            message="Video generation started. Check status for completion.",
+        )
 
-            logger.info("Video generated: %s", video_url)
+    except Exception as e:
+        logger.error("Failed to start video generation: %s", str(e))
+        return GenerateResponse(
+            success=False,
+            message=f"Failed to start video generation: {str(e)}",
+        )
 
+
+async def _poll_video_completion(
+    video_id: str,
+    parrot_job_id: str,
+    use_addition_api: bool,
+    metadata: dict,
+):
+    """Background task to poll for video completion and update database."""
+    parrot = get_parrot_client()
+    storage = get_storage_service()
+
+    try:
+        # Wait for video completion (up to 5 minutes)
+        result = await parrot.wait_for_video(
+            video_id=parrot_job_id,
+            timeout=300,
+            poll_interval=5,
+            use_addition_api=use_addition_api,
+        )
+
+        video_url = result.get("video_url")
+        if not video_url:
+            raise ValueError("Video generation completed but no URL returned")
+
+        logger.info("Video generated: %s", video_url)
+
+        # Use a new database session for the background task
+        async with async_session() as db:
             # Download and save video locally
             saved = await storage.save_from_url(video_url, db, prefix="animated")
             local_video_url = saved["url"]
@@ -283,40 +330,30 @@ async def generate_animation(
                     logger.warning("Failed to save thumbnail: %s", e)
 
             # Update video record with completed status
-            video.video_url = local_video_url
-            video.thumbnail_url = thumbnail_url
-            video.duration = result.get("duration")
-            video.status = DBVideoStatus.COMPLETED
-
-            await db.commit()
-            await db.refresh(video)
-
-            logger.info("Video completed and saved: %s", video.id)
-
-            return GenerateResponse(
-                success=True,
-                video_id=video.id,
-                video_url=local_video_url,
-                message="Video generated successfully",
+            video_result = await db.execute(
+                select(Video).where(Video.id == video_id)
             )
-
-        except (TimeoutError, Exception) as e:
-            # Update video record with failed status
-            logger.error("Video generation failed: %s", str(e))
-            video.status = DBVideoStatus.FAILED
-            metadata["error"] = str(e)
-            video.metadata_json = json.dumps(metadata)
-            await db.commit()
-
-            return GenerateResponse(
-                success=False,
-                video_id=video.id,
-                message=f"Video generation failed: {str(e)}",
-            )
+            video = video_result.scalar_one_or_none()
+            if video:
+                video.video_url = local_video_url
+                video.thumbnail_url = thumbnail_url
+                video.duration = result.get("duration")
+                video.status = DBVideoStatus.COMPLETED
+                await db.commit()
+                logger.info("Video completed and saved: %s", video.id)
+            else:
+                logger.error("Video record not found: %s", video_id)
 
     except Exception as e:
-        logger.error("Failed to start video generation: %s", str(e))
-        return GenerateResponse(
-            success=False,
-            message=f"Failed to start video generation: {str(e)}",
-        )
+        logger.error("Video generation failed: %s", str(e))
+        # Update video record with failed status
+        async with async_session() as db:
+            video_result = await db.execute(
+                select(Video).where(Video.id == video_id)
+            )
+            video = video_result.scalar_one_or_none()
+            if video:
+                video.status = DBVideoStatus.FAILED
+                metadata["error"] = str(e)
+                video.metadata_json = json.dumps(metadata)
+                await db.commit()
