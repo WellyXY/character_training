@@ -220,37 +220,6 @@ async def generate_animation(
 
         logger.info("Video job created: %s", video_job_id)
 
-        # Wait for video completion (up to 5 minutes)
-        result = await parrot.wait_for_video(
-            video_id=video_job_id,
-            timeout=300,
-            poll_interval=5,
-            use_addition_api=use_addition_api,
-        )
-
-        video_url = result.get("video_url")
-        if not video_url:
-            raise ValueError("Video generation completed but no URL returned")
-
-        logger.info("Video generated: %s", video_url)
-
-        # Download and save video locally
-        saved = await storage.save_from_url(video_url, db, prefix="animated")
-        local_video_url = saved["url"]
-
-        # Save thumbnail if available
-        thumbnail_url = None
-        if result.get("thumbnail_url"):
-            try:
-                thumb_saved = await storage.save_from_url(
-                    result["thumbnail_url"],
-                    db,
-                    prefix="thumb"
-                )
-                thumbnail_url = thumb_saved["url"]
-            except Exception as e:
-                logger.warning("Failed to save thumbnail: %s", e)
-
         # Build metadata
         metadata = {
             "original_prompt": request.prompt,
@@ -263,15 +232,15 @@ async def generate_animation(
             metadata["reference_video_url"] = request.reference_video_url
             metadata["reference_video_duration"] = request.reference_video_duration
 
-        # Create Video record
+        # Create Video record immediately with PROCESSING status
         video = Video(
             character_id=request.character_id,
             type=DBVideoType.VLOG,
-            video_url=local_video_url,
-            thumbnail_url=thumbnail_url,
-            duration=result.get("duration"),
+            video_url=None,  # Will be set when complete
+            thumbnail_url=None,
+            duration=None,
             source_image_id=request.image_id,
-            status=DBVideoStatus.COMPLETED,
+            status=DBVideoStatus.PROCESSING,
             metadata_json=json.dumps(metadata),
         )
 
@@ -279,24 +248,75 @@ async def generate_animation(
         await db.commit()
         await db.refresh(video)
 
-        logger.info("Video saved to database: %s", video.id)
+        logger.info("Video record created with PROCESSING status: %s", video.id)
 
-        return GenerateResponse(
-            success=True,
-            video_id=video.id,
-            video_url=local_video_url,
-            message="Video generated successfully",
-        )
+        # Wait for video completion (up to 5 minutes)
+        try:
+            result = await parrot.wait_for_video(
+                video_id=video_job_id,
+                timeout=300,
+                poll_interval=5,
+                use_addition_api=use_addition_api,
+            )
 
-    except TimeoutError as e:
-        logger.error("Video generation timed out: %s", str(e))
-        return GenerateResponse(
-            success=False,
-            message=f"Video generation timed out: {str(e)}",
-        )
+            video_url = result.get("video_url")
+            if not video_url:
+                raise ValueError("Video generation completed but no URL returned")
+
+            logger.info("Video generated: %s", video_url)
+
+            # Download and save video locally
+            saved = await storage.save_from_url(video_url, db, prefix="animated")
+            local_video_url = saved["url"]
+
+            # Save thumbnail if available
+            thumbnail_url = None
+            if result.get("thumbnail_url"):
+                try:
+                    thumb_saved = await storage.save_from_url(
+                        result["thumbnail_url"],
+                        db,
+                        prefix="thumb"
+                    )
+                    thumbnail_url = thumb_saved["url"]
+                except Exception as e:
+                    logger.warning("Failed to save thumbnail: %s", e)
+
+            # Update video record with completed status
+            video.video_url = local_video_url
+            video.thumbnail_url = thumbnail_url
+            video.duration = result.get("duration")
+            video.status = DBVideoStatus.COMPLETED
+
+            await db.commit()
+            await db.refresh(video)
+
+            logger.info("Video completed and saved: %s", video.id)
+
+            return GenerateResponse(
+                success=True,
+                video_id=video.id,
+                video_url=local_video_url,
+                message="Video generated successfully",
+            )
+
+        except (TimeoutError, Exception) as e:
+            # Update video record with failed status
+            logger.error("Video generation failed: %s", str(e))
+            video.status = DBVideoStatus.FAILED
+            metadata["error"] = str(e)
+            video.metadata_json = json.dumps(metadata)
+            await db.commit()
+
+            return GenerateResponse(
+                success=False,
+                video_id=video.id,
+                message=f"Video generation failed: {str(e)}",
+            )
+
     except Exception as e:
-        logger.error("Failed to generate video: %s", str(e))
+        logger.error("Failed to start video generation: %s", str(e))
         return GenerateResponse(
             success=False,
-            message=f"Failed to generate video: {str(e)}",
+            message=f"Failed to start video generation: {str(e)}",
         )

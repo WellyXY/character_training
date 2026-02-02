@@ -108,7 +108,7 @@ class Video(Base):
         default=VideoType.VLOG,
         nullable=False,
     )
-    video_url: Mapped[str] = mapped_column(Text, nullable=False)
+    video_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     source_image_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
