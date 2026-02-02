@@ -35,6 +35,7 @@ export default function ImageEditPanel({
   const [currentSourceImage, setCurrentSourceImage] = useState<string>(
     sourceImage.image_url || ""
   );
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -189,10 +190,12 @@ export default function ImageEditPanel({
               </p>
               {msg.imageUrl && (
                 <div className="mt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={resolveApiUrl(msg.imageUrl)}
                     alt="Generated"
-                    className="rounded-lg max-w-full max-h-64 object-contain"
+                    className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setEnlargedImage(msg.imageUrl!)}
                   />
                 </div>
               )}
@@ -322,6 +325,29 @@ export default function ImageEditPanel({
           </button>
         </form>
       </div>
+
+      {/* Enlarged Image Modal */}
+      {enlargedImage && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setEnlargedImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setEnlargedImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl hover:bg-white/20 z-10"
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolveApiUrl(enlargedImage)}
+            alt="Enlarged"
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
