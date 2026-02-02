@@ -289,13 +289,13 @@ async def generate_animation(
 
                 # 2. Generate pose-matched image using Seedream
                 # Image order: [image 1 = user's selected image, image 2 = first frame from reference video]
+                # NOTE: Do NOT include request.prompt here - that's for video animation, not image generation
                 seedream = get_seedream_client()
                 pose_prompt = (
                     f"Use image 1 (first reference image) for the character's face, body features, clothing, and style. "
                     f"Use image 2 (second reference image) for the exact pose, body position, camera angle, and framing. "
                     f"Combine: character identity from image 1 with pose/composition from image 2. "
-                    f"Photorealistic, seamless blend, matching lighting and skin tone. "
-                    f"{request.prompt}"
+                    f"Photorealistic, seamless blend, matching lighting and skin tone, no text, no watermark, no extra limbs."
                 )
                 logger.info("Generating pose-matched image with Seedream...")
 
