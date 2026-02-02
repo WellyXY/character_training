@@ -208,6 +208,11 @@ class SeedreamClient:
                 payload.get("size"),
                 len(reference_images or []),
             )
+            # Log the full prompt being sent to Seedream
+            logger.info("=" * 60)
+            logger.info("Seedream PROMPT:")
+            logger.info(prompt)
+            logger.info("=" * 60)
             if reference_images:
                 logger.info("Seedream reference images included: %d images", len(reference_images))
                 if "image" in payload:
