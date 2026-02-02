@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db, async_session
-from app.clients.gpt import get_gpt_client
+from app.clients.gemini import get_gemini_client
 from app.clients.parrot import get_parrot_client
 from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service, StorageService
@@ -157,7 +157,7 @@ async def analyze_image_for_animation(
     Uses GPT-4o Vision to understand the image content.
     """
     import base64
-    gpt = get_gpt_client()
+    gemini = get_gemini_client()
     storage = get_storage_service()
 
     # Convert local image to base64 data URL for GPT-4o Vision
@@ -201,7 +201,7 @@ The suggested_prompt should be specific and describe:
 Keep the prompt concise but descriptive (1-2 sentences). Always include "maintain exact facial features" or similar phrasing."""
 
     try:
-        response = await gpt.analyze_image(
+        response = await gemini.analyze_image(
             image_url=image_url,
             prompt=analysis_prompt,
             detail="high",

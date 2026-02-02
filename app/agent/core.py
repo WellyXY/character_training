@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
-from app.clients.gpt import get_gpt_client, GPTClient
+from app.clients.gemini import get_gemini_client, GeminiClient
 from app.agent.skills.character import CharacterSkill
 from app.agent.skills.prompt_optimizer import PromptOptimizerSkill
 from app.agent.skills.image_generator import ImageGeneratorSkill
@@ -170,7 +170,7 @@ class Agent:
     """Main agent class with o1-mini reasoning and skill execution."""
 
     def __init__(self):
-        self.gpt_client = get_gpt_client()
+        self.gemini_client = get_gemini_client()
         self.sessions: dict[str, ConversationSession] = {}
 
         # Initialize skills
@@ -338,7 +338,7 @@ Current State:
         last_message = session.messages[-1].content if session.messages else ""
 
         try:
-            result = await self.gpt_client.chat_reasoning_json(
+            result = await self.gemini_client.chat_reasoning_json(
                 messages=messages,
                 max_tokens=2000,
             )
@@ -972,7 +972,7 @@ Current State:
         ]
 
         try:
-            result = await self.gpt_client.chat_reasoning_json(
+            result = await self.gemini_client.chat_reasoning_json(
                 messages=messages,
                 max_tokens=1000,
             )

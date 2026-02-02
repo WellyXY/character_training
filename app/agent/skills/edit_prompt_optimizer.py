@@ -5,7 +5,7 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.skills.base import BaseSkill
-from app.clients.gpt import get_gpt_client
+from app.clients.gemini import get_gemini_client
 from app.services.storage import get_storage_service
 
 
@@ -84,7 +84,7 @@ class EditPromptOptimizerSkill(BaseSkill):
     description = "Optimize edit prompts for image editing"
 
     def __init__(self):
-        self.gpt_client = get_gpt_client()
+        self.gemini_client = get_gemini_client()
         self.storage = get_storage_service()
 
     async def _get_image_url_or_base64(self, image_path: str, db: AsyncSession) -> str:
@@ -136,7 +136,7 @@ class EditPromptOptimizerSkill(BaseSkill):
         prompt = IMAGE_ANALYSIS_FOR_EDIT_PROMPT.format(edit_instruction=edit_instruction)
 
         try:
-            analysis = await self.gpt_client.analyze_image(
+            analysis = await self.gemini_client.analyze_image(
                 image_url=image_url,
                 prompt=prompt,
                 detail="high",
@@ -214,7 +214,7 @@ Output ONLY the optimized prompt.""",
         ]
 
         try:
-            optimized = await self.gpt_client.chat_creative(
+            optimized = await self.gemini_client.chat_creative(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=300,

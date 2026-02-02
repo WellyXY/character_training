@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     gpt_reasoning_model: str = "o1-mini"
     gpt_creative_model: str = "gpt-4o"
 
+    # Google Gemini
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_vision_model: str = "gemini-2.0-flash"
+
     # Seedream (Image Generation)
     seedream_api_key: str = ""
     seedream_server_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
