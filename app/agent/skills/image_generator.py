@@ -233,9 +233,10 @@ class ImageGeneratorSkill(BaseSkill):
 
             if reference_image_mode == "face_swap":
                 # Face swap: user reference first (preserve pose/background/outfit),
-                # base image for face extraction only
-                reference_images = [user_reference_url] + list(base_image_urls)
-                logger.info(f"[ImageGenerator] Face swap mode: user reference first")
+                # only 1 base image for face extraction (too many base images = base image dominates)
+                face_base_images = base_image_urls[:1] if base_image_urls else []
+                reference_images = [user_reference_url] + list(face_base_images)
+                logger.info(f"[ImageGenerator] Face swap mode: user reference first, 1 base image for face only")
             else:
                 # Other modes: base images first for character consistency
                 reference_images = list(base_image_urls)
