@@ -64,6 +64,7 @@ export default function AnimateModal({
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [addSubtitles, setAddSubtitles] = useState(false);
+  const [matchReferencePose, setMatchReferencePose] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Analyze image on mount
@@ -179,6 +180,7 @@ export default function AnimateModal({
       reference_video_url: referenceVideo?.url ?? undefined,
       reference_video_duration: referenceVideo?.duration ?? undefined,
       add_subtitles: addSubtitles,
+      match_reference_pose: referenceVideo ? matchReferencePose : false,
     };
     console.log("=== AnimateModal Request ===");
     console.log("Request data:", requestData);
@@ -381,19 +383,38 @@ export default function AnimateModal({
                     </div>
                   )}
 
-                  {/* Subtitle Toggle */}
-                  <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={addSubtitles}
-                      onChange={(e) => setAddSubtitles(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
-                    />
-                    <div className="flex-1">
-                      <span className="text-sm text-white font-mono">Add Subtitles</span>
-                      <p className="text-xs text-gray-500 font-mono mt-0.5">Auto-generate captions using AI</p>
-                    </div>
-                  </label>
+                  {/* Options */}
+                  <div className="space-y-2 mb-4">
+                    {/* Match Reference Pose Toggle - only shown when reference video is present */}
+                    {referenceVideo && (
+                      <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={matchReferencePose}
+                          onChange={(e) => setMatchReferencePose(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm text-white font-mono">Match Reference Pose</span>
+                          <p className="text-xs text-gray-500 font-mono mt-0.5">Generate intermediate image matching the video&apos;s first frame pose</p>
+                        </div>
+                      </label>
+                    )}
+
+                    {/* Subtitle Toggle */}
+                    <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={addSubtitles}
+                        onChange={(e) => setAddSubtitles(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm text-white font-mono">Add Subtitles</span>
+                        <p className="text-xs text-gray-500 font-mono mt-0.5">Auto-generate captions using AI</p>
+                      </div>
+                    </label>
+                  </div>
 
                   {/* Generate Button */}
                   <button
