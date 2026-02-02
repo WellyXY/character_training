@@ -19,6 +19,7 @@ from app.schemas.agent import (
     GenerationTaskStatus,
 )
 from app.agent.core import Agent, get_agent
+from app.agent.skills.edit_prompt_optimizer import EditPromptOptimizerSkill
 from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service
 from app.models.image import Image, ImageType, ImageStatus
@@ -203,6 +204,7 @@ class DirectEditRequest(BaseModel):
     source_image_path: str
     character_id: str
     aspect_ratio: str = "9:16"
+    ai_optimize: bool = False  # If True, use Gemini to optimize prompt before generation
 
 
 class DirectEditResponse(BaseModel):
@@ -242,11 +244,14 @@ async def direct_image_edit(
 
     This is a simplified flow that bypasses the agent GPT analysis.
     The source image is used as a reference for the generation.
+
+    If ai_optimize=True, the prompt will be optimized by Gemini before generation.
     """
     logger.info(f"=== /agent/image-edit/direct request ===")
     logger.info(f"Prompt: {request.prompt}")
     logger.info(f"Character ID: {request.character_id}")
     logger.info(f"Aspect ratio: {request.aspect_ratio}")
+    logger.info(f"AI optimize: {request.ai_optimize}")
     # Only show filename for source image
     source_display = request.source_image_path.split("/")[-1] if "/" in request.source_image_path else request.source_image_path[:50]
     logger.info(f"Source image: {source_display}")
@@ -257,6 +262,19 @@ async def direct_image_edit(
 
         width, height = _parse_aspect_ratio(request.aspect_ratio)
 
+        # Optimize prompt with Gemini if ai_optimize is enabled
+        final_prompt = request.prompt
+        if request.ai_optimize:
+            logger.info("AI optimize enabled, optimizing prompt with Gemini...")
+            optimizer = EditPromptOptimizerSkill()
+            optimized_prompt, detected_type, analysis = await optimizer.optimize(
+                edit_instruction=request.prompt,
+                source_image_path=request.source_image_path,
+                db=db,
+            )
+            final_prompt = optimized_prompt
+            logger.info(f"Optimized prompt: {final_prompt[:200]}...")
+
         # Use the source image as reference for generation
         source_full_url = storage.get_full_url(request.source_image_path)
         reference_images = [source_full_url]
@@ -265,7 +283,7 @@ async def direct_image_edit(
 
         # Generate image with Seedream
         result = await seedream.generate(
-            prompt=request.prompt,
+            prompt=final_prompt,
             width=width,
             height=height,
             reference_images=reference_images,
@@ -285,7 +303,9 @@ async def direct_image_edit(
 
         # Build metadata for later saving
         metadata = {
-            "prompt": request.prompt,
+            "prompt": final_prompt,
+            "original_prompt": request.prompt,
+            "ai_optimized": request.ai_optimize,
             "width": width,
             "height": height,
             "seed": result.get("seed"),
