@@ -137,6 +137,7 @@ class GenerateRequest(BaseModel):
     reference_video_duration: Optional[float] = None
     add_subtitles: bool = False
     match_reference_pose: bool = False
+    pose_image_aspect_ratio: str = "9:16"  # Aspect ratio for pose-matched image generation
 
 
 class GenerateResponse(BaseModel):
@@ -328,10 +329,19 @@ async def generate_animation(
 
                 logger.info("Generating pose-matched image with Seedream using %d reference images...", len(reference_images_for_pose))
 
+                # Parse aspect ratio to width/height
+                aspect_ratios = {
+                    "9:16": (1024, 1820),
+                    "1:1": (1024, 1024),
+                    "16:9": (1820, 1024),
+                }
+                pose_width, pose_height = aspect_ratios.get(request.pose_image_aspect_ratio, (1024, 1820))
+                logger.info("Pose-matched image aspect ratio: %s (%dx%d)", request.pose_image_aspect_ratio, pose_width, pose_height)
+
                 pose_matched_result = await seedream.generate(
                     prompt=pose_prompt,
-                    width=1024,
-                    height=1024,
+                    width=pose_width,
+                    height=pose_height,
                     reference_images=reference_images_for_pose,
                 )
 
