@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Image } from "@/lib/types";
-import { resolveApiUrl, generateDirect, ApiError } from "@/lib/api";
+import { resolveApiUrl, generateDirect, getImage, ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface CustomPromptModalProps {
@@ -36,9 +36,57 @@ export default function CustomPromptModal({
         prompt: prompt.trim(),
         aspect_ratio: aspectRatio,
       });
-      setResultUrl(image.image_url || null);
-      onGenerated();
-      refreshUser(); // Refresh token balance
+
+      refreshUser(); // Refresh token balance immediately (token is deducted at start)
+
+      // If image_url is already available (legacy flow), show it
+      if (image.image_url) {
+        setResultUrl(image.image_url);
+        setLoading(false);
+        onGenerated();
+        return;
+      }
+
+      // Otherwise, poll for completion
+      const pollInterval = 3000;
+      const maxPolls = 60; // 3 minutes max
+      let polls = 0;
+
+      const pollForCompletion = async () => {
+        try {
+          const updatedImage = await getImage(image.id);
+          if (updatedImage.status === "completed" && updatedImage.image_url) {
+            setResultUrl(updatedImage.image_url);
+            setLoading(false);
+            onGenerated();
+          } else if (updatedImage.status === "failed") {
+            setError(updatedImage.error_message || "Generation failed");
+            setLoading(false);
+            refreshUser();
+          } else {
+            // Still generating
+            polls++;
+            if (polls < maxPolls) {
+              setTimeout(pollForCompletion, pollInterval);
+            } else {
+              setError("Generation timed out. Check the gallery for your image.");
+              setLoading(false);
+            }
+          }
+        } catch (pollErr) {
+          console.error("Poll error:", pollErr);
+          polls++;
+          if (polls < maxPolls) {
+            setTimeout(pollForCompletion, pollInterval);
+          } else {
+            setError("Failed to check generation status");
+            setLoading(false);
+          }
+        }
+      };
+
+      // Start polling after a delay
+      setTimeout(pollForCompletion, pollInterval);
     } catch (err) {
       if (err instanceof ApiError && err.status === 402) {
         setError("Insufficient tokens. Please contact your administrator.");
@@ -46,7 +94,6 @@ export default function CustomPromptModal({
         setError(err instanceof Error ? err.message : "Generation failed");
       }
       refreshUser(); // Refresh in case balance changed
-    } finally {
       setLoading(false);
     }
   };

@@ -628,6 +628,36 @@ export default function ContentGallery({
                 )
               )}
 
+            {/* Generating Base Images (for base tab) */}
+            {activeTab === "base" &&
+              generatingImages.filter(img => img.type === "base").map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm font-medium text-blue-400 mb-1 font-mono uppercase tracking-wide">
+                      Generating...
+                    </p>
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full w-1/3 bg-blue-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                    </div>
+                    {img.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
+                        {img.metadata.prompt}
+                      </p>
+                    )}
+                  </div>
+                  <div className="absolute top-2 left-2 z-20">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      Base
+                    </span>
+                  </div>
+                </div>
+              ))}
+
             {/* Base Images (only for base tab) */}
             {activeTab === "base" &&
               baseImages.filter(img => img.image_url).map((img) => (
@@ -712,6 +742,36 @@ export default function ContentGallery({
                   <div className="absolute top-2 left-2">
                     <span className="rounded-full bg-green-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm font-mono uppercase tracking-wide">
                       Base
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+            {/* Generating Images (for images tab) */}
+            {activeTab === "images" &&
+              generatingImages.filter(img => img.type !== "base").map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-[9/16] overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex flex-col"
+                >
+                  <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+                    <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm font-medium text-blue-400 mb-1 font-mono uppercase tracking-wide">
+                      Generating...
+                    </p>
+                    <div className="w-full max-w-[120px] h-1.5 bg-white/10 rounded-full overflow-hidden mb-3">
+                      <div className="h-full w-1/3 bg-blue-500 animate-[slide_1.5s_ease-in-out_infinite]" />
+                    </div>
+                    {img.metadata?.prompt && (
+                      <p className="text-[10px] text-gray-400 text-center line-clamp-3 px-2 font-mono">
+                        {img.metadata.prompt}
+                      </p>
+                    )}
+                  </div>
+                  <div className="absolute top-2 left-2 z-20">
+                    <span className="rounded-full bg-blue-500/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm flex items-center gap-1 font-mono uppercase tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      Content
                     </span>
                   </div>
                 </div>
