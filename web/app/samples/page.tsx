@@ -6,6 +6,7 @@ import type { SamplePost } from "@/lib/types";
 import { listSamples, resolveApiUrl, uploadSample, importSampleFromUrl, updateSample, deleteSample, getSamplesStats, type SampleStats } from "@/lib/api";
 import SampleCard from "@/components/SampleCard";
 import AppNavbar from "@/components/AppNavbar";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 type FilterType = "all" | "image" | "video";
 const PAGE_SIZE = 50;
@@ -719,12 +720,14 @@ function SamplesContent() {
 
 export default function SamplesPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <span className="text-amber-400 animate-pulse font-mono">Loading...</span>
-      </div>
-    }>
-      <SamplesContent />
-    </Suspense>
+    <ProtectedRoute>
+      <Suspense fallback={
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <span className="text-amber-400 animate-pulse font-mono">Loading...</span>
+        </div>
+      }>
+        <SamplesContent />
+      </Suspense>
+    </ProtectedRoute>
   );
 }

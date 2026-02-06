@@ -18,6 +18,15 @@ import type {
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const API_ROOT = `${API_BASE}/api/v1`;
 
+// Token storage key (must match AuthContext)
+const TOKEN_KEY = "auth_token";
+
+// Get auth token from localStorage
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 export function resolveApiUrl(url: string): string {
   if (!url) return url;
   if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -26,24 +35,63 @@ export function resolveApiUrl(url: string): string {
   return url.startsWith("/") ? `${API_BASE}${url}` : `${API_BASE}/${url}`;
 }
 
+// Custom error class for API errors with status code
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> ?? {}),
+  };
+
+  // Add Authorization header if token exists
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_ROOT}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!res.ok) {
-    let detail = "";
+    let detail: unknown = "";
     try {
       const data = await res.json();
-      detail = data?.detail ? String(data.detail) : JSON.stringify(data);
+      detail = data?.detail ?? data;
     } catch {
       detail = await res.text();
     }
-    throw new Error(detail || `Request failed (${res.status})`);
+
+    // Handle specific error codes
+    if (res.status === 401) {
+      // Unauthorized - clear token and redirect to login
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem("auth_user");
+        window.location.href = "/login";
+      }
+      throw new ApiError("Session expired. Please log in again.", 401, detail);
+    }
+
+    if (res.status === 402) {
+      // Payment Required - insufficient tokens
+      throw new ApiError("Insufficient tokens", 402, detail);
+    }
+
+    const message = typeof detail === "string" ? detail : JSON.stringify(detail);
+    throw new ApiError(message || `Request failed (${res.status})`, res.status, detail);
   }
 
   if (res.status === 204) {
@@ -145,12 +193,27 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_ROOT}/uploads`, {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem("auth_user");
+        window.location.href = "/login";
+      }
+      throw new ApiError("Session expired. Please log in again.", 401);
+    }
     let detail = "";
     try {
       const data = await res.json();
@@ -158,7 +221,7 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
     } catch {
       detail = await res.text();
     }
-    throw new Error(detail || `Upload failed (${res.status})`);
+    throw new ApiError(detail || `Upload failed (${res.status})`, res.status);
   }
 
   return (await res.json()) as UploadResponse;
@@ -340,9 +403,16 @@ export async function uploadSample(
   if (creatorName) formData.append("creator_name", creatorName);
   if (tags) formData.append("tags", tags);
 
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_ROOT}/samples/upload`, {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) {
@@ -353,7 +423,7 @@ export async function uploadSample(
     } catch {
       detail = await res.text();
     }
-    throw new Error(detail || `Upload failed (${res.status})`);
+    throw new ApiError(detail || `Upload failed (${res.status})`, res.status);
   }
 
   return (await res.json()) as SamplePost;
@@ -367,9 +437,16 @@ export async function importSampleFromUrl(
   formData.append("url", url);
   if (tags) formData.append("tags", tags);
 
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_ROOT}/samples/import-url`, {
     method: "POST",
     body: formData,
+    headers,
   });
 
   if (!res.ok) {
@@ -380,7 +457,7 @@ export async function importSampleFromUrl(
     } catch {
       detail = await res.text();
     }
-    throw new Error(detail || `Import failed (${res.status})`);
+    throw new ApiError(detail || `Import failed (${res.status})`, res.status);
   }
 
   return (await res.json()) as SamplePost;

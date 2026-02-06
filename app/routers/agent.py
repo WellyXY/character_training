@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import get_db
 from app.schemas.agent import (
@@ -23,6 +24,10 @@ from app.agent.skills.edit_prompt_optimizer import EditPromptOptimizerSkill
 from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service
 from app.models.image import Image, ImageType, ImageStatus
+from app.models.character import Character
+from app.models.user import User
+from app.auth import get_current_user
+from app.services.tokens import deduct_tokens, refund_tokens
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,6 +38,7 @@ async def agent_chat(
     request: AgentChatRequest,
     db: AsyncSession = Depends(get_db),
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Send a message to the agent.
@@ -78,6 +84,7 @@ async def agent_confirm(
     request: AgentConfirmRequest,
     db: AsyncSession = Depends(get_db),
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Confirm a pending generation.
@@ -103,6 +110,7 @@ async def agent_confirm(
 async def agent_cancel(
     session_id: str,
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """Cancel a pending generation."""
     agent.cancel_pending(session_id)
@@ -113,6 +121,7 @@ async def agent_cancel(
 async def agent_clear(
     session_id: str,
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """Clear conversation history for a session."""
     agent.clear_session(session_id)
@@ -124,6 +133,7 @@ async def image_edit_chat(
     request: ImageEditRequest,
     db: AsyncSession = Depends(get_db),
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Send an image edit request to the agent.
@@ -149,6 +159,7 @@ async def image_edit_confirm(
     request: ImageEditConfirmRequest,
     db: AsyncSession = Depends(get_db),
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Confirm a pending image edit.
@@ -174,6 +185,7 @@ async def get_task_status(
     task_id: str,
     session_id: str = Query(..., description="Session ID"),
     agent: Agent = Depends(get_agent),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get the status of a background generation task.
@@ -238,15 +250,31 @@ def _parse_aspect_ratio(aspect_ratio: str) -> tuple[int, int]:
 async def direct_image_edit(
     request: DirectEditRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Direct image edit: use prompt + source image to generate a new image.
+    Direct image edit: use prompt + source image to generate a new image (costs 1 token).
 
     This is a simplified flow that bypasses the agent GPT analysis.
     The source image is used as a reference for the generation.
 
     If ai_optimize=True, the prompt will be optimized by Gemini before generation.
     """
+    # Verify character belongs to user
+    char_result = await db.execute(
+        select(Character)
+        .where(Character.id == request.character_id)
+        .where(Character.user_id == current_user.id)
+    )
+    if not char_result.scalar_one_or_none():
+        return DirectEditResponse(
+            success=False,
+            message="Character not found",
+        )
+
+    # Deduct token before generation
+    await deduct_tokens(current_user, "image_generation", db)
+    await db.commit()
     logger.info(f"=== /agent/image-edit/direct request ===")
     logger.info(f"Prompt: {request.prompt}")
     logger.info(f"Character ID: {request.character_id}")
@@ -328,6 +356,9 @@ async def direct_image_edit(
 
     except Exception as e:
         logger.exception(f"Error in direct_image_edit: {e}")
+        # Refund token on failure
+        await refund_tokens(current_user, "image_generation", db)
+        await db.commit()
         return DirectEditResponse(
             success=False,
             message=f"Generation failed: {str(e)}",
@@ -338,6 +369,7 @@ async def direct_image_edit(
 async def save_edited_image(
     request: SaveEditRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Save a generated edit image to the gallery.

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db, async_session
 from app.models.character import Character, CharacterStatus as DBCharacterStatus
 from app.models.image import Image, ImageType as DBImageType, ImageStatus as DBImageStatus
+from app.models.user import User
 from app.schemas.character import (
     CharacterCreate,
     CharacterUpdate,
@@ -20,6 +21,8 @@ from app.schemas.character import (
     CharacterStatus,
 )
 from app.services.storage import get_storage_service, StorageService
+from app.auth import get_current_user
+from app.services.tokens import deduct_tokens, refund_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +53,15 @@ def _character_to_response(character: Character, base_image_ids: list[str]) -> C
 
 
 @router.get("/characters", response_model=list[CharacterResponse])
-async def list_characters(db: AsyncSession = Depends(get_db)):
-    """List all characters."""
+async def list_characters(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all characters for the current user."""
     result = await db.execute(
-        select(Character).order_by(Character.created_at.desc())
+        select(Character)
+        .where(Character.user_id == current_user.id)
+        .order_by(Character.created_at.desc())
     )
     characters = result.scalars().all()
 
@@ -76,13 +84,15 @@ async def list_characters(db: AsyncSession = Depends(get_db)):
 async def create_character(
     data: CharacterCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create a new character."""
+    """Create a new character for the current user."""
     character = Character(
         name=data.name,
         description=data.description,
         gender=data.gender,
         status=DBCharacterStatus.DRAFT,
+        user_id=current_user.id,
     )
     db.add(character)
     await db.commit()
@@ -95,10 +105,13 @@ async def create_character(
 async def get_character(
     character_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get a character by ID."""
+    """Get a character by ID (must belong to current user)."""
     result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     character = result.scalar_one_or_none()
 
@@ -122,10 +135,13 @@ async def update_character(
     character_id: str,
     data: CharacterUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a character."""
+    """Update a character (must belong to current user)."""
     result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     character = result.scalar_one_or_none()
 
@@ -158,10 +174,13 @@ async def update_character(
 async def delete_character(
     character_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a character."""
+    """Delete a character (must belong to current user)."""
     result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     character = result.scalar_one_or_none()
 
@@ -194,6 +213,7 @@ async def _generate_single_base_image(
     character_id: str,
     image_id: str,
     prompt: str,
+    user_id: str,
     reference_image_paths: Optional[list[str]] = None,
 ):
     """Background task: generate one base image and auto-approve it."""
@@ -224,15 +244,29 @@ async def _generate_single_base_image(
                 logger.info(f"Base image {image_id} generated and auto-approved")
             else:
                 logger.error(f"Base image {image_id} generation failed: {result.get('error')}")
+                # Refund token on failure
+                from app.models.user import User as UserModel
+                user_res = await db.execute(sel(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                    await db.commit()
         except Exception as e:
             logger.error(f"Base image {image_id} generation error: {e}")
             try:
-                res = await db.execute(select(Image).where(Image.id == image_id))
+                from sqlalchemy import select as sel
+                res = await db.execute(sel(Image).where(Image.id == image_id))
                 image = res.scalar_one_or_none()
                 if image:
                     image.status = DBImageStatus.FAILED
                     image.error_message = str(e)
-                    await db.commit()
+                # Refund token on failure
+                from app.models.user import User as UserModel
+                user_res = await db.execute(sel(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                await db.commit()
             except Exception:
                 pass
 
@@ -242,11 +276,14 @@ async def generate_base_images(
     character_id: str,
     data: GenerateBaseImagesRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Generate 3 base images for a character (white t-shirt, white bg, different poses)."""
-    # Verify character exists
+    # Verify character exists and belongs to user
     result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     character = result.scalar_one_or_none()
     if not character:
@@ -260,6 +297,19 @@ async def generate_base_images(
         f"A photorealistic portrait of a {gender}, {description}, wearing a plain white t-shirt, standing against a clean white background, turned slightly to the left at a three-quarter angle, gentle smile, soft studio lighting, half-body shot",
         f"A photorealistic portrait of a {gender}, {description}, wearing a plain white t-shirt, standing against a clean white background, slight side angle looking over shoulder, natural expression, even studio lighting, half-body shot",
     ]
+
+    # Check and deduct tokens for all 3 images upfront (3 tokens total)
+    total_cost = len(prompts)  # 1 token per image
+    if current_user.token_balance < total_cost:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "insufficient_tokens",
+                "message": f"Insufficient tokens. Required: {total_cost}, Available: {current_user.token_balance}",
+                "required": total_cost,
+                "available": current_user.token_balance,
+            }
+        )
 
     tasks = []
     for prompt in prompts:
@@ -278,12 +328,17 @@ async def generate_base_images(
         await db.commit()
         await db.refresh(image)
 
+        # Deduct token for this image
+        await deduct_tokens(current_user, "image_generation", db, image.id)
+        await db.commit()
+
         # Spawn background generation
         asyncio.create_task(
             _generate_single_base_image(
                 character_id=character_id,
                 image_id=image.id,
                 prompt=prompt,
+                user_id=current_user.id,
                 reference_image_paths=data.reference_image_paths,
             )
         )
@@ -298,8 +353,9 @@ async def upload_file(
     file: UploadFile = File(...),
     storage: StorageService = Depends(get_storage_service),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Upload a file."""
+    """Upload a file (requires authentication)."""
     result = await storage.save_upload(file, db)
     await db.commit()
     return result

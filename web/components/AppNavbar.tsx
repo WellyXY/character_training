@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AppNavbarProps {
   loading?: boolean;
@@ -10,8 +11,15 @@ interface AppNavbarProps {
 
 export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout, isAuthenticated } = useAuth();
   const isInspiration = pathname.startsWith("/samples");
   const isStudio = pathname === "/";
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#333] bg-black/50 backdrop-blur-md">
@@ -71,8 +79,8 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
           </Link>
         </div>
 
-        {/* Status */}
-        <div className="flex items-center gap-4 min-w-[120px] justify-end">
+        {/* Status + User Info */}
+        <div className="flex items-center gap-4 min-w-[200px] justify-end">
           {loading && (
             <span className="text-xs text-amber-400 animate-pulse">
               Processing...
@@ -80,6 +88,61 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
           )}
           {statusText && !loading && (
             <span className="text-xs text-gray-400">{statusText}</span>
+          )}
+
+          {/* Token Balance */}
+          {isAuthenticated && user && (
+            <div className="flex items-center gap-3">
+              {/* Token Display */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1a1a1a] border border-[#333]">
+                <svg
+                  className="w-4 h-4 text-amber-400"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="12" cy="12" r="10" fill="currentColor" />
+                  <text
+                    x="12"
+                    y="16"
+                    textAnchor="middle"
+                    fontSize="10"
+                    fill="black"
+                    fontWeight="bold"
+                  >
+                    T
+                  </text>
+                </svg>
+                <span className="text-sm font-mono font-bold text-amber-400">
+                  {user.token_balance}
+                </span>
+              </div>
+
+              {/* User Menu */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 font-mono">
+                  {user.username}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wide text-gray-400 hover:text-white hover:bg-[#222] transition-all border border-[#333]"
+                  title="Logout"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

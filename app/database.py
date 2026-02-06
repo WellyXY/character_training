@@ -25,6 +25,7 @@ class Base(DeclarativeBase):
 
 # Ensure all models are imported so metadata is complete
 from app.models.file_blob import FileBlob  # noqa: F401
+from app.models.user import User, TokenTransaction  # noqa: F401
 
 
 async def get_db() -> AsyncSession:
@@ -169,6 +170,22 @@ def _run_migrations(conn):
                         logger.info(f"Normalized {table_name}.{col_name} values to lowercase")
                     except Exception as e:
                         logger.warning(f"Could not normalize {table_name}.{col_name}: {e}")
+
+        # Add user_id column to characters table if missing
+        if "characters" in inspector.get_table_names():
+            existing_columns = {col["name"] for col in inspector.get_columns("characters")}
+            if "user_id" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE characters ADD COLUMN user_id VARCHAR(36)"))
+                    logger.info("Added user_id column to characters table")
+                    # Create index for user_id
+                    try:
+                        conn.execute(text("CREATE INDEX idx_characters_user_id ON characters(user_id)"))
+                        logger.info("Created index idx_characters_user_id on characters table")
+                    except Exception as e:
+                        logger.warning(f"Could not create index idx_characters_user_id: {e}")
+                except Exception as e:
+                    logger.warning(f"Could not add user_id column to characters: {e}")
 
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")

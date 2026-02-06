@@ -10,9 +10,12 @@ from app.database import get_db
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
 from app.models.image import Image
 from app.models.character import Character
+from app.models.user import User
 from app.schemas.video import VideoResponse, VideoMetadata, VideoType, VideoStatus
 from app.agent.skills.video_generator import VideoGeneratorSkill
 from app.services.storage import get_storage_service
+from app.auth import get_current_user
+from app.services.tokens import deduct_tokens
 
 router = APIRouter()
 
@@ -44,11 +47,14 @@ def _video_to_response(video: Video) -> VideoResponse:
 async def list_character_videos(
     character_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List videos for a character."""
-    # Verify character exists
+    """List videos for a character (must belong to current user)."""
+    # Verify character exists and belongs to user
     char_result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     if not char_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Character not found")
@@ -67,10 +73,14 @@ async def list_character_videos(
 async def get_video(
     video_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get a video by ID."""
+    """Get a video by ID (character must belong to current user)."""
     result = await db.execute(
-        select(Video).where(Video.id == video_id)
+        select(Video)
+        .join(Character)
+        .where(Video.id == video_id)
+        .where(Character.user_id == current_user.id)
     )
     video = result.scalar_one_or_none()
 
@@ -84,10 +94,14 @@ async def get_video(
 async def delete_video(
     video_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a video."""
+    """Delete a video (character must belong to current user)."""
     result = await db.execute(
-        select(Video).where(Video.id == video_id)
+        select(Video)
+        .join(Character)
+        .where(Video.id == video_id)
+        .where(Character.user_id == current_user.id)
     )
     video = result.scalar_one_or_none()
 
@@ -104,15 +118,22 @@ async def delete_video(
 async def retry_video(
     video_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Retry video generation using stored metadata."""
+    """Retry video generation (character must belong to current user, costs 2 tokens)."""
     result = await db.execute(
-        select(Video).where(Video.id == video_id)
+        select(Video)
+        .join(Character)
+        .where(Video.id == video_id)
+        .where(Character.user_id == current_user.id)
     )
     video = result.scalar_one_or_none()
 
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    # Deduct tokens for retry
+    await deduct_tokens(current_user, "video_generation", db, video_id)
 
     metadata: dict[str, Any] = {}
     if video.metadata_json:

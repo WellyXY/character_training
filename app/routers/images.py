@@ -10,8 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.image import Image, ImageType as DBImageType
 from app.models.character import Character
+from app.models.user import User
 from app.schemas.image import ImageResponse, ImageMetadata, ImageType, ImageStatus
 from app.agent.skills.image_generator import ImageGeneratorSkill
+from app.auth import get_current_user
+from app.services.tokens import deduct_tokens
 
 router = APIRouter()
 
@@ -58,11 +61,14 @@ async def list_character_images(
     character_id: str,
     image_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List images for a character."""
-    # Verify character exists
+    """List images for a character (must belong to current user)."""
+    # Verify character exists and belongs to user
     char_result = await db.execute(
-        select(Character).where(Character.id == character_id)
+        select(Character)
+        .where(Character.id == character_id)
+        .where(Character.user_id == current_user.id)
     )
     if not char_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Character not found")
@@ -87,10 +93,14 @@ async def list_character_images(
 async def get_image(
     image_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get an image by ID."""
+    """Get an image by ID (character must belong to current user)."""
     result = await db.execute(
-        select(Image).where(Image.id == image_id)
+        select(Image)
+        .join(Character)
+        .where(Image.id == image_id)
+        .where(Character.user_id == current_user.id)
     )
     image = result.scalar_one_or_none()
 
@@ -104,10 +114,14 @@ async def get_image(
 async def approve_image(
     image_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Approve an image (mark as base image if type is base)."""
+    """Approve an image (character must belong to current user)."""
     result = await db.execute(
-        select(Image).where(Image.id == image_id)
+        select(Image)
+        .join(Character)
+        .where(Image.id == image_id)
+        .where(Character.user_id == current_user.id)
     )
     image = result.scalar_one_or_none()
 
@@ -140,10 +154,14 @@ async def approve_image(
 async def set_as_base(
     image_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Set an image as base, replacing the oldest base image if at the limit."""
+    """Set an image as base (character must belong to current user)."""
     result = await db.execute(
-        select(Image).where(Image.id == image_id)
+        select(Image)
+        .join(Character)
+        .where(Image.id == image_id)
+        .where(Character.user_id == current_user.id)
     )
     image = result.scalar_one_or_none()
 
@@ -185,10 +203,14 @@ async def set_as_base(
 async def delete_image(
     image_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete an image."""
+    """Delete an image (character must belong to current user)."""
     result = await db.execute(
-        select(Image).where(Image.id == image_id)
+        select(Image)
+        .join(Character)
+        .where(Image.id == image_id)
+        .where(Character.user_id == current_user.id)
     )
     image = result.scalar_one_or_none()
 
@@ -205,15 +227,22 @@ async def delete_image(
 async def retry_image(
     image_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Retry image generation using stored metadata."""
+    """Retry image generation (character must belong to current user, costs 1 token)."""
     result = await db.execute(
-        select(Image).where(Image.id == image_id)
+        select(Image)
+        .join(Character)
+        .where(Image.id == image_id)
+        .where(Character.user_id == current_user.id)
     )
     image = result.scalar_one_or_none()
 
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
+
+    # Deduct token for retry
+    await deduct_tokens(current_user, "image_generation", db, image_id)
 
     metadata: dict[str, Any] = {}
     if image.metadata_json:
@@ -292,15 +321,22 @@ class DirectGenerateRequest(BaseModel):
 async def generate_direct(
     request: DirectGenerateRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Generate an image directly with a custom prompt + base images, bypassing the AI agent."""
-    # Verify character exists
+    """Generate an image directly (costs 1 token, character must belong to current user)."""
+    # Verify character exists and belongs to user
     char_result = await db.execute(
-        select(Character).where(Character.id == request.character_id)
+        select(Character)
+        .where(Character.id == request.character_id)
+        .where(Character.user_id == current_user.id)
     )
     character = char_result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+
+    # Deduct token before generation
+    await deduct_tokens(current_user, "image_generation", db)
+    await db.commit()
 
     skill = ImageGeneratorSkill()
     result = await skill.execute(
@@ -314,6 +350,10 @@ async def generate_direct(
     )
 
     if not result.get("success"):
+        # Refund token on failure
+        from app.services.tokens import refund_tokens
+        await refund_tokens(current_user, "image_generation", db)
+        await db.commit()
         raise HTTPException(
             status_code=500,
             detail=result.get("error", "Generation failed"),

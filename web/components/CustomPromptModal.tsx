@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { Image } from "@/lib/types";
-import { resolveApiUrl, generateDirect } from "@/lib/api";
+import { resolveApiUrl, generateDirect, ApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CustomPromptModalProps {
   characterId: string;
@@ -17,6 +18,7 @@ export default function CustomPromptModal({
   onClose,
   onGenerated,
 }: CustomPromptModalProps) {
+  const { refreshUser } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [loading, setLoading] = useState(false);
@@ -36,8 +38,14 @@ export default function CustomPromptModal({
       });
       setResultUrl(image.image_url || null);
       onGenerated();
+      refreshUser(); // Refresh token balance
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
+      if (err instanceof ApiError && err.status === 402) {
+        setError("Insufficient tokens. Please contact your administrator.");
+      } else {
+        setError(err instanceof Error ? err.message : "Generation failed");
+      }
+      refreshUser(); // Refresh in case balance changed
     } finally {
       setLoading(false);
     }

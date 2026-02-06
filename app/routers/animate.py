@@ -20,6 +20,10 @@ from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service, StorageService
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
 from app.models.image import Image, ImageType, ImageStatus
+from app.models.character import Character
+from app.models.user import User
+from app.auth import get_current_user
+from app.services.tokens import deduct_tokens, refund_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +156,7 @@ class GenerateResponse(BaseModel):
 async def analyze_image_for_animation(
     request: AnalyzeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Analyze an image and suggest video generation prompts.
@@ -245,13 +250,27 @@ Keep the prompt concise but descriptive (1-2 sentences). Always include "maintai
 async def generate_animation(
     request: GenerateRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Generate a video from an image using Parrot API.
+    Generate a video from an image using Parrot API (costs 2 tokens).
     If reference_video_url is provided, uses Pika Addition API with pose-matching.
     Otherwise, uses standard image-to-video API.
     Creates a Video record in the database.
     """
+    # Verify character belongs to user
+    char_result = await db.execute(
+        select(Character)
+        .where(Character.id == request.character_id)
+        .where(Character.user_id == current_user.id)
+    )
+    if not char_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Deduct tokens for video generation (2 tokens)
+    await deduct_tokens(current_user, "video_generation", db)
+    await db.commit()
+
     parrot = get_parrot_client()
     storage = get_storage_service()
 
@@ -457,6 +476,7 @@ async def generate_animation(
                 use_addition_api=use_addition_api,
                 metadata=metadata,
                 add_subtitles=request.add_subtitles,
+                user_id=current_user.id,
             )
         )
         # Keep reference to prevent garbage collection
@@ -473,6 +493,9 @@ async def generate_animation(
 
     except Exception as e:
         logger.error("Failed to start video generation: %s", str(e))
+        # Refund tokens on early failure
+        await refund_tokens(current_user, "video_generation", db)
+        await db.commit()
         return GenerateResponse(
             success=False,
             message=f"Failed to start video generation: {str(e)}",
@@ -485,6 +508,7 @@ async def _poll_video_completion(
     use_addition_api: bool,
     metadata: dict,
     add_subtitles: bool = False,
+    user_id: str = None,
 ):
     """Background task to poll for video completion and update database."""
     parrot = get_parrot_client()
@@ -648,7 +672,7 @@ async def _poll_video_completion(
 
     except Exception as e:
         logger.error("Video generation failed: %s", str(e))
-        # Update video record with failed status
+        # Update video record with failed status and refund tokens
         async with async_session() as db:
             video_result = await db.execute(
                 select(Video).where(Video.id == video_id)
@@ -658,4 +682,16 @@ async def _poll_video_completion(
                 video.status = DBVideoStatus.FAILED
                 metadata["error"] = str(e)
                 video.metadata_json = json.dumps(metadata)
-                await db.commit()
+
+            # Refund tokens on failure
+            if user_id:
+                from app.models.user import User as UserModel
+                user_result = await db.execute(
+                    select(UserModel).where(UserModel.id == user_id)
+                )
+                user = user_result.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "video_generation", db, video_id)
+                    logger.info(f"Refunded 2 tokens to user {user.username} for failed video {video_id}")
+
+            await db.commit()

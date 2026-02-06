@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Image } from "@/lib/types";
-import { directImageEdit, saveEditedImage, resolveApiUrl } from "@/lib/api";
+import { directImageEdit, saveEditedImage, resolveApiUrl, ApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface EditMessage {
   id: string;
@@ -30,6 +31,7 @@ export default function ImageEditPanel({
   onImageGenerated,
   onClose,
 }: ImageEditPanelProps) {
+  const { refreshUser } = useAuth();
   const [messages, setMessages] = useState<EditMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -98,6 +100,7 @@ export default function ImageEditPanel({
           ? `/uploads/${result.image_url.split("/uploads/")[1]}`
           : result.image_url;
         setCurrentSourceImage(newSourcePath);
+        refreshUser(); // Refresh token balance
       } else {
         // Show error message
         setMessages((prev) => [
@@ -111,15 +114,22 @@ export default function ImageEditPanel({
         ]);
       }
     } catch (error) {
+      let errorMessage = "Unknown error";
+      if (error instanceof ApiError && error.status === 402) {
+        errorMessage = "Insufficient tokens. Please contact your administrator.";
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           role: "assistant",
-          content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+          content: `Error: ${errorMessage}`,
           timestamp: new Date(),
         },
       ]);
+      refreshUser(); // Refresh in case balance changed
     } finally {
       setIsGenerating(false);
     }

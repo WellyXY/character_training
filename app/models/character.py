@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime
+from sqlalchemy import String, Text, DateTime, ForeignKey, Index
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
@@ -59,6 +59,12 @@ class Character(Base):
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
     )
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -82,6 +88,10 @@ class Character(Base):
     )
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(
+        "User",
+        back_populates="characters",
+    )
     images: Mapped[list["Image"]] = relationship(
         "Image",
         back_populates="character",

@@ -31,12 +31,16 @@ import CharacterSidebar from "@/components/CharacterSidebar";
 import ContentGallery from "@/components/ContentGallery";
 import AgentChatPanel, { ChatMessage } from "@/components/AgentChatPanel";
 import AppNavbar from "@/components/AppNavbar";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/lib/api";
 
 // Wrapper component to handle Suspense for useSearchParams
 function HomeContent() {
   // URL search params
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const initialReferenceUrl = searchParams.get("ref");
   const initialVideoRefUrl = searchParams.get("videoRef");
   const urlCharacterId = searchParams.get("character");
@@ -232,6 +236,18 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [videos, selectedCharacterId]);
 
+  // Helper to handle API errors with token refresh
+  const handleApiError = (err: unknown, fallbackMessage: string) => {
+    if (err instanceof ApiError) {
+      if (err.status === 402) {
+        setError("Insufficient tokens. Please contact your administrator for more tokens.");
+        refreshUser(); // Refresh user data to update token balance
+        return;
+      }
+    }
+    setError(err instanceof Error ? err.message : fallbackMessage);
+  };
+
   // API calls
   const loadCharacters = async () => {
     try {
@@ -245,7 +261,7 @@ function HomeContent() {
         selectCharacter(validId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load characters");
+      handleApiError(err, "Failed to load characters");
     }
   };
 
@@ -263,7 +279,7 @@ function HomeContent() {
         (t) => !t.task_id.startsWith("edit-") && !t.task_id.startsWith("animate-")
       ));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load media");
+      handleApiError(err, "Failed to load media");
     } finally {
       setLoading(false);
     }
@@ -297,8 +313,15 @@ function HomeContent() {
           created_at: new Date().toISOString(),
         }));
         setActiveTasks((prev) => [...prev, ...baseTasks]);
+        // Refresh user to update token balance
+        refreshUser();
       } catch (err) {
-        console.error("Failed to generate base images:", err);
+        if (err instanceof ApiError && err.status === 402) {
+          setError("Insufficient tokens to generate base images. Please contact your administrator.");
+          refreshUser();
+        } else {
+          console.error("Failed to generate base images:", err);
+        }
       }
 
       // Send welcome message in agent chat
@@ -310,7 +333,7 @@ function HomeContent() {
         },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create character");
+      handleApiError(err, "Failed to create character");
     } finally {
       setLoading(false);
     }
@@ -325,7 +348,7 @@ function HomeContent() {
       setVideos([]);
       await loadCharacters();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete character");
+      handleApiError(err, "Failed to delete character");
     } finally {
       setLoading(false);
     }
@@ -339,7 +362,7 @@ function HomeContent() {
       await approveImage(imageId);
       await loadMedia(selectedCharacterId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve image");
+      handleApiError(err, "Failed to approve image");
     } finally {
       setLoading(false);
     }
@@ -352,7 +375,7 @@ function HomeContent() {
       await deleteImage(imageId);
       await loadMedia(selectedCharacterId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete image");
+      handleApiError(err, "Failed to delete image");
     } finally {
       setLoading(false);
     }
@@ -365,7 +388,7 @@ function HomeContent() {
       await deleteVideo(videoId);
       await loadMedia(selectedCharacterId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete video");
+      handleApiError(err, "Failed to delete video");
     } finally {
       setLoading(false);
     }
@@ -412,9 +435,11 @@ function HomeContent() {
       // Reload media if action was taken
       if (response.action_taken && selectedCharacterId) {
         await loadMedia(selectedCharacterId);
+        refreshUser(); // Refresh token balance after action
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Chat failed");
+      handleApiError(err, "Chat failed");
+      refreshUser(); // Refresh in case tokens were deducted
     } finally {
       setLoading(false);
     }
@@ -464,9 +489,11 @@ function HomeContent() {
       // (For background tasks, we'll reload when the task completes)
       if (response.action_taken && selectedCharacterId) {
         await loadMedia(selectedCharacterId);
+        refreshUser(); // Refresh token balance after action
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Confirm failed");
+      handleApiError(err, "Confirm failed");
+      refreshUser(); // Refresh in case tokens were deducted
     } finally {
       setLoading(false);
     }
@@ -483,7 +510,7 @@ function HomeContent() {
         { role: "assistant", content: "Generation task cancelled." },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Cancel failed");
+      handleApiError(err, "Cancel failed");
     }
   };
 
@@ -694,15 +721,17 @@ function HomeContent() {
   );
 }
 
-// Main export wrapped in Suspense for useSearchParams
+// Main export wrapped in Suspense for useSearchParams and ProtectedRoute
 export default function Home() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <span className="text-amber-400 animate-pulse">Loading...</span>
-      </div>
-    }>
-      <HomeContent />
-    </Suspense>
+    <ProtectedRoute>
+      <Suspense fallback={
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <span className="text-amber-400 animate-pulse">Loading...</span>
+        </div>
+      }>
+        <HomeContent />
+      </Suspense>
+    </ProtectedRoute>
   );
 }

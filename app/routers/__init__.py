@@ -1,4 +1,4 @@
 """API routers."""
-from app.routers import characters, images, videos, agent, animate, samples, twitter
+from app.routers import auth, characters, images, videos, agent, animate, samples, twitter
 
-__all__ = ["characters", "images", "videos", "agent", "animate", "samples", "twitter"]
+__all__ = ["auth", "characters", "images", "videos", "agent", "animate", "samples", "twitter"]

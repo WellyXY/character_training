@@ -68,11 +68,24 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     upload_dir: str = "public/uploads"
 
+    # Cloud Storage (Google Cloud Storage)
+    # Set storage_backend to "gcs" to use Google Cloud Storage, or "database" for DB storage
+    storage_backend: str = "database"  # "database" or "gcs"
+    gcs_bucket_name: str = ""
+    gcs_project_id: str = ""
+    # For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var to service account JSON path
+    # For Railway/Cloud Run, credentials are auto-detected
+
     # CORS
     cors_origins: str = "*"
 
     # Logging
     log_level: str = "INFO"
+
+    # JWT Authentication
+    jwt_secret_key: str = "your-super-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 hours
 
     class Config:
         env_file = ".env"

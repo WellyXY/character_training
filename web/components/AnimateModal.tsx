@@ -7,8 +7,10 @@ import {
   analyzeImageForAnimation,
   animateImage,
   uploadFile,
+  ApiError,
   type AnalyzeImageResponse,
 } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ReferenceVideo {
   file: File | null;
@@ -52,6 +54,7 @@ export default function AnimateModal({
   onTaskStarted,
   initialReferenceVideo,
 }: AnimateModalProps) {
+  const { refreshUser } = useAuth();
   const [state, setState] = useState<ModalState>("analyzing");
   const [analysis, setAnalysis] = useState<AnalyzeImageResponse | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -195,13 +198,19 @@ export default function AnimateModal({
         // Video generation started - close modal and refresh to show processing status
         onVideoCreated();
         onClose();
+        refreshUser(); // Refresh token balance
       } else {
         console.error("Video generation failed:", result.message);
         alert(`Failed to start video generation: ${result.message}`);
       }
     } catch (err) {
-      console.error("Video generation failed:", err);
-      alert(`Failed to start video generation: ${err instanceof Error ? err.message : "Unknown error"}`);
+      if (err instanceof ApiError && err.status === 402) {
+        alert("Insufficient tokens. Please contact your administrator.");
+      } else {
+        console.error("Video generation failed:", err);
+        alert(`Failed to start video generation: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+      refreshUser(); // Refresh in case balance changed
     }
   };
 
