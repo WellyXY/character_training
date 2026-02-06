@@ -57,12 +57,19 @@ async def list_characters(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all characters for the current user."""
-    result = await db.execute(
-        select(Character)
-        .where(Character.user_id == current_user.id)
-        .order_by(Character.created_at.desc())
-    )
+    """List all characters for the current user (or all characters if admin)."""
+    if current_user.is_admin:
+        # Admin sees all characters
+        result = await db.execute(
+            select(Character).order_by(Character.created_at.desc())
+        )
+    else:
+        # Regular user sees only their own
+        result = await db.execute(
+            select(Character)
+            .where(Character.user_id == current_user.id)
+            .order_by(Character.created_at.desc())
+        )
     characters = result.scalars().all()
 
     responses = []
@@ -156,12 +163,17 @@ async def get_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a character by ID (must belong to current user)."""
-    result = await db.execute(
-        select(Character)
-        .where(Character.id == character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Get a character by ID (must belong to current user, or any if admin)."""
+    if current_user.is_admin:
+        result = await db.execute(
+            select(Character).where(Character.id == character_id)
+        )
+    else:
+        result = await db.execute(
+            select(Character)
+            .where(Character.id == character_id)
+            .where(Character.user_id == current_user.id)
+        )
     character = result.scalar_one_or_none()
 
     if not character:
@@ -186,12 +198,17 @@ async def update_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a character (must belong to current user)."""
-    result = await db.execute(
-        select(Character)
-        .where(Character.id == character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Update a character (must belong to current user, or any if admin)."""
+    if current_user.is_admin:
+        result = await db.execute(
+            select(Character).where(Character.id == character_id)
+        )
+    else:
+        result = await db.execute(
+            select(Character)
+            .where(Character.id == character_id)
+            .where(Character.user_id == current_user.id)
+        )
     character = result.scalar_one_or_none()
 
     if not character:
@@ -225,12 +242,17 @@ async def delete_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a character (must belong to current user)."""
-    result = await db.execute(
-        select(Character)
-        .where(Character.id == character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Delete a character (must belong to current user, or any if admin)."""
+    if current_user.is_admin:
+        result = await db.execute(
+            select(Character).where(Character.id == character_id)
+        )
+    else:
+        result = await db.execute(
+            select(Character)
+            .where(Character.id == character_id)
+            .where(Character.user_id == current_user.id)
+        )
     character = result.scalar_one_or_none()
 
     if not character:
