@@ -238,6 +238,66 @@ async def delete_image(
     return {"status": "deleted"}
 
 
+async def _retry_image_background(
+    character_id: str,
+    image_id: str,
+    image_type: str,
+    prompt: str,
+    aspect_ratio: str,
+    params: dict[str, Any],
+    user_id: str,
+):
+    """Background task: retry image generation."""
+    skill = ImageGeneratorSkill()
+    action = "generate_base" if image_type == "base" else "generate_content"
+
+    async with async_session() as db:
+        try:
+            result = await skill.execute(
+                action=action,
+                params={
+                    **params,
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "existing_image_id": image_id,
+                },
+                character_id=character_id,
+                db=db,
+            )
+            if result.get("success"):
+                logger.info(f"Retry image {image_id} generated successfully")
+            else:
+                logger.error(f"Retry image {image_id} generation failed: {result.get('error')}")
+                # Mark as failed and refund
+                res = await db.execute(select(Image).where(Image.id == image_id))
+                img = res.scalar_one_or_none()
+                if img:
+                    img.status = DBImageStatus.FAILED
+                    img.error_message = result.get("error", "Generation failed")
+                from app.models.user import User as UserModel
+                user_res = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Retry image {image_id} generation error: {e}")
+            try:
+                res = await db.execute(select(Image).where(Image.id == image_id))
+                img = res.scalar_one_or_none()
+                if img:
+                    img.status = DBImageStatus.FAILED
+                    img.error_message = str(e)
+                from app.models.user import User as UserModel
+                user_res = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                await db.commit()
+            except Exception:
+                pass
+
+
 @router.post("/images/{image_id}/retry", response_model=ImageResponse)
 async def retry_image(
     image_id: str,
@@ -260,9 +320,6 @@ async def retry_image(
 
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-
-    # Deduct token for retry
-    await deduct_tokens(current_user, "image_generation", db, image_id)
 
     metadata: dict[str, Any] = {}
     if image.metadata_json:
@@ -287,11 +344,7 @@ async def retry_image(
     else:
         aspect_ratio = "9:16"
 
-    params: dict[str, Any] = {
-        "prompt": prompt,
-        "aspect_ratio": aspect_ratio,
-    }
-
+    params: dict[str, Any] = {}
     if metadata.get("style"):
         params["style"] = metadata.get("style")
     if metadata.get("cloth"):
@@ -301,31 +354,37 @@ async def retry_image(
     if metadata.get("reference_image_paths"):
         params["reference_image_paths"] = metadata.get("reference_image_paths")
 
-    action = "generate_base" if image.type == DBImageType.BASE else "generate_content"
-    skill = ImageGeneratorSkill()
-    retry_result = await skill.execute(
-        action=action,
-        params=params,
+    # Create new image record with GENERATING status
+    task_id = f"retry-{uuid.uuid4().hex[:8]}"
+    new_image = Image(
         character_id=image.character_id,
-        db=db,
+        type=image.type,
+        status=DBImageStatus.GENERATING,
+        task_id=task_id,
+        image_url="",
+        is_approved=False,
+        metadata_json=json.dumps({"prompt": prompt, "aspect_ratio": aspect_ratio, **params}),
     )
+    db.add(new_image)
+    await db.commit()
+    await db.refresh(new_image)
 
-    if not retry_result.get("success"):
-        raise HTTPException(
-            status_code=500,
-            detail=retry_result.get("error", "Retry failed"),
+    # Deduct token for retry
+    await deduct_tokens(current_user, "image_generation", db, new_image.id)
+    await db.commit()
+
+    # Spawn background generation
+    asyncio.create_task(
+        _retry_image_background(
+            character_id=image.character_id,
+            image_id=new_image.id,
+            image_type=image.type.value,
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            params=params,
+            user_id=current_user.id,
         )
-
-    new_image_id = retry_result.get("image_id")
-    if not new_image_id:
-        raise HTTPException(status_code=500, detail="Retry did not return image_id")
-
-    new_result = await db.execute(
-        select(Image).where(Image.id == new_image_id)
     )
-    new_image = new_result.scalar_one_or_none()
-    if not new_image:
-        raise HTTPException(status_code=500, detail="Retry image not found")
 
     return _image_to_response(new_image)
 

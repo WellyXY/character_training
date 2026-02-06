@@ -687,6 +687,7 @@ function HomeContent() {
                 loadMedia(selectedCharacterId);
               }
             }}
+            onTokenRefresh={refreshUser}
             onTaskStarted={(task) => {
               const newTask: GenerationTask = {
                 task_id: task.task_id,

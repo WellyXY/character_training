@@ -16,6 +16,7 @@ interface ContentGalleryProps {
   characterId?: string | null;
   onVideoCreated?: () => void;
   onRefresh?: () => void;
+  onTokenRefresh?: () => void;
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
   onTaskUpdate?: (taskId: string, update: Partial<GenerationTask>) => void;
   onCancelTask?: (taskId: string) => void;
@@ -35,6 +36,7 @@ export default function ContentGallery({
   characterId,
   onVideoCreated,
   onRefresh,
+  onTokenRefresh,
   onTaskStarted,
   onTaskUpdate,
   onCancelTask,
@@ -170,42 +172,16 @@ export default function ContentGallery({
   const handleRetryImage = async (imageId: string) => {
     if (loading) return;
 
-    // Find the image to get its metadata for display
-    const img = images.find((i) => i.id === imageId);
-    const taskId = `retry-image-${Date.now()}`;
-
-    // Show generating task immediately
-    if (onTaskStarted) {
-      onTaskStarted({
-        task_id: taskId,
-        prompt: img?.metadata?.prompt || "Retrying image...",
-        reference_image_url: img?.image_url ?? undefined,
-      });
-    }
-
-    // Run retry in background
     try {
+      // Retry returns immediately with a GENERATING status image
       await retryImage(imageId);
-      // Mark task as completed
-      if (onTaskUpdate) {
-        onTaskUpdate(taskId, {
-          status: "completed" as GenerationTask["status"],
-          progress: 100,
-          stage: "completed",
-        });
-      }
+      // Refresh token balance immediately (token is deducted at start)
+      onTokenRefresh?.();
+      // Refresh images to show the new generating image
       await onRefresh?.();
     } catch (err) {
       console.error("Retry image failed:", err);
-      const message = err instanceof Error ? err.message : "Retry failed";
-      if (onTaskUpdate) {
-        onTaskUpdate(taskId, {
-          status: "failed" as GenerationTask["status"],
-          progress: 0,
-          stage: "failed",
-          error: message,
-        });
-      }
+      onTokenRefresh?.(); // Refresh in case balance changed
     }
   };
 
