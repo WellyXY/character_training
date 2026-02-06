@@ -258,12 +258,17 @@ async def generate_animation(
     Otherwise, uses standard image-to-video API.
     Creates a Video record in the database.
     """
-    # Verify character belongs to user
-    char_result = await db.execute(
-        select(Character)
-        .where(Character.id == request.character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    # Verify character exists (admin can access all, others only their own)
+    if current_user.is_admin:
+        char_result = await db.execute(
+            select(Character).where(Character.id == request.character_id)
+        )
+    else:
+        char_result = await db.execute(
+            select(Character)
+            .where(Character.id == request.character_id)
+            .where(Character.user_id == current_user.id)
+        )
     if not char_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Character not found")
 

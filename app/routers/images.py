@@ -1,5 +1,8 @@
 """Image management router."""
+import asyncio
 import json
+import logging
+import uuid
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,14 +10,16 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models.image import Image, ImageType as DBImageType
+from app.database import get_db, async_session
+from app.models.image import Image, ImageType as DBImageType, ImageStatus as DBImageStatus
 from app.models.character import Character
 from app.models.user import User
 from app.schemas.image import ImageResponse, ImageMetadata, ImageType, ImageStatus
 from app.agent.skills.image_generator import ImageGeneratorSkill
 from app.auth import get_current_user
-from app.services.tokens import deduct_tokens
+from app.services.tokens import deduct_tokens, refund_tokens
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -100,13 +105,18 @@ async def get_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get an image by ID (character must belong to current user)."""
-    result = await db.execute(
-        select(Image)
-        .join(Character)
-        .where(Image.id == image_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Get an image by ID (character must belong to current user, or any if admin)."""
+    if current_user.is_admin:
+        result = await db.execute(
+            select(Image).where(Image.id == image_id)
+        )
+    else:
+        result = await db.execute(
+            select(Image)
+            .join(Character)
+            .where(Image.id == image_id)
+            .where(Character.user_id == current_user.id)
+        )
     image = result.scalar_one_or_none()
 
     if not image:
@@ -327,55 +337,109 @@ class DirectGenerateRequest(BaseModel):
     aspect_ratio: str = "9:16"
 
 
+async def _generate_direct_background(
+    character_id: str,
+    image_id: str,
+    prompt: str,
+    aspect_ratio: str,
+    user_id: str,
+):
+    """Background task: generate a direct content image."""
+    skill = ImageGeneratorSkill()
+    async with async_session() as db:
+        try:
+            result = await skill.execute(
+                action="generate_content",
+                params={
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "existing_image_id": image_id,
+                },
+                character_id=character_id,
+                db=db,
+            )
+            if result.get("success"):
+                logger.info(f"Direct image {image_id} generated successfully")
+            else:
+                logger.error(f"Direct image {image_id} generation failed: {result.get('error')}")
+                # Refund token on failure
+                from app.models.user import User as UserModel
+                user_res = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                    await db.commit()
+        except Exception as e:
+            logger.error(f"Direct image {image_id} generation error: {e}")
+            try:
+                res = await db.execute(select(Image).where(Image.id == image_id))
+                image = res.scalar_one_or_none()
+                if image:
+                    image.status = DBImageStatus.FAILED
+                    image.error_message = str(e)
+                # Refund token on failure
+                from app.models.user import User as UserModel
+                user_res = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                await db.commit()
+            except Exception:
+                pass
+
+
 @router.post("/generate/direct", response_model=ImageResponse)
 async def generate_direct(
     request: DirectGenerateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate an image directly (costs 1 token, character must belong to current user)."""
-    # Verify character exists and belongs to user
-    char_result = await db.execute(
-        select(Character)
-        .where(Character.id == request.character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Generate an image directly (costs 1 token, character must belong to current user or admin)."""
+    # Verify character exists and belongs to user (or admin)
+    if current_user.is_admin:
+        char_result = await db.execute(
+            select(Character).where(Character.id == request.character_id)
+        )
+    else:
+        char_result = await db.execute(
+            select(Character)
+            .where(Character.id == request.character_id)
+            .where(Character.user_id == current_user.id)
+        )
     character = char_result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    # Deduct token before generation
-    await deduct_tokens(current_user, "image_generation", db)
+    # Create task_id
+    task_id = f"direct-{uuid.uuid4().hex[:8]}"
+
+    # Create image record with GENERATING status
+    image = Image(
+        character_id=request.character_id,
+        type=DBImageType.CONTENT,
+        status=DBImageStatus.GENERATING,
+        task_id=task_id,
+        image_url="",
+        is_approved=False,
+        metadata_json=json.dumps({"prompt": request.prompt, "aspect_ratio": request.aspect_ratio}),
+    )
+    db.add(image)
+    await db.commit()
+    await db.refresh(image)
+
+    # Deduct token for this image
+    await deduct_tokens(current_user, "image_generation", db, image.id)
     await db.commit()
 
-    skill = ImageGeneratorSkill()
-    result = await skill.execute(
-        action="generate_content",
-        params={
-            "prompt": request.prompt,
-            "aspect_ratio": request.aspect_ratio,
-        },
-        character_id=request.character_id,
-        db=db,
-    )
-
-    if not result.get("success"):
-        # Refund token on failure
-        from app.services.tokens import refund_tokens
-        await refund_tokens(current_user, "image_generation", db)
-        await db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail=result.get("error", "Generation failed"),
+    # Spawn background generation
+    asyncio.create_task(
+        _generate_direct_background(
+            character_id=request.character_id,
+            image_id=image.id,
+            prompt=request.prompt,
+            aspect_ratio=request.aspect_ratio,
+            user_id=current_user.id,
         )
-
-    image_id = result.get("image_id")
-    if not image_id:
-        raise HTTPException(status_code=500, detail="No image_id returned")
-
-    img_result = await db.execute(select(Image).where(Image.id == image_id))
-    image = img_result.scalar_one_or_none()
-    if not image:
-        raise HTTPException(status_code=500, detail="Generated image not found")
+    )
 
     return _image_to_response(image)

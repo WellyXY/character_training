@@ -1,6 +1,8 @@
 """Agent chat router."""
+import asyncio
 import json
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database import get_db
+from app.database import get_db, async_session
 from app.schemas.agent import (
     AgentChatRequest,
     AgentChatResponse,
@@ -246,6 +248,102 @@ def _parse_aspect_ratio(aspect_ratio: str) -> tuple[int, int]:
     return ratios.get(aspect_ratio, (1024, 1820))
 
 
+async def _direct_edit_background(
+    character_id: str,
+    image_id: str,
+    prompt: str,
+    source_image_path: str,
+    aspect_ratio: str,
+    ai_optimize: bool,
+    user_id: str,
+):
+    """Background task: generate a direct edit image."""
+    logger.info(f"=== Background direct_edit starting for image {image_id} ===")
+    logger.info(f"Prompt: {prompt}")
+    logger.info(f"AI optimize: {ai_optimize}")
+
+    async with async_session() as db:
+        try:
+            seedream = get_seedream_client()
+            storage = get_storage_service()
+
+            width, height = _parse_aspect_ratio(aspect_ratio)
+
+            # Optimize prompt with Gemini if ai_optimize is enabled
+            final_prompt = prompt
+            if ai_optimize:
+                logger.info("AI optimize enabled, optimizing prompt with Gemini...")
+                optimizer = EditPromptOptimizerSkill()
+                optimized_prompt, detected_type, analysis = await optimizer.optimize(
+                    edit_instruction=prompt,
+                    source_image_path=source_image_path,
+                    db=db,
+                )
+                final_prompt = optimized_prompt
+                logger.info(f"Optimized prompt: {final_prompt[:200]}...")
+
+            # Use the source image as reference for generation
+            source_full_url = storage.get_full_url(source_image_path)
+            reference_images = [source_full_url]
+
+            # Generate image with Seedream
+            result = await seedream.generate(
+                prompt=final_prompt,
+                width=width,
+                height=height,
+                reference_images=reference_images,
+            )
+
+            image_url = result.get("image_url")
+            if not image_url:
+                raise Exception("No image URL in generation response")
+
+            # Download and save the image locally
+            saved = await storage.save_from_url(image_url, db, prefix="edit")
+
+            # Build metadata
+            metadata = {
+                "prompt": final_prompt,
+                "original_prompt": prompt,
+                "ai_optimized": ai_optimize,
+                "width": width,
+                "height": height,
+                "seed": result.get("seed"),
+                "source_image_path": source_image_path,
+                "edit_type": "direct",
+            }
+
+            # Update image record with completed status
+            res = await db.execute(select(Image).where(Image.id == image_id))
+            image = res.scalar_one_or_none()
+            if image:
+                image.image_url = saved["url"]
+                image.status = ImageStatus.COMPLETED
+                image.metadata_json = json.dumps(metadata)
+                await db.commit()
+                logger.info(f"Direct edit image {image_id} generated successfully")
+            else:
+                logger.error(f"Image {image_id} not found for update")
+
+        except Exception as e:
+            logger.exception(f"Error in direct_edit background: {e}")
+            try:
+                res = await db.execute(select(Image).where(Image.id == image_id))
+                image = res.scalar_one_or_none()
+                if image:
+                    image.status = ImageStatus.FAILED
+                    image.error_message = str(e)
+                # Refund token on failure
+                from app.models.user import User as UserModel
+                user_res = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                user = user_res.scalar_one_or_none()
+                if user:
+                    await refund_tokens(user, "image_generation", db, image_id)
+                await db.commit()
+            except Exception:
+                pass
+
+
 @router.post("/agent/image-edit/direct", response_model=DirectEditResponse)
 async def direct_image_edit(
     request: DirectEditRequest,
@@ -260,109 +358,76 @@ async def direct_image_edit(
 
     If ai_optimize=True, the prompt will be optimized by Gemini before generation.
     """
-    # Verify character belongs to user
-    char_result = await db.execute(
-        select(Character)
-        .where(Character.id == request.character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    # Verify character exists (admin can access all, others only their own)
+    if current_user.is_admin:
+        char_result = await db.execute(
+            select(Character).where(Character.id == request.character_id)
+        )
+    else:
+        char_result = await db.execute(
+            select(Character)
+            .where(Character.id == request.character_id)
+            .where(Character.user_id == current_user.id)
+        )
     if not char_result.scalar_one_or_none():
         return DirectEditResponse(
             success=False,
             message="Character not found",
         )
 
-    # Deduct token before generation
-    await deduct_tokens(current_user, "image_generation", db)
-    await db.commit()
     logger.info(f"=== /agent/image-edit/direct request ===")
     logger.info(f"Prompt: {request.prompt}")
     logger.info(f"Character ID: {request.character_id}")
     logger.info(f"Aspect ratio: {request.aspect_ratio}")
     logger.info(f"AI optimize: {request.ai_optimize}")
-    # Only show filename for source image
     source_display = request.source_image_path.split("/")[-1] if "/" in request.source_image_path else request.source_image_path[:50]
     logger.info(f"Source image: {source_display}")
 
-    try:
-        seedream = get_seedream_client()
-        storage = get_storage_service()
+    # Create task_id
+    task_id = f"edit-{uuid.uuid4().hex[:8]}"
 
-        width, height = _parse_aspect_ratio(request.aspect_ratio)
-
-        # Optimize prompt with Gemini if ai_optimize is enabled
-        final_prompt = request.prompt
-        if request.ai_optimize:
-            logger.info("AI optimize enabled, optimizing prompt with Gemini...")
-            optimizer = EditPromptOptimizerSkill()
-            optimized_prompt, detected_type, analysis = await optimizer.optimize(
-                edit_instruction=request.prompt,
-                source_image_path=request.source_image_path,
-                db=db,
-            )
-            final_prompt = optimized_prompt
-            logger.info(f"Optimized prompt: {final_prompt[:200]}...")
-
-        # Use the source image as reference for generation
-        source_full_url = storage.get_full_url(request.source_image_path)
-        reference_images = [source_full_url]
-
-        logger.info(f"Generating with reference image: {source_display}")
-
-        # Generate image with Seedream
-        result = await seedream.generate(
-            prompt=final_prompt,
-            width=width,
-            height=height,
-            reference_images=reference_images,
-        )
-
-        image_url = result.get("image_url")
-        if not image_url:
-            return DirectEditResponse(
-                success=False,
-                message="No image URL in generation response",
-            )
-
-        # Download and save the image locally (but don't create DB record yet)
-        saved = await storage.save_from_url(image_url, db, prefix="edit")
-        # Commit so the image is available for frontend to display
-        await db.commit()
-
-        # Build metadata for later saving
-        metadata = {
-            "prompt": final_prompt,
-            "original_prompt": request.prompt,
-            "ai_optimized": request.ai_optimize,
-            "width": width,
-            "height": height,
-            "seed": result.get("seed"),
+    # Create image record with GENERATING status
+    image = Image(
+        character_id=request.character_id,
+        type=ImageType.CONTENT,
+        status=ImageStatus.GENERATING,
+        task_id=task_id,
+        image_url="",
+        is_approved=False,
+        metadata_json=json.dumps({
+            "prompt": request.prompt,
             "source_image_path": request.source_image_path,
-            "edit_type": "direct",
-            "character_id": request.character_id,
-            "local_url": saved["url"],  # Store the local path for saving
-        }
+            "aspect_ratio": request.aspect_ratio,
+            "ai_optimize": request.ai_optimize,
+        }),
+    )
+    db.add(image)
+    await db.commit()
+    await db.refresh(image)
 
-        logger.info(f"Direct edit successful, image ready for save: {saved['url']}")
+    # Deduct token for this image
+    await deduct_tokens(current_user, "image_generation", db, image.id)
+    await db.commit()
 
-        # Return image without saving to gallery - user must click Save
-        return DirectEditResponse(
-            success=True,
-            image_id=None,  # No ID yet - not saved to gallery
-            image_url=saved["full_url"],
-            message="Image generated. Click Save to add to gallery.",
-            metadata=metadata,
+    # Spawn background generation
+    asyncio.create_task(
+        _direct_edit_background(
+            character_id=request.character_id,
+            image_id=image.id,
+            prompt=request.prompt,
+            source_image_path=request.source_image_path,
+            aspect_ratio=request.aspect_ratio,
+            ai_optimize=request.ai_optimize,
+            user_id=current_user.id,
         )
+    )
 
-    except Exception as e:
-        logger.exception(f"Error in direct_image_edit: {e}")
-        # Refund token on failure
-        await refund_tokens(current_user, "image_generation", db)
-        await db.commit()
-        return DirectEditResponse(
-            success=False,
-            message=f"Generation failed: {str(e)}",
-        )
+    return DirectEditResponse(
+        success=True,
+        image_id=image.id,
+        image_url=None,  # URL will be available after generation completes
+        message="Image generation started. Refresh to see progress.",
+    )
 
 
 @router.post("/agent/image-edit/save", response_model=DirectEditResponse)

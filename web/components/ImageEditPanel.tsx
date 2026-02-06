@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Image } from "@/lib/types";
-import { directImageEdit, saveEditedImage, resolveApiUrl, ApiError } from "@/lib/api";
+import { directImageEdit, saveEditedImage, getImage, resolveApiUrl, ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface EditMessage {
@@ -79,27 +79,112 @@ export default function ImageEditPanel({
         aspect_ratio: selectedRatio,
       });
 
-      if (result.success && result.image_url) {
-        // Add assistant message with generated image (not saved yet)
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            role: "assistant",
-            content: "Image generated. Click Save to add to gallery.",
-            imageUrl: result.image_url,
-            metadata: result.metadata,
-            isSaved: false,
-            timestamp: new Date(),
-          },
-        ]);
+      if (result.success) {
+        // Image generation started - now we need to poll for completion
+        const messageId = Date.now().toString();
 
-        // Update current source image for next edit
-        // Use the relative path for consistency
-        const newSourcePath = result.image_url.includes("/uploads/")
-          ? `/uploads/${result.image_url.split("/uploads/")[1]}`
-          : result.image_url;
-        setCurrentSourceImage(newSourcePath);
+        if (result.image_url) {
+          // Image is ready immediately (legacy flow)
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: messageId,
+              role: "assistant",
+              content: "Image generated. Click Save to add to gallery.",
+              imageUrl: result.image_url,
+              metadata: result.metadata,
+              isSaved: false,
+              timestamp: new Date(),
+            },
+          ]);
+          const newSourcePath = result.image_url.includes("/uploads/")
+            ? `/uploads/${result.image_url.split("/uploads/")[1]}`
+            : result.image_url;
+          setCurrentSourceImage(newSourcePath);
+        } else if (result.image_id) {
+          // Image is generating in background - add generating message
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: messageId,
+              role: "assistant",
+              content: "Generating image...",
+              timestamp: new Date(),
+            },
+          ]);
+
+          // Poll for completion
+          const pollInterval = 3000;
+          const maxPolls = 60; // 3 minutes max
+          let polls = 0;
+
+          const pollForCompletion = async () => {
+            try {
+              const image = await getImage(result.image_id!);
+              if (image.status === "completed" && image.image_url) {
+                // Image is ready
+                const fullImageUrl = resolveApiUrl(image.image_url);
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === messageId
+                      ? {
+                          ...m,
+                          content: "Image generated. It's automatically saved to the gallery.",
+                          imageUrl: fullImageUrl,
+                          isSaved: true,
+                          metadata: image.metadata as Record<string, unknown>,
+                        }
+                      : m
+                  )
+                );
+                const newSourcePath = image.image_url.includes("/uploads/")
+                  ? `/uploads/${image.image_url.split("/uploads/")[1]}`
+                  : image.image_url;
+                setCurrentSourceImage(newSourcePath);
+                setIsGenerating(false);
+                refreshUser();
+                // Notify parent to refresh gallery
+                onImageGenerated();
+              } else if (image.status === "failed") {
+                // Generation failed
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === messageId
+                      ? { ...m, content: `Error: ${image.error_message || "Generation failed"}` }
+                      : m
+                  )
+                );
+                setIsGenerating(false);
+                refreshUser();
+              } else {
+                // Still generating - poll again
+                polls++;
+                if (polls < maxPolls) {
+                  setTimeout(pollForCompletion, pollInterval);
+                } else {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === messageId
+                        ? { ...m, content: "Generation timed out. Check the gallery for your image." }
+                        : m
+                    )
+                  );
+                  setIsGenerating(false);
+                }
+              }
+            } catch (pollError) {
+              console.error("Failed to poll image status:", pollError);
+              polls++;
+              if (polls < maxPolls) {
+                setTimeout(pollForCompletion, pollInterval);
+              }
+            }
+          };
+
+          // Start polling after a short delay
+          setTimeout(pollForCompletion, pollInterval);
+          return; // Don't set isGenerating to false yet
+        }
         refreshUser(); // Refresh token balance
       } else {
         // Show error message

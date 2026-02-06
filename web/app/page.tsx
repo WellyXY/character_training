@@ -236,6 +236,35 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [videos, selectedCharacterId]);
 
+  // Poll generating images for completion (for images saved with GENERATING status)
+  useEffect(() => {
+    const generatingImageIds = images
+      .filter((img) => img.status === "generating")
+      .map((img) => img.id);
+    if (generatingImageIds.length === 0 || !selectedCharacterId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const imgs = await listCharacterImages(selectedCharacterId);
+        const hasChange = imgs.some((img) => {
+          const prev = images.find((p) => p.id === img.id);
+          if (!prev) return true;
+          // Check if status changed from generating to completed/failed
+          return prev.status === "generating" && img.status !== "generating";
+        });
+        if (hasChange) {
+          setImages(imgs);
+          // Refresh user token balance after image completes
+          refreshUser();
+        }
+      } catch (err) {
+        console.error("Failed to poll generating image status:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [images, selectedCharacterId, refreshUser]);
+
   // Helper to handle API errors with token refresh
   const handleApiError = (err: unknown, fallbackMessage: string) => {
     if (err instanceof ApiError) {

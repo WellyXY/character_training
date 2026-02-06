@@ -159,6 +159,10 @@ export async function listCharacterImages(
   return apiFetch<Image[]>(`/characters/${characterId}/images${typeParam}`);
 }
 
+export async function getImage(imageId: string): Promise<Image> {
+  return apiFetch<Image>(`/images/${imageId}`);
+}
+
 export async function approveImage(imageId: string): Promise<Image> {
   return apiFetch<Image>(`/images/${imageId}/approve`, { method: "POST" });
 }
