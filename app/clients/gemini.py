@@ -193,6 +193,40 @@ class GeminiClient:
             max_tokens=max_tokens,
         )
 
+    def _detect_mime_type(self, data: bytes, url: str = "", header_mime: str = "") -> str:
+        """
+        Detect the correct MIME type for image data.
+
+        Uses magic bytes detection as primary method, falls back to URL extension.
+        """
+        # Check magic bytes for common image formats
+        if data[:8] == b'\x89PNG\r\n\x1a\n':
+            return "image/png"
+        elif data[:2] == b'\xff\xd8':
+            return "image/jpeg"
+        elif data[:6] in (b'GIF87a', b'GIF89a'):
+            return "image/gif"
+        elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            return "image/webp"
+
+        # If header mime is valid image type, use it
+        if header_mime and header_mime.startswith("image/") and header_mime != "binary/octet-stream":
+            return header_mime
+
+        # Try to infer from URL extension
+        url_lower = url.lower()
+        if ".png" in url_lower:
+            return "image/png"
+        elif ".jpg" in url_lower or ".jpeg" in url_lower:
+            return "image/jpeg"
+        elif ".gif" in url_lower:
+            return "image/gif"
+        elif ".webp" in url_lower:
+            return "image/webp"
+
+        # Default to JPEG as most common
+        return "image/jpeg"
+
     async def _load_image_data(self, image_url: str) -> tuple[bytes, str]:
         """
         Load image data from URL or data URI.
@@ -206,6 +240,9 @@ class GeminiClient:
             if match:
                 mime_type = match.group(1)
                 image_data = base64.b64decode(match.group(2))
+                # Verify mime type is valid for Gemini
+                if mime_type == "binary/octet-stream" or not mime_type.startswith("image/"):
+                    mime_type = self._detect_mime_type(image_data, image_url, mime_type)
                 return image_data, mime_type
             raise ValueError("Invalid data URI format")
         else:
@@ -213,7 +250,9 @@ class GeminiClient:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(image_url)
                 response.raise_for_status()
-                mime_type = response.headers.get("content-type", "image/jpeg")
+                header_mime = response.headers.get("content-type", "")
+                # Detect actual mime type from image data
+                mime_type = self._detect_mime_type(response.content, image_url, header_mime)
                 return response.content, mime_type
 
     async def analyze_image(
