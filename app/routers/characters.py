@@ -21,7 +21,7 @@ from app.schemas.character import (
     CharacterStatus,
 )
 from app.services.storage import get_storage_service, StorageService
-from app.auth import get_current_user
+from app.auth import get_current_user, get_current_admin_user
 from app.services.tokens import deduct_tokens, refund_tokens
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,55 @@ async def list_characters(
         )
         base_image_ids = [row[0] for row in img_result.fetchall()]
         responses.append(_character_to_response(char, base_image_ids))
+
+    return responses
+
+
+class AdminCharacterResponse(BaseModel):
+    """Character response with owner info for admin."""
+    id: str
+    name: str
+    description: Optional[str] = None
+    status: CharacterStatus
+    owner_username: str
+    owner_id: str
+    base_image_count: int
+    created_at: str
+
+
+@router.get("/admin/characters", response_model=list[AdminCharacterResponse])
+async def list_all_characters(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """List all characters from all users (admin only)."""
+    result = await db.execute(
+        select(Character, User.username)
+        .join(User, Character.user_id == User.id, isouter=True)
+        .order_by(Character.created_at.desc())
+    )
+    rows = result.fetchall()
+
+    responses = []
+    for char, owner_username in rows:
+        # Count base images
+        img_result = await db.execute(
+            select(Image.id)
+            .where(Image.character_id == char.id)
+            .where(Image.type == DBImageType.BASE)
+        )
+        base_image_count = len(img_result.fetchall())
+
+        responses.append(AdminCharacterResponse(
+            id=char.id,
+            name=char.name,
+            description=char.description,
+            status=CharacterStatus(char.status.value),
+            owner_username=owner_username or "Unknown",
+            owner_id=char.user_id or "",
+            base_image_count=base_image_count,
+            created_at=char.created_at.isoformat(),
+        ))
 
     return responses
 

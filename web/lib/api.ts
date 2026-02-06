@@ -477,3 +477,55 @@ export async function updateSample(
   });
 }
 
+// Admin API functions
+export interface AdminUser {
+  id: string;
+  email: string;
+  username: string;
+  token_balance: number;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at: string;
+}
+
+export interface AdminCharacter {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  owner_username: string;
+  owner_id: string;
+  base_image_count: number;
+  created_at: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  username: string;
+  password: string;
+  token_balance?: number;
+  is_admin?: boolean;
+}
+
+export async function adminListUsers(): Promise<AdminUser[]> {
+  return apiFetch<AdminUser[]>("/admin/users");
+}
+
+export async function adminCreateUser(data: CreateUserRequest): Promise<AdminUser> {
+  return apiFetch<AdminUser>("/admin/users", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminUpdateTokens(userId: string, amount: number): Promise<AdminUser> {
+  return apiFetch<AdminUser>(`/admin/users/${userId}/tokens`, {
+    method: "PUT",
+    body: JSON.stringify({ amount }),
+  });
+}
+
+export async function adminListCharacters(): Promise<AdminCharacter[]> {
+  return apiFetch<AdminCharacter[]>("/admin/characters");
+}
+
