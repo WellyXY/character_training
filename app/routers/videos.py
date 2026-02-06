@@ -49,13 +49,18 @@ async def list_character_videos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List videos for a character (must belong to current user)."""
-    # Verify character exists and belongs to user
-    char_result = await db.execute(
-        select(Character)
-        .where(Character.id == character_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """List videos for a character (must belong to current user, or any if admin)."""
+    # Verify character exists and belongs to user (or admin)
+    if current_user.is_admin:
+        char_result = await db.execute(
+            select(Character).where(Character.id == character_id)
+        )
+    else:
+        char_result = await db.execute(
+            select(Character)
+            .where(Character.id == character_id)
+            .where(Character.user_id == current_user.id)
+        )
     if not char_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Character not found")
 
