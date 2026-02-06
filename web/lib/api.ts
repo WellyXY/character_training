@@ -485,6 +485,7 @@ export interface AdminUser {
   token_balance: number;
   is_active: boolean;
   is_admin: boolean;
+  role: string;  // admin, developer, user
   created_at: string;
 }
 
@@ -527,5 +528,16 @@ export async function adminUpdateTokens(userId: string, amount: number): Promise
 
 export async function adminListCharacters(): Promise<AdminCharacter[]> {
   return apiFetch<AdminCharacter[]>("/admin/characters");
+}
+
+export async function adminUpdateRole(userId: string, role: string): Promise<AdminUser> {
+  return apiFetch<AdminUser>(`/admin/users/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function adminDeleteUser(userId: string): Promise<void> {
+  await apiFetch<void>(`/admin/users/${userId}`, { method: "DELETE" });
 }
 

@@ -187,5 +187,18 @@ def _run_migrations(conn):
                 except Exception as e:
                     logger.warning(f"Could not add user_id column to characters: {e}")
 
+        # Add role column to users table if missing
+        if "users" in inspector.get_table_names():
+            existing_columns = {col["name"] for col in inspector.get_columns("users")}
+            if "role" not in existing_columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user'"))
+                    logger.info("Added role column to users table")
+                    # Set role based on is_admin
+                    conn.execute(text("UPDATE users SET role = 'admin' WHERE is_admin = true"))
+                    logger.info("Updated role for existing admin users")
+                except Exception as e:
+                    logger.warning(f"Could not add role column to users: {e}")
+
     except Exception as e:
         logger.warning(f"Migration check failed: {e}")

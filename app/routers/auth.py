@@ -48,6 +48,7 @@ class UserResponse(BaseModel):
     token_balance: int
     is_active: bool
     is_admin: bool
+    role: str = "user"  # admin, developer, user
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -60,6 +61,12 @@ class CreateUserRequest(BaseModel):
     password: str
     token_balance: int = 100
     is_admin: bool = False
+    role: str = "user"  # admin, developer, user
+
+
+class UpdateRoleRequest(BaseModel):
+    """Admin request to update user role."""
+    role: str  # admin, developer, user
 
 
 class UpdateTokensRequest(BaseModel):
@@ -87,6 +94,7 @@ def _user_to_response(user: User) -> UserResponse:
         username=user.username,
         token_balance=user.token_balance,
         is_active=user.is_active,
+        role=getattr(user, 'role', 'user'),
         is_admin=user.is_admin,
         created_at=user.created_at.isoformat(),
     )
@@ -195,7 +203,8 @@ async def create_user(
         username=request.username,
         hashed_password=get_password_hash(request.password),
         token_balance=request.token_balance,
-        is_admin=request.is_admin,
+        is_admin=request.is_admin or request.role == "admin",
+        role=request.role,
     )
     db.add(user)
     await db.commit()
@@ -333,3 +342,73 @@ async def get_user_transactions(
         )
         for t in transactions
     ]
+
+
+@router.put("/admin/users/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: str,
+    request: UpdateRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Update a user's role (admin only)."""
+    if request.role not in ["admin", "developer", "user"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role. Must be 'admin', 'developer', or 'user'",
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent admin from demoting themselves
+    if user.id == admin_user.id and request.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change your own admin role",
+        )
+
+    user.role = request.role
+    user.is_admin = request.role == "admin"
+    await db.commit()
+    await db.refresh(user)
+
+    logger.info(f"Admin {admin_user.username} changed user {user.username} role to {request.role}")
+
+    return _user_to_response(user)
+
+
+@router.delete("/admin/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Delete a user (admin only)."""
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent admin from deleting themselves
+    if user.id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    username = user.username
+    await db.delete(user)
+    await db.commit()
+
+    logger.info(f"Admin {admin_user.username} deleted user {username}")
+
+    return {"status": "deleted", "username": username}

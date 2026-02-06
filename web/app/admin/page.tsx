@@ -7,6 +7,8 @@ import {
   adminListUsers,
   adminCreateUser,
   adminUpdateTokens,
+  adminUpdateRole,
+  adminDeleteUser,
   adminListCharacters,
   type AdminUser,
   type AdminCharacter,
@@ -30,13 +32,17 @@ export default function AdminPage() {
     email: "",
     password: "",
     token_balance: 100,
-    is_admin: false,
+    role: "user",
   });
   const [creating, setCreating] = useState(false);
 
   // Token update
   const [tokenUpdate, setTokenUpdate] = useState<{ userId: string; amount: string } | null>(null);
   const [updating, setUpdating] = useState(false);
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -72,7 +78,10 @@ export default function AdminPage() {
     setCreating(true);
     setError("");
     try {
-      const created = await adminCreateUser(newUser);
+      const created = await adminCreateUser({
+        ...newUser,
+        is_admin: newUser.role === "admin",
+      });
       setUsers((prev) => [created, ...prev]);
       setShowCreateForm(false);
       setNewUser({
@@ -80,7 +89,7 @@ export default function AdminPage() {
         email: "",
         password: "",
         token_balance: 100,
-        is_admin: false,
+        role: "user",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
@@ -104,6 +113,33 @@ export default function AdminPage() {
       setError(err instanceof Error ? err.message : "Failed to update tokens");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, role: string) => {
+    setUpdating(true);
+    setError("");
+    try {
+      const updated = await adminUpdateRole(userId, role);
+      setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setDeleting(true);
+    setError("");
+    try {
+      await adminDeleteUser(userId);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setDeleteConfirm(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -249,18 +285,19 @@ export default function AdminPage() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-4 mb-4">
-                  <label className="flex items-center gap-2 text-sm font-mono">
-                    <input
-                      type="checkbox"
-                      checked={newUser.is_admin}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, is_admin: e.target.checked })
-                      }
-                      className="w-4 h-4"
-                    />
-                    Admin User
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-400 font-mono mb-1">
+                    Role
                   </label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                    className="w-full px-3 py-2 bg-black border border-[#333] rounded-lg text-sm font-mono focus:outline-none focus:border-white/50"
+                  >
+                    <option value="user">User</option>
+                    <option value="developer">Developer</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
                 <button
                   type="submit"
@@ -340,26 +377,63 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="py-3 px-2">
-                        <span
-                          className={`text-xs font-mono px-2 py-1 rounded ${
-                            u.is_admin
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : "bg-gray-500/20 text-gray-400"
+                        <select
+                          value={u.role || (u.is_admin ? "admin" : "user")}
+                          onChange={(e) => handleUpdateRole(u.id, e.target.value)}
+                          disabled={u.id === user?.id || updating}
+                          className={`text-xs font-mono px-2 py-1 rounded bg-transparent border cursor-pointer disabled:cursor-not-allowed ${
+                            (u.role || (u.is_admin ? "admin" : "user")) === "admin"
+                              ? "border-yellow-400/50 text-yellow-400"
+                              : (u.role || "user") === "developer"
+                              ? "border-blue-400/50 text-blue-400"
+                              : "border-gray-500/50 text-gray-400"
                           }`}
                         >
-                          {u.is_admin ? "Admin" : "User"}
-                        </span>
+                          <option value="user">User</option>
+                          <option value="developer">Developer</option>
+                          <option value="admin">Admin</option>
+                        </select>
                       </td>
                       <td className="py-3 px-2 font-mono text-sm text-gray-400">
                         {new Date(u.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-2">
-                        <button
-                          onClick={() => setTokenUpdate({ userId: u.id, amount: "" })}
-                          className="text-xs text-blue-400 hover:text-blue-300 font-mono"
-                        >
-                          Add Tokens
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setTokenUpdate({ userId: u.id, amount: "" })}
+                            className="text-xs text-blue-400 hover:text-blue-300 font-mono"
+                          >
+                            Tokens
+                          </button>
+                          {u.id !== user?.id && (
+                            <>
+                              {deleteConfirm === u.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    disabled={deleting}
+                                    className="text-xs text-red-400 hover:text-red-300 font-mono"
+                                  >
+                                    {deleting ? "..." : "Confirm"}
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    className="text-xs text-gray-400 hover:text-white font-mono"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirm(u.id)}
+                                  className="text-xs text-red-400 hover:text-red-300 font-mono"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
