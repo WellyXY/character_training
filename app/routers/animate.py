@@ -520,8 +520,8 @@ async def _poll_video_completion(
     storage = get_storage_service()
 
     try:
-        # Poll for video completion with progress updates (up to 5 minutes)
-        timeout = 300
+        # Poll for video completion with progress updates (up to 10 minutes)
+        timeout = 600
         poll_interval = 5
         elapsed = 0
         last_progress = 0
