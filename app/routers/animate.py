@@ -183,28 +183,41 @@ async def analyze_image_for_animation(
 
     analysis_prompt = """Analyze this image and suggest how it could be animated as a short video.
 
-CRITICAL: The person's facial features, face structure, and identity MUST remain completely unchanged during animation. Only suggest body movements and camera motions that will NOT alter or distort the face.
+CRITICAL: The person's facial features, face structure, and identity MUST remain completely unchanged during animation.
 
-Consider:
-1. The subject's pose and position
-2. Natural movements that would fit the scene (avoid extreme head movements that could distort facial features)
-3. Camera movements that would enhance the composition
-4. Movements that keep the face stable and recognizable
+## Analysis Focus:
+
+1. **Character Body Actions (MOST IMPORTANT)**: Based on the scene, pose, and mood, suggest natural or alluring body movements:
+   - Sensual/sexy scenes: slow hair toss, gentle hip sway, running fingers through hair, arching back, shifting weight between legs, biting lip, looking over shoulder, adjusting clothing strap, stretching languidly
+   - Casual/natural scenes: turning head with a smile, brushing hair behind ear, taking a deep breath (chest rise), leaning forward, crossing/uncrossing legs, tilting head playfully, laughing naturally
+   - Dynamic scenes: walking toward camera, spinning slowly, sitting down gracefully, standing up confidently
+   - The body action should match the mood and outfit in the image
+
+2. **Camera Movement (secondary)**: Subtle camera motion to complement the body action:
+   - Slow zoom in, gentle orbit, dolly forward, slight tilt up/down
+
+3. **Atmosphere**: Wind, lighting shifts, fabric movement, hair flow that adds life to the scene
 
 Respond in JSON format:
 {
-    "image_description": "Brief description of what's in the image",
-    "suggested_prompt": "A detailed video generation prompt describing the motion/animation",
+    "image_description": "Brief description of what's in the image including pose, outfit, setting, mood",
+    "suggested_prompt": "A detailed video prompt combining character action + camera motion + atmosphere",
     "motion_types": ["list", "of", "suggested", "motion", "types"]
 }
 
-The suggested_prompt should be specific and describe:
-- What movement or action should happen (while preserving facial identity)
-- How the camera might move (if applicable)
-- The mood or style of the animation
-- MUST include instruction to maintain the person's exact facial features and identity
+The suggested_prompt MUST:
+- Lead with the CHARACTER'S BODY ACTION (what the person does), not the camera
+- Include a complementary camera movement
+- Add atmospheric details (hair flowing, fabric moving, light shifting)
+- Maintain the person's exact facial features and identity
+- Be 2-3 sentences, vivid and specific
 
-Keep the prompt concise but descriptive (1-2 sentences). Always include "maintain exact facial features" or similar phrasing."""
+Example good prompts:
+- "The woman slowly runs her fingers through her long hair while tilting her head back with a sultry expression, her silk dress catching the breeze. Slow dolly forward with soft golden light shifting across her skin. Maintain exact facial features."
+- "She turns her head toward the camera with a playful smile, gently brushing hair behind her ear as she shifts her weight. Subtle zoom in capturing the intimate moment. Maintain exact facial features."
+- "The woman arches her back slightly and looks over her shoulder with a confident gaze, her lingerie strap sliding down naturally. Gentle orbit camera revealing the scene. Maintain exact facial features."
+
+The motion_types should include both body actions AND camera movements, e.g. ["hair toss", "hip sway", "slow zoom in", "dolly forward"]."""
 
     try:
         response = await gemini.analyze_image(
