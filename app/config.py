@@ -32,10 +32,11 @@ class Settings(BaseSettings):
     gpt_reasoning_model: str = "o1-mini"
     gpt_creative_model: str = "gpt-4o"
 
-    # Google Gemini
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
-    gemini_vision_model: str = "gemini-2.0-flash"
+    # GMI Cloud (OpenAI-compatible API)
+    gmi_api_key: str = ""
+    gmi_base_url: str = "https://api.gmi-serving.com/v1"
+    gmi_model: str = "google/gemini-3-flash-preview"
+    gmi_vision_model: str = "google/gemini-3-flash-preview"
 
     # Seedream (Image Generation)
     seedream_api_key: str = ""
