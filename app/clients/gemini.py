@@ -22,6 +22,22 @@ class GeminiClient:
         self.model_name = settings.gmi_model
         self.vision_model_name = settings.gmi_vision_model
 
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """Strip Gemini's thinking/reasoning block from response.
+
+        Gemini 3 Flash prefixes responses with a bold-titled thinking block:
+          **Title**\\n\\nreasoning text...\\n\\n\\nactual content
+        This method removes that prefix and returns only the actual content.
+        """
+        if not text or not text.startswith("**"):
+            return text
+        # Thinking block is separated from actual content by triple newline
+        parts = text.split("\n\n\n", 1)
+        if len(parts) == 2 and parts[1].strip():
+            return parts[1].strip()
+        return text
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -40,7 +56,7 @@ class GeminiClient:
             kwargs["response_format"] = response_format
 
         response = await self.client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
+        return self._strip_thinking(response.choices[0].message.content)
 
     async def chat_json(
         self,
@@ -173,7 +189,7 @@ class GeminiClient:
             messages=messages,
             max_tokens=4096,
         )
-        return response.choices[0].message.content
+        return self._strip_thinking(response.choices[0].message.content)
 
     async def compare_images(
         self,
@@ -198,7 +214,7 @@ class GeminiClient:
             messages=messages,
             max_tokens=4096,
         )
-        return response.choices[0].message.content
+        return self._strip_thinking(response.choices[0].message.content)
 
     async def chat_with_tools(
         self,
