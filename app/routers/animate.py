@@ -187,16 +187,17 @@ CRITICAL: The person's facial features, face structure, and identity MUST remain
 
 ## Analysis Focus:
 
-1. **Character Body Actions (MOST IMPORTANT)**: Based on the scene, pose, and mood, suggest natural or alluring body movements:
-   - Sensual/sexy scenes: slow hair toss, gentle hip sway, running fingers through hair, arching back, shifting weight between legs, biting lip, looking over shoulder, adjusting clothing strap, stretching languidly
-   - Casual/natural scenes: turning head with a smile, brushing hair behind ear, taking a deep breath (chest rise), leaning forward, crossing/uncrossing legs, tilting head playfully, laughing naturally
-   - Dynamic scenes: walking toward camera, spinning slowly, sitting down gracefully, standing up confidently
+1. **Character Body Actions (MOST IMPORTANT)**: Based on the scene, pose, and mood, suggest natural or alluring body movements at a LIVELY, ENERGETIC pace — NOT slow motion:
+   - Sensual/sexy scenes: quick hair flip, confident hip sway, running fingers through hair briskly, arching back with energy, shifting weight dynamically, biting lip, snapping a look over shoulder, playfully adjusting clothing strap
+   - Casual/natural scenes: turning head swiftly with a bright smile, brushing hair behind ear, taking a deep breath, leaning forward with interest, crossing legs in one smooth motion, tilting head with a quick wink, laughing naturally
+   - Dynamic scenes: walking briskly toward camera, spinning with momentum, sitting down in one fluid motion, standing up with confidence and purpose
    - The body action should match the mood and outfit in the image
+   - **SPEED RULE**: All movements should feel natural real-time speed or slightly energetic. NEVER use words like "slowly", "gently", "gradually", "languidly". Instead use "smoothly", "swiftly", "confidently", "briskly", "naturally", "fluidly"
 
-2. **Camera Movement (secondary)**: Subtle camera motion to complement the body action:
-   - Slow zoom in, gentle orbit, dolly forward, slight tilt up/down
+2. **Camera Movement (secondary)**: Complementary camera motion at matching pace:
+   - Steady zoom in, smooth orbit, dolly forward, dynamic tilt
 
-3. **Atmosphere**: Wind, lighting shifts, fabric movement, hair flow that adds life to the scene
+3. **Atmosphere**: Wind blowing hair, fabric swaying, light shifting — all at natural speed, never slow-motion
 
 Respond in JSON format:
 {
@@ -207,17 +208,18 @@ Respond in JSON format:
 
 The suggested_prompt MUST:
 - Lead with the CHARACTER'S BODY ACTION (what the person does), not the camera
+- Use NATURAL or BRISK pacing words — NEVER "slowly", "gently", "gradually". Use "smoothly", "swiftly", "confidently", "briskly", "fluidly" instead
 - Include a complementary camera movement
 - Add atmospheric details (hair flowing, fabric moving, light shifting)
 - Maintain the person's exact facial features and identity
 - Be 2-3 sentences, vivid and specific
 
 Example good prompts:
-- "The woman slowly runs her fingers through her long hair while tilting her head back with a sultry expression, her silk dress catching the breeze. Slow dolly forward with soft golden light shifting across her skin. Maintain exact facial features."
-- "She turns her head toward the camera with a playful smile, gently brushing hair behind her ear as she shifts her weight. Subtle zoom in capturing the intimate moment. Maintain exact facial features."
-- "The woman arches her back slightly and looks over her shoulder with a confident gaze, her lingerie strap sliding down naturally. Gentle orbit camera revealing the scene. Maintain exact facial features."
+- "The woman flips her long hair back confidently while running her fingers through it with a sultry expression, her silk dress catching the breeze. Smooth dolly forward with golden light shifting across her skin. Maintain exact facial features."
+- "She turns her head swiftly toward the camera with a bright smile, brushing hair behind her ear as she shifts her weight. Steady zoom in capturing the moment. Maintain exact facial features."
+- "The woman arches her back and snaps a confident look over her shoulder, her lingerie strap sliding down naturally. Smooth orbit camera revealing the scene. Maintain exact facial features."
 
-The motion_types should include both body actions AND camera movements, e.g. ["hair toss", "hip sway", "slow zoom in", "dolly forward"]."""
+The motion_types should include both body actions AND camera movements, e.g. ["hair flip", "hip sway", "zoom in", "dolly forward"]."""
 
     try:
         response = await gemini.analyze_image(
@@ -426,7 +428,7 @@ async def generate_animation(
             )
         else:
             # Add face preservation emphasis to the prompt
-            enhanced_prompt = f"Maintain exact facial features and identity unchanged. {request.prompt}"
+            enhanced_prompt = f"Natural real-time speed movement, not slow motion. Maintain exact facial features and identity unchanged. {request.prompt}"
 
             logger.info(
                 "Starting video generation for image %s with prompt: %s",
