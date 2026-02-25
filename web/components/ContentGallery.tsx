@@ -1349,6 +1349,14 @@ export default function ContentGallery({
                           <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.prompt}</p>
                         </div>
                       )}
+
+                      {/* Video Prompt (enhanced prompt sent to API) */}
+                      {selectedItem.video.metadata?.enhanced_prompt && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Video Prompt</p>
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedItem.video.metadata.enhanced_prompt}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 

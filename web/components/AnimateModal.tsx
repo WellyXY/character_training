@@ -66,6 +66,7 @@ export default function AnimateModal({
   );
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [videoModel, setVideoModel] = useState<"v1" | "v2">("v1");
   const [addSubtitles, setAddSubtitles] = useState(false);
   const [matchReferencePose, setMatchReferencePose] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -175,6 +176,8 @@ export default function AnimateModal({
     onClose();
 
     // Fire API call in background (continues after unmount)
+    // Force V1 when reference video is present (V2 doesn't support Addition API)
+    const effectiveModel = referenceVideo ? "v1" : videoModel;
     const requestData = {
       image_id: image.id,
       image_url: image.image_url,
@@ -182,6 +185,7 @@ export default function AnimateModal({
       prompt: prompt.trim(),
       reference_video_url: referenceVideo?.url ?? undefined,
       reference_video_duration: referenceVideo?.duration ?? undefined,
+      video_model: effectiveModel,
       add_subtitles: addSubtitles,
       match_reference_pose: referenceVideo ? matchReferencePose : false,
     };
@@ -394,6 +398,38 @@ export default function AnimateModal({
 
                   {/* Options */}
                   <div className="space-y-2 mb-4">
+                    {/* Video Model Toggle */}
+                    <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                      <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Video Model</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setVideoModel("v1")}
+                          disabled={!!referenceVideo}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                            (referenceVideo ? "v1" : videoModel) === "v1"
+                              ? "bg-white text-black"
+                              : "bg-white/10 text-gray-400 hover:text-white"
+                          } ${referenceVideo ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          V1
+                        </button>
+                        <button
+                          onClick={() => setVideoModel("v2")}
+                          disabled={!!referenceVideo}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
+                            (referenceVideo ? "v1" : videoModel) === "v2"
+                              ? "bg-white text-black"
+                              : "bg-white/10 text-gray-400 hover:text-white"
+                          } ${referenceVideo ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          V2
+                        </button>
+                      </div>
+                      {referenceVideo && (
+                        <p className="text-xs text-gray-500 font-mono mt-1">V2 unavailable with reference video</p>
+                      )}
+                    </div>
+
                     {/* Match Reference Pose Toggle - only shown when reference video is present */}
                     {referenceVideo && (
                       <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">

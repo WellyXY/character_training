@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     gmi_base_url: str = "https://api.gmi-serving.com/v1"
     gmi_model: str = "google/gemini-3-flash-preview"
     gmi_vision_model: str = "google/gemini-3-flash-preview"
+    gmi_video_model: str = "wan2.6-i2v"
 
     # Seedream (Image Generation)
     seedream_api_key: str = ""

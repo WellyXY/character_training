@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.database import get_db, async_session
 from app.clients.gemini import get_gemini_client
 from app.clients.parrot import get_parrot_client
+from app.clients.gmi_video import get_gmi_video_client
 from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service, StorageService
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
@@ -139,6 +140,7 @@ class GenerateRequest(BaseModel):
     prompt: str
     reference_video_url: Optional[str] = None
     reference_video_duration: Optional[float] = None
+    video_model: str = "v1"  # "v1" = Parrot/Pika, "v2" = GMI LTX
     add_subtitles: bool = False
     match_reference_pose: bool = False
     pose_image_aspect_ratio: str = "9:16"  # Aspect ratio for pose-matched image generation
@@ -188,16 +190,22 @@ CRITICAL: The person's facial features, face structure, and identity MUST remain
 ## Analysis Focus:
 
 1. **Character Body Actions (MOST IMPORTANT)**: Based on the scene, pose, and mood, suggest natural or alluring body movements at a LIVELY, ENERGETIC pace — NOT slow motion:
-   - Sensual/sexy scenes: quick hair flip, confident hip sway, running fingers through hair briskly, arching back with energy, shifting weight dynamically, biting lip, snapping a look over shoulder, playfully adjusting clothing strap
-   - Casual/natural scenes: turning head swiftly with a bright smile, brushing hair behind ear, taking a deep breath, leaning forward with interest, crossing legs in one smooth motion, tilting head with a quick wink, laughing naturally
-   - Dynamic scenes: walking briskly toward camera, spinning with momentum, sitting down in one fluid motion, standing up with confidence and purpose
-   - The body action should match the mood and outfit in the image
+   - Sensual/sexy scenes: quick hair flip, confident hip sway, running fingers through hair briskly, arching back with energy, shifting weight dynamically, snapping a look over shoulder, playfully adjusting clothing strap, tracing collarbone with fingertips, stretching arms above head, leaning forward to reveal cleavage, rolling shoulders back, caressing own neck, tugging at hem of skirt
+   - Facial expressions (IMPORTANT — pick one that matches the mood):
+     * Seductive: biting lower lip, half-lidded bedroom eyes, smoldering gaze into camera, parting lips slightly, raising one eyebrow suggestively, tongue lightly touching upper lip
+     * Playful: winking at camera, sticking tongue out briefly, blowing a kiss, scrunching nose cutely, puffing cheeks, mischievous grin, exaggerated surprised look
+     * Confident: sharp eye contact with a smirk, chin-up power stare, knowing smile, narrowing eyes with intensity, jaw clench then release into smile
+     * Sweet/warm: bright genuine smile showing teeth, soft closed-eye smile, shy look away then back with a grin, eyes lighting up, gentle head tilt with warm gaze, bashful giggle covering mouth
+   - Casual/natural scenes: turning head swiftly with a bright smile, brushing hair behind ear, taking a deep breath, leaning forward with interest, crossing legs in one smooth motion, tilting head with a quick wink, laughing naturally, resting chin on hand, fidgeting with jewelry or accessories, adjusting sunglasses, sipping a drink, looking up from phone, stretching lazily
+   - Dynamic scenes: walking briskly toward camera, spinning with momentum, sitting down in one fluid motion, standing up with confidence and purpose, jumping playfully, dance move or body wave, throwing head back laughing, striking a pose, hands on hips power stance, twirling hair while walking
+   - Hand & arm gestures: waving at camera, peace sign, heart shape with fingers, beckoning gesture, clapping, finger guns, covering face shyly then peeking, reaching toward camera, fixing hair clip, adjusting earring
+   - The body action AND expression should match the mood and outfit in the image
    - **SPEED RULE**: All movements should feel natural real-time speed or slightly energetic. NEVER use words like "slowly", "gently", "gradually", "languidly". Instead use "smoothly", "swiftly", "confidently", "briskly", "naturally", "fluidly"
 
 2. **Camera Movement (secondary)**: Complementary camera motion at matching pace:
-   - Steady zoom in, smooth orbit, dolly forward, dynamic tilt
+   - Steady zoom in, smooth orbit, dolly forward, dynamic tilt, push-in close-up, subtle parallax shift
 
-3. **Atmosphere**: Wind blowing hair, fabric swaying, light shifting — all at natural speed, never slow-motion
+3. **Atmosphere**: Wind blowing hair, fabric swaying, light shifting, lens flare, bokeh sparkles — all at natural speed, never slow-motion
 
 Respond in JSON format:
 {
@@ -208,6 +216,7 @@ Respond in JSON format:
 
 The suggested_prompt MUST:
 - Lead with the CHARACTER'S BODY ACTION (what the person does), not the camera
+- ALWAYS include a specific FACIAL EXPRESSION (e.g. biting lip, winking, smirking, bright smile)
 - Use NATURAL or BRISK pacing words — NEVER "slowly", "gently", "gradually". Use "smoothly", "swiftly", "confidently", "briskly", "fluidly" instead
 - Include a complementary camera movement
 - Add atmospheric details (hair flowing, fabric moving, light shifting)
@@ -215,11 +224,13 @@ The suggested_prompt MUST:
 - Be 2-3 sentences, vivid and specific
 
 Example good prompts:
-- "The woman flips her long hair back confidently while running her fingers through it with a sultry expression, her silk dress catching the breeze. Smooth dolly forward with golden light shifting across her skin. Maintain exact facial features."
-- "She turns her head swiftly toward the camera with a bright smile, brushing hair behind her ear as she shifts her weight. Steady zoom in capturing the moment. Maintain exact facial features."
-- "The woman arches her back and snaps a confident look over her shoulder, her lingerie strap sliding down naturally. Smooth orbit camera revealing the scene. Maintain exact facial features."
+- "The woman flips her long hair back confidently, biting her lower lip with a smoldering gaze into the camera, her silk dress catching the breeze. Smooth dolly forward with golden light shifting across her skin. Maintain exact facial features."
+- "She turns her head swiftly toward the camera with a bright smile showing teeth, brushing hair behind her ear as she shifts her weight playfully. Steady zoom in capturing the moment. Maintain exact facial features."
+- "The woman arches her back and snaps a look over her shoulder with half-lidded bedroom eyes and a knowing smirk, her lingerie strap sliding down naturally. Smooth orbit camera revealing the scene. Maintain exact facial features."
+- "She throws her head back laughing with pure joy, one hand resting on her chest, then looks back at the camera with sparkling eyes and a wide grin. Dynamic push-in close-up with warm bokeh. Maintain exact facial features."
+- "The woman strikes a confident hands-on-hips pose, raising one eyebrow suggestively with a mischievous grin, then winks at the camera while tossing her hair. Smooth parallax shift with lens flare. Maintain exact facial features."
 
-The motion_types should include both body actions AND camera movements, e.g. ["hair flip", "hip sway", "zoom in", "dolly forward"]."""
+The motion_types should include body actions, facial expressions, AND camera movements, e.g. ["hair flip", "lip bite", "hip sway", "wink", "zoom in", "dolly forward"]."""
 
     try:
         response = await gemini.analyze_image(
@@ -431,16 +442,47 @@ async def generate_animation(
             enhanced_prompt = f"Natural real-time speed movement, not slow motion. Maintain exact facial features and identity unchanged. {request.prompt}"
 
             logger.info(
-                "Starting video generation for image %s with prompt: %s",
+                "Starting video generation for image %s with prompt: %s (model=%s)",
                 request.image_id,
                 enhanced_prompt[:150],
+                request.video_model,
             )
 
-            # Create video generation job using standard API
-            video_job_id = await parrot.create_image_to_video(
-                image_source=image_url,
-                prompt_text=enhanced_prompt,
-            )
+            if request.video_model == "v2":
+                # V2: GMI image-to-video
+                # GMI needs a publicly accessible URL or base64 data URI.
+                # Local DB storage URLs (localhost) aren't reachable, so
+                # convert to a base64 data URI when needed.
+                gmi_image_url = image_url
+                if not image_url.startswith("https://"):
+                    import base64 as b64
+                    if request.image_url.startswith("/uploads/"):
+                        file_id = request.image_url.replace("/uploads/", "")
+                        blob = await storage.get_file_blob(file_id, db)
+                        if blob:
+                            mime = blob.content_type or "image/jpeg"
+                            gmi_image_url = f"data:{mime};base64,{b64.b64encode(blob.data).decode()}"
+                        else:
+                            raise ValueError("Image file not found in storage")
+                    else:
+                        # Fetch from local URL and convert
+                        async with httpx.AsyncClient(timeout=30.0) as _c:
+                            resp = await _c.get(image_url)
+                            resp.raise_for_status()
+                            mime = resp.headers.get("content-type", "image/jpeg")
+                            gmi_image_url = f"data:{mime};base64,{b64.b64encode(resp.content).decode()}"
+
+                gmi_video = get_gmi_video_client()
+                video_job_id = await gmi_video.create_image_to_video(
+                    image_url=gmi_image_url,
+                    prompt=enhanced_prompt,
+                )
+            else:
+                # V1: Parrot/Pika image-to-video
+                video_job_id = await parrot.create_image_to_video(
+                    image_source=image_url,
+                    prompt_text=enhanced_prompt,
+                )
 
         logger.info("Video job created: %s", video_job_id)
 
@@ -450,6 +492,7 @@ async def generate_animation(
             "enhanced_prompt": enhanced_prompt,
             "source_image_id": request.image_id,
             "parrot_job_id": video_job_id,
+            "video_model": request.video_model,
             "add_subtitles": request.add_subtitles,
         }
         if use_addition_api:
@@ -497,6 +540,7 @@ async def generate_animation(
                 metadata=metadata,
                 add_subtitles=request.add_subtitles,
                 user_id=current_user.id,
+                video_model=request.video_model,
             )
         )
         # Keep reference to prevent garbage collection
@@ -529,6 +573,7 @@ async def _poll_video_completion(
     metadata: dict,
     add_subtitles: bool = False,
     user_id: str = None,
+    video_model: str = "v1",
 ):
     """Background task to poll for video completion and update database."""
     parrot = get_parrot_client()
@@ -543,7 +588,11 @@ async def _poll_video_completion(
         result = None
 
         while elapsed < timeout:
-            poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
+            if video_model == "v2":
+                gmi_video = get_gmi_video_client()
+                poll_result = await gmi_video.get_request_status(parrot_job_id)
+            else:
+                poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
             status = poll_result.get("status", "").lower()
             progress = poll_result.get("raw", {}).get("progress") or 0
 

@@ -236,6 +236,8 @@ export async function generateDirect(request: {
   character_id: string;
   prompt: string;
   aspect_ratio?: string;
+  reference_image_url?: string;
+  reference_image_mode?: string;
 }): Promise<import("./types").Image> {
   return apiFetch<import("./types").Image>("/generate/direct", {
     method: "POST",
@@ -306,6 +308,7 @@ export interface AnimateImageRequest {
   prompt: string;
   reference_video_url?: string;
   reference_video_duration?: number;
+  video_model?: string;
   add_subtitles?: boolean;
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import type { Character, Image } from "@/lib/types";
-import { resolveApiUrl, uploadFile } from "@/lib/api";
+import { resolveApiUrl } from "@/lib/api";
 import CustomPromptModal from "./CustomPromptModal";
 
 interface CharacterSidebarProps {
@@ -15,6 +15,7 @@ interface CharacterSidebarProps {
   onApproveImage: (imageId: string) => Promise<void>;
   onDeleteImage: (imageId: string) => Promise<void>;
   onRefresh?: () => void;
+  onStartOnboarding?: () => void;
   loading: boolean;
 }
 
@@ -28,64 +29,11 @@ export default function CharacterSidebar({
   onApproveImage,
   onDeleteImage,
   onRefresh,
+  onStartOnboarding,
   loading,
 }: CharacterSidebarProps) {
-  const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [gender, setGender] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
-  const [referenceFiles, setReferenceFiles] = useState<{ file: File; previewUrl: string }[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAddReferenceFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-    const newEntries = imageFiles.map((file) => ({
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
-    setReferenceFiles((prev) => [...prev, ...newEntries]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleRemoveReferenceFile = (index: number) => {
-    setReferenceFiles((prev) => {
-      URL.revokeObjectURL(prev[index].previewUrl);
-      return prev.filter((_, i) => i !== index);
-    });
-  };
-
-  const handleCreate = async () => {
-    if (!name.trim()) return;
-
-    // Upload reference images first
-    let uploadedPaths: string[] = [];
-    if (referenceFiles.length > 0) {
-      setUploading(true);
-      try {
-        const results = await Promise.all(
-          referenceFiles.map((rf) => uploadFile(rf.file))
-        );
-        uploadedPaths = results.map((r) => r.url);
-      } catch (err) {
-        console.error("Failed to upload reference images:", err);
-      } finally {
-        setUploading(false);
-      }
-    }
-
-    await onCreate(name.trim(), description.trim(), gender || undefined, uploadedPaths.length > 0 ? uploadedPaths : undefined);
-    // Clean up
-    referenceFiles.forEach((rf) => URL.revokeObjectURL(rf.previewUrl));
-    setReferenceFiles([]);
-    setName("");
-    setDescription("");
-    setGender("");
-    setShowCreate(false);
-  };
 
   const approvedImages = baseImages.filter((img) => img.is_approved && img.image_url);
   const pendingImages = baseImages.filter((img) => !img.is_approved && img.image_url);
@@ -256,89 +204,12 @@ export default function CharacterSidebar({
 
       {/* Create Character */}
       <div className="mt-auto pt-4 border-t border-white/10">
-        {showCreate ? (
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Character name"
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
-            />
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Character description"
-              rows={2}
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
-            />
-            <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-sm text-white font-mono"
-            >
-              <option value="">Gender (optional)</option>
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-            </select>
-            {/* Reference Images Upload */}
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleAddReferenceFiles}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-lg border border-dashed border-white/20 px-3 py-2 text-xs font-mono text-gray-400 hover:text-white hover:border-white/40 transition-colors"
-              >
-                + Reference Images (optional)
-              </button>
-              {referenceFiles.length > 0 && (
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {referenceFiles.map((rf, i) => (
-                    <div key={i} className="relative w-10 h-10 rounded overflow-hidden group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rf.previewUrl} alt="" className="w-full h-full object-cover" />
-                      <button
-                        onClick={() => handleRemoveReferenceFile(i)}
-                        className="absolute inset-0 bg-black/60 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleCreate}
-                disabled={loading || uploading || !name.trim()}
-                className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
-              >
-                Create
-              </button>
-              <button
-                onClick={() => setShowCreate(false)}
-                className="flex-1 rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="w-full rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300"
-          >
-            + New Character
-          </button>
-        )}
+        <button
+          onClick={() => onStartOnboarding?.()}
+          className="w-full rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300"
+        >
+          + New Character
+        </button>
       </div>
 
       {/* Custom Prompt Modal */}

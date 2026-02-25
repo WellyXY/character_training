@@ -31,6 +31,7 @@ import CharacterSidebar from "@/components/CharacterSidebar";
 import ContentGallery from "@/components/ContentGallery";
 import AgentChatPanel, { ChatMessage } from "@/components/AgentChatPanel";
 import AppNavbar from "@/components/AppNavbar";
+import OnboardingWizard from "@/components/OnboardingWizard";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
@@ -52,6 +53,10 @@ function HomeContent() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [charactersLoaded, setCharactersLoaded] = useState(false);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -282,7 +287,10 @@ function HomeContent() {
     try {
       const data = await listCharacters();
       setCharacters(data);
-      if (data.length > 0 && !selectedCharacterId) {
+      setCharactersLoaded(true);
+      if (data.length === 0) {
+        setShowOnboarding(true);
+      } else if (!selectedCharacterId) {
         // Restore from URL param first, then cookie, then default to first
         const cookieId = document.cookie.match(/selectedCharacterId=([^;]+)/)?.[1];
         const restoreId = urlCharacterId || cookieId;
@@ -291,6 +299,7 @@ function HomeContent() {
       }
     } catch (err) {
       handleApiError(err, "Failed to load characters");
+      setCharactersLoaded(true);
     }
   };
 
@@ -631,6 +640,20 @@ function HomeContent() {
     }
   };
 
+  // ── Onboarding wizard ──
+  if (showOnboarding && charactersLoaded) {
+    return (
+      <OnboardingWizard
+        onComplete={async (characterId) => {
+          setShowOnboarding(false);
+          await loadCharacters();
+          selectCharacter(characterId);
+        }}
+        onSkip={() => setShowOnboarding(false)}
+      />
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black text-white">
       {/* Navbar */}
@@ -665,6 +688,7 @@ function HomeContent() {
             onRefresh={() => {
               if (selectedCharacterId) loadMedia(selectedCharacterId);
             }}
+            onStartOnboarding={() => setShowOnboarding(true)}
             loading={loading}
           />
 
@@ -757,7 +781,7 @@ export default function Home() {
     <ProtectedRoute>
       <Suspense fallback={
         <div className="min-h-screen bg-black text-white flex items-center justify-center">
-          <span className="text-amber-400 animate-pulse">Loading...</span>
+          <span className="text-white animate-pulse">Loading...</span>
         </div>
       }>
         <HomeContent />

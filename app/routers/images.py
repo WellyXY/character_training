@@ -394,6 +394,8 @@ class DirectGenerateRequest(BaseModel):
     character_id: str
     prompt: str
     aspect_ratio: str = "9:16"
+    reference_image_url: Optional[str] = None
+    reference_image_mode: Optional[str] = None
 
 
 async def _generate_direct_background(
@@ -402,18 +404,25 @@ async def _generate_direct_background(
     prompt: str,
     aspect_ratio: str,
     user_id: str,
+    reference_image_url: Optional[str] = None,
+    reference_image_mode: Optional[str] = None,
 ):
     """Background task: generate a direct content image."""
     skill = ImageGeneratorSkill()
     async with async_session() as db:
         try:
+            params = {
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,
+                "existing_image_id": image_id,
+            }
+            if reference_image_url:
+                params["reference_image_path"] = reference_image_url
+            if reference_image_mode:
+                params["reference_image_mode"] = reference_image_mode
             result = await skill.execute(
                 action="generate_content",
-                params={
-                    "prompt": prompt,
-                    "aspect_ratio": aspect_ratio,
-                    "existing_image_id": image_id,
-                },
+                params=params,
                 character_id=character_id,
                 db=db,
             )
@@ -498,6 +507,8 @@ async def generate_direct(
             prompt=request.prompt,
             aspect_ratio=request.aspect_ratio,
             user_id=current_user.id,
+            reference_image_url=request.reference_image_url,
+            reference_image_mode=request.reference_image_mode,
         )
     )
 
