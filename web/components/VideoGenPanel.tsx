@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Image } from "@/lib/types";
 import {
   analyzeImageForAnimation,
@@ -24,6 +24,9 @@ interface VideoGenPanelProps {
   onClearPreSelected: () => void;
   onVideoCreated: () => void;
   onTaskStarted?: (task: { task_id: string; prompt: string; reference_image_url?: string }) => void;
+  initialReferenceVideo?: { url: string; duration: number } | null;
+  initialReferenceVideoLoading?: boolean;
+  onClearInitialReferenceVideo?: () => void;
 }
 
 // Default video prompt presets from Prompt.md
@@ -105,6 +108,9 @@ export default function VideoGenPanel({
   onClearPreSelected,
   onVideoCreated,
   onTaskStarted,
+  initialReferenceVideo,
+  initialReferenceVideoLoading = false,
+  onClearInitialReferenceVideo,
 }: VideoGenPanelProps) {
   const { refreshUser } = useAuth();
   const [selectedImage, setSelectedImage] = useState<Image | null>(preSelectedImage);
@@ -124,6 +130,18 @@ export default function VideoGenPanel({
   if (preSelectedImage && preSelectedImage.id !== selectedImage?.id) {
     setSelectedImage(preSelectedImage);
   }
+
+  // Sync initial reference video from parent (e.g. from community "Apply Ref")
+  useEffect(() => {
+    if (initialReferenceVideo && !referenceVideo) {
+      setReferenceVideo({
+        file: null,
+        url: initialReferenceVideo.url,
+        duration: initialReferenceVideo.duration,
+      });
+      onClearInitialReferenceVideo?.();
+    }
+  }, [initialReferenceVideo]);
 
   const completedImages = availableImages.filter(
     (img) => img.status !== "generating" && img.image_url
@@ -504,14 +522,14 @@ export default function VideoGenPanel({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={generating || !prompt.trim() || !characterId}
+          disabled={generating || !prompt.trim() || !characterId || initialReferenceVideoLoading}
           className="w-full py-3 rounded-xl bg-white hover:bg-gray-200 disabled:bg-gray-600 disabled:cursor-not-allowed text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          {generating ? "Generating..." : "Generate Video"}
+          {generating ? "Generating..." : initialReferenceVideoLoading ? "Loading ref video..." : "Generate Video"}
         </button>
       </div>
     </section>

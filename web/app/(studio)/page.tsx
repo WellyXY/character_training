@@ -20,6 +20,7 @@ import {
   agentClear,
   getGenerationTask,
   generateBaseImages,
+  resolveApiUrl,
 } from "@/lib/api";
 import ContentGallery from "@/components/ContentGallery";
 import AgentChatPanel, { ChatMessage } from "@/components/AgentChatPanel";
@@ -54,8 +55,30 @@ function GalleryContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Right panel tab state
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("image");
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>(initialVideoRefUrl ? "video" : "image");
   const [preSelectedVideoImage, setPreSelectedVideoImage] = useState<Image | null>(null);
+
+  // Video reference from community "Apply Ref"
+  const [videoRefForPanel, setVideoRefForPanel] = useState<{ url: string; duration: number } | null>(null);
+  const [videoRefLoading, setVideoRefLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialVideoRefUrl) {
+      setRightPanelTab("video");
+      setVideoRefLoading(true);
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        setVideoRefForPanel({ url: initialVideoRefUrl, duration: video.duration || 5 });
+        setVideoRefLoading(false);
+      };
+      video.onerror = () => {
+        setVideoRefForPanel({ url: initialVideoRefUrl, duration: 5 });
+        setVideoRefLoading(false);
+      };
+      video.src = resolveApiUrl(initialVideoRefUrl);
+    }
+  }, [initialVideoRefUrl]);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -789,6 +812,9 @@ function GalleryContent() {
               preSelectedImage={preSelectedVideoImage}
               onClearPreSelected={() => setPreSelectedVideoImage(null)}
               onVideoCreated={() => { if (selectedCharacterId) loadMedia(selectedCharacterId); }}
+              initialReferenceVideo={videoRefForPanel}
+              initialReferenceVideoLoading={videoRefLoading}
+              onClearInitialReferenceVideo={() => { setVideoRefForPanel(null); setVideoRefLoading(false); }}
               onTaskStarted={(task) => {
                 setActiveTasks((prev) => [
                   ...prev,

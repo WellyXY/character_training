@@ -57,23 +57,27 @@ export default function ContentGallery({
   } | null>(null);
   const [animatingImage, setAnimatingImage] = useState<Image | null>(null);
   const [videoRefForAnimate, setVideoRefForAnimate] = useState<{ url: string; duration: number } | null>(null);
+  const [videoRefLoading, setVideoRefLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   // Handle initial video reference from URL
   useEffect(() => {
     if (initialVideoRef) {
-      // Get video duration
+      setVideoRefLoading(true);
       const video = document.createElement("video");
       video.preload = "metadata";
       video.onloadedmetadata = () => {
         setVideoRefForAnimate({ url: initialVideoRef, duration: video.duration || 5 });
+        setVideoRefLoading(false);
       };
       video.onerror = () => {
         setVideoRefForAnimate({ url: initialVideoRef, duration: 5 });
+        setVideoRefLoading(false);
       };
       video.src = resolveApiUrl(initialVideoRef);
     } else {
       setVideoRefForAnimate(null);
+      setVideoRefLoading(false);
     }
   }, [initialVideoRef]);
 
@@ -1391,6 +1395,7 @@ export default function ContentGallery({
           }}
           onTaskStarted={onTaskStarted}
           initialReferenceVideo={videoRefForAnimate}
+          initialReferenceVideoLoading={videoRefLoading}
         />
       )}
     </section>
