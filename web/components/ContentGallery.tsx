@@ -164,9 +164,12 @@ export default function ContentGallery({
     );
   }, [completedImages, completedVideos]);
 
-  // Filter active tasks (pending or generating)
+  // Filter active tasks (pending or generating), excluding any already tracked as a generating DB image
+  const generatingImageTaskIds = new Set(generatingImages.map((img) => img.task_id).filter(Boolean));
   const pendingTasks = activeTasks.filter(
-    (t) => t.status === "pending" || t.status === "generating"
+    (t) =>
+      (t.status === "pending" || t.status === "generating") &&
+      !generatingImageTaskIds.has(t.task_id)
   );
 
   const tabs: { key: TabType; label: string; count: number }[] = [
@@ -258,27 +261,6 @@ export default function ContentGallery({
         })}
       </div>
 
-      {/* Video Reference Mode Banner */}
-      {videoRefForAnimate && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            <span className="text-sm text-amber-200 font-mono">Select an image to animate with reference video</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setVideoRefForAnimate(null);
-              onClearVideoRef?.();
-            }}
-            className="text-amber-400 hover:text-amber-200 text-sm font-mono"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
 
       {/* Content Grid */}
       <div className="flex-1 overflow-y-auto min-h-0">

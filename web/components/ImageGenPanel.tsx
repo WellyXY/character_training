@@ -45,6 +45,7 @@ interface ImageGenPanelProps {
   ) => void;
   onTaskComplete: (taskId: string, resultUrl: string) => void;
   onTaskError: (taskId: string, error: string) => void;
+  onSaveToGallery: () => void;
   loading: boolean;
 }
 
@@ -55,12 +56,14 @@ export default function ImageGenPanel({
   onGenerate,
   onTaskComplete,
   onTaskError,
+  onSaveToGallery,
   loading,
 }: ImageGenPanelProps) {
   const [allSamples, setAllSamples] = useState<SamplePost[]>([]);
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<string | null>(null);
   const [cloth, setCloth] = useState<string | null>(null);
+  const [completedPreviews, setCompletedPreviews] = useState<{ taskId: string; resultUrl: string }[]>([]);
 
   // Fetch community samples once
   useEffect(() => {
@@ -69,11 +72,11 @@ export default function ImageGenPanel({
       .catch(() => {});
   }, []);
 
-  // Pick 4 random samples (stable until allSamples changes)
+  // Pick 2 random samples (stable until allSamples changes)
   const randomSamples = useMemo(() => {
-    if (allSamples.length <= 4) return allSamples;
+    if (allSamples.length <= 2) return allSamples;
     const shuffled = [...allSamples].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 4);
+    return shuffled.slice(0, 2);
   }, [allSamples]);
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [selectedRefImage, setSelectedRefImage] = useState<Image | null>(null);
@@ -150,7 +153,7 @@ export default function ImageGenPanel({
                   key={sample.id}
                   type="button"
                   onClick={() => setPrompt(sample.caption || "")}
-                  className="relative aspect-[4/3] overflow-hidden rounded-lg border border-white/10 hover:border-white/30 transition-colors group"
+                  className="relative aspect-[3/2] overflow-hidden rounded-lg border border-white/10 hover:border-white/30 transition-colors group"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -166,25 +169,33 @@ export default function ImageGenPanel({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!characterId || uploading}
+              className="mt-1.5 w-full py-2 rounded-lg bg-white hover:bg-gray-200 disabled:opacity-50 text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors"
+            >
+              {uploading ? "Uploading..." : "Upload Image"}
+            </button>
           </div>
         )}
 
         {/* Prompt */}
-        <div>
+        {!hasRef && <div>
           <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Prompt</p>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Describe the image you want to generate..."
-            rows={3}
+            rows={4}
             disabled={!characterId}
             className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 resize-none font-mono disabled:opacity-50"
           />
-        </div>
+        </div>}
 
-        {/* Style */}
-        <div>
-          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Style</p>
+        {/* Style & Outfit */}
+        {!hasRef && <div>
+          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Style &amp; Outfit</p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(STYLE_DISPLAY).map(([key, label]) => (
               <button
@@ -201,11 +212,7 @@ export default function ImageGenPanel({
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Cloth */}
-        <div>
-          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Outfit</p>
+          <hr className="border-white/10 my-1.5" />
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(CLOTH_DISPLAY).map(([key, label]) => (
               <button
@@ -222,12 +229,12 @@ export default function ImageGenPanel({
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
-        {/* Aspect Ratio */}
+        {/* Settings: Aspect Ratio + Reference */}
         <div>
-          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Aspect Ratio</p>
-          <div className="flex gap-2">
+          <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Settings</p>
+          <div className="flex gap-2 items-center">
             {ASPECT_RATIO_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -242,26 +249,24 @@ export default function ImageGenPanel({
                 {option.label}
               </button>
             ))}
-          </div>
-        </div>
-
-        {/* Reference Image */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Reference</p>
             {hasRef && (
-              <button
-                type="button"
-                onClick={() => { setSelectedRefImage(null); setUploadedRef(null); }}
-                className="text-[10px] text-gray-500 hover:text-red-400 font-mono uppercase"
-              >
-                Remove
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => { setSelectedRefImage(null); setUploadedRef(null); }}
+              disabled={!characterId}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors disabled:opacity-50 bg-white text-black"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              Ref ✕
+            </button>
+          )}
           </div>
 
-          {hasRef ? (
-            <div className="space-y-2">
+          {/* Reference preview when set */}
+          {hasRef && (
+            <div className="mt-2 space-y-2">
               <div className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/10">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -276,7 +281,6 @@ export default function ImageGenPanel({
                   </p>
                 </div>
               </div>
-              {/* Reference Mode Selector */}
               <div className="space-y-1">
                 {REFERENCE_MODES.filter(m => m.key !== "custom").map((mode) => (
                   <button
@@ -295,54 +299,49 @@ export default function ImageGenPanel({
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowImagePicker(!showImagePicker)}
-                disabled={!characterId}
-                className="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
-              >
-                Select Image
-              </button>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!characterId || uploading}
-                className="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
-              >
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
-            </div>
           )}
 
-          {/* Image Picker Grid */}
-          {showImagePicker && (
-            <div className="mt-2 p-2 rounded-lg bg-[#0b0b0b] border border-white/10 max-h-36 overflow-y-auto">
-              {availableImages.filter(img => img.image_url).length > 0 ? (
-                <div className="grid grid-cols-4 gap-1.5">
-                  {availableImages.filter(img => img.image_url).map((img) => (
-                    <button
-                      key={img.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRefImage(img);
-                        setUploadedRef(null);
-                        setShowImagePicker(false);
-                      }}
-                      className="relative aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-white/30 transition-colors"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={resolveApiUrl(img.image_url!)}
-                        alt="Select"
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
+          {/* Reference select — always visible when no ref attached */}
+          {!hasRef && (
+            <div className="mt-2">
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImagePicker(!showImagePicker)}
+                  disabled={!characterId}
+                  className="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
+                >
+                  Select Reference Image
+                </button>
+              </div>
+              {showImagePicker && (
+                <div className="p-2 rounded-lg bg-[#0b0b0b] border border-white/10 max-h-36 overflow-y-auto">
+                  {availableImages.filter(img => img.image_url).length > 0 ? (
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {availableImages.filter(img => img.image_url).map((img) => (
+                        <button
+                          key={img.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedRefImage(img);
+                            setUploadedRef(null);
+                            setShowImagePicker(false);
+                          }}
+                          className="relative aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-white/30 transition-colors"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={resolveApiUrl(img.image_url!)}
+                            alt="Select"
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 font-mono text-center py-4">No images available</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-xs text-gray-500 font-mono text-center py-4">No images available</p>
               )}
             </div>
           )}
@@ -364,12 +363,37 @@ export default function ImageGenPanel({
               <GenerationProgressCard
                 key={task.task_id}
                 task={task}
-                onComplete={(resultUrl) => onTaskComplete(task.task_id, resultUrl)}
+                onComplete={(resultUrl) => {
+                  setCompletedPreviews((prev) => [...prev, { taskId: task.task_id, resultUrl }]);
+                  onTaskComplete(task.task_id, resultUrl);
+                }}
                 onError={(error) => onTaskError(task.task_id, error)}
               />
             ))}
           </div>
         )}
+
+        {/* Completed Previews — waiting for user to Save */}
+        {completedPreviews.map(({ taskId, resultUrl }) => (
+          <div key={taskId} className="rounded-xl overflow-hidden border border-white/20">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={resolveApiUrl(resultUrl)}
+              alt="Generated"
+              className="w-full aspect-[9/16] object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onSaveToGallery();
+                setCompletedPreviews((prev) => prev.filter((p) => p.taskId !== taskId));
+              }}
+              className="w-full py-2.5 bg-white hover:bg-gray-200 text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors"
+            >
+              Save to Gallery
+            </button>
+          </div>
+        ))}
       </div>
 
       {/* Generate Button */}

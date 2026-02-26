@@ -282,9 +282,31 @@ async def _direct_edit_background(
                 final_prompt = optimized_prompt
                 logger.info(f"Optimized prompt: {final_prompt[:200]}...")
 
-            # Use the source image as reference for generation
+            # Fetch the character's most recent approved base image for face consistency
+            base_result = await db.execute(
+                select(Image)
+                .where(Image.character_id == character_id)
+                .where(Image.type == ImageType.BASE)
+                .where(Image.is_approved == True)
+                .order_by(Image.created_at.desc())
+                .limit(1)
+            )
+            base_images = base_result.scalars().all()
+            base_image_urls = [storage.get_full_url(img.image_url) for img in base_images]
+
+            # Source image for pose/composition, base image appended for face reference only
             source_full_url = storage.get_full_url(source_image_path)
-            reference_images = [source_full_url]
+            reference_images = [source_full_url] + base_image_urls
+            logger.info(f"Reference images: 1 source + {len(base_image_urls)} base = {len(reference_images)} total")
+
+            # If a base image is included, prepend face-reference instruction to the prompt
+            if base_image_urls:
+                final_prompt = (
+                    f"Use the last reference image ONLY to preserve the character's face and identity. "
+                    f"Do NOT copy the pose, clothing, or background from the last reference image. "
+                    f"{final_prompt}"
+                )
+                logger.info("Prepended face-only base image instruction to prompt")
 
             # Generate image with Seedream
             result = await seedream.generate(
@@ -482,3 +504,25 @@ async def save_edited_image(
             success=False,
             message=f"Save failed: {str(e)}",
         )
+
+
+@router.post("/agent/image-edit/approve/{image_id}", response_model=DirectEditResponse)
+async def approve_edited_image(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a generated edit image as approved so it appears in the gallery."""
+    try:
+        res = await db.execute(select(Image).where(Image.id == image_id))
+        image = res.scalar_one_or_none()
+        if not image:
+            return DirectEditResponse(success=False, message="Image not found")
+
+        image.is_approved = True
+        await db.commit()
+        logger.info(f"Edit image {image_id} approved for gallery")
+        return DirectEditResponse(success=True, image_id=image_id, message="Image saved to gallery")
+    except Exception as e:
+        logger.exception(f"Error approving image {image_id}: {e}")
+        return DirectEditResponse(success=False, message=str(e))

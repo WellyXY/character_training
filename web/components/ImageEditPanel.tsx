@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Image } from "@/lib/types";
-import { directImageEdit, saveEditedImage, getImage, resolveApiUrl, ApiError } from "@/lib/api";
+import { directImageEdit, approveEditedImage, getImage, resolveApiUrl, ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface EditMessage {
@@ -10,6 +10,7 @@ interface EditMessage {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  imageId?: string;
   metadata?: Record<string, unknown>;
   isSaved?: boolean;
   timestamp: Date;
@@ -122,16 +123,17 @@ export default function ImageEditPanel({
             try {
               const image = await getImage(result.image_id!);
               if (image.status === "completed" && image.image_url) {
-                // Image is ready
+                // Image is ready — wait for user to click Save
                 const fullImageUrl = resolveApiUrl(image.image_url);
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === messageId
                       ? {
                           ...m,
-                          content: "Image generated. It's automatically saved to the gallery.",
+                          content: "Image generated. Click Save to add to gallery.",
                           imageUrl: fullImageUrl,
-                          isSaved: true,
+                          imageId: result.image_id,
+                          isSaved: false,
                           metadata: image.metadata as Record<string, unknown>,
                         }
                       : m
@@ -143,8 +145,6 @@ export default function ImageEditPanel({
                 setCurrentSourceImage(newSourcePath);
                 setIsGenerating(false);
                 refreshUser();
-                // Notify parent to refresh gallery
-                onImageGenerated();
               } else if (image.status === "failed") {
                 // Generation failed
                 setMessages((prev) =>
@@ -222,35 +222,24 @@ export default function ImageEditPanel({
 
   const handleSave = async (messageId: string) => {
     const message = messages.find((m) => m.id === messageId);
-    if (!message || !message.imageUrl || !message.metadata || !characterId) return;
+    if (!message || !message.imageUrl || !message.imageId) return;
 
     setSaving(messageId);
 
     try {
-      const result = await saveEditedImage({
-        image_url: message.imageUrl,
-        character_id: characterId,
-        metadata: message.metadata,
-      });
+      const result = await approveEditedImage(message.imageId);
 
       if (result.success) {
-        // Mark message as saved
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === messageId
-              ? { ...m, isSaved: true, content: "Saved to gallery" }
-              : m
+            m.id === messageId ? { ...m, isSaved: true, content: "Saved to gallery" } : m
           )
         );
-        // Notify parent to refresh gallery
         onImageGenerated();
       } else {
-        // Show error
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === messageId
-              ? { ...m, content: `Save failed: ${result.message}` }
-              : m
+            m.id === messageId ? { ...m, content: `Save failed: ${result.message}` } : m
           )
         );
       }
@@ -349,7 +338,7 @@ export default function ImageEditPanel({
                         handleSave(msg.id);
                       }}
                       disabled={isSaving === msg.id}
-                      className="absolute top-2 right-2 px-3 py-1.5 bg-white text-black text-xs font-mono font-bold uppercase tracking-wide rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors shadow-lg"
+                      className="absolute bottom-2 right-2 px-3 py-1.5 bg-white text-black text-xs font-mono font-bold uppercase tracking-wide rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors shadow-lg"
                     >
                       {isSaving === msg.id ? (
                         <span className="flex items-center gap-1">
@@ -377,7 +366,7 @@ export default function ImageEditPanel({
                   )}
                   {/* Saved indicator */}
                   {msg.isSaved && (
-                    <div className="absolute top-2 right-2 px-3 py-1.5 bg-green-500/90 text-white text-xs font-mono font-bold uppercase tracking-wide rounded-lg shadow-lg flex items-center gap-1">
+                    <div className="absolute bottom-2 right-2 px-3 py-1.5 bg-green-500/90 text-white text-xs font-mono font-bold uppercase tracking-wide rounded-lg shadow-lg flex items-center gap-1">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>

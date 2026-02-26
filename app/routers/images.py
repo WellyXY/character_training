@@ -92,6 +92,20 @@ async def list_character_images(
         except ValueError:
             pass
 
+    # Exclude completed edit images that haven't been approved yet
+    # (task_id starts with "edit-", status=completed, is_approved=False)
+    # Generating edit images are still shown so the user sees progress
+    from sqlalchemy import and_, not_
+    query = query.where(
+        not_(
+            and_(
+                Image.task_id.like("edit-%"),
+                Image.status == DBImageStatus.COMPLETED,
+                Image.is_approved == False,
+            )
+        )
+    )
+
     query = query.order_by(Image.created_at.desc())
     result = await db.execute(query)
     images = result.scalars().all()

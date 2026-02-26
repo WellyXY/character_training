@@ -373,6 +373,12 @@ export async function saveEditedImage(request: SaveEditRequest): Promise<DirectE
   });
 }
 
+export async function approveEditedImage(imageId: string): Promise<DirectEditResponse> {
+  return apiFetch<DirectEditResponse>(`/agent/image-edit/approve/${imageId}`, {
+    method: "POST",
+  });
+}
+
 // Sample Gallery endpoints
 export async function listSamples(params?: SampleListParams): Promise<SamplePost[]> {
   const searchParams = new URLSearchParams();

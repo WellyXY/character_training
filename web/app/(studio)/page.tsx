@@ -621,6 +621,21 @@ function GalleryContent() {
     ]);
   };
 
+  // ImageGenPanel-specific task completion — does NOT auto-refresh gallery
+  const handleImageGenTaskComplete = (taskId: string, _resultUrl: string) => {
+    setTimeout(() => {
+      setActiveTasks((prev) => prev.filter((t) => t.task_id !== taskId));
+    }, 500);
+  };
+
+  // Called when user clicks "Save to Gallery" in ImageGenPanel
+  const handleSaveToGallery = async () => {
+    if (selectedCharacterId) {
+      await loadMedia(selectedCharacterId);
+      refreshUser();
+    }
+  };
+
   const handleTaskError = (taskId: string, error: string) => {
     setTimeout(() => {
       setActiveTasks((prev) => prev.filter((t) => t.task_id !== taskId));
@@ -646,6 +661,23 @@ function GalleryContent() {
     referenceImageMode?: ReferenceImageMode
   ) => {
     if (!selectedCharacterId) return;
+
+    // Add placeholder task immediately for instant gallery feedback
+    const placeholderId = `placeholder-${Date.now()}`;
+    setActiveTasks((prev) => [
+      ...prev,
+      {
+        task_id: placeholderId,
+        status: "generating" as const,
+        progress: 5,
+        stage: "Preparing...",
+        prompt: message,
+        reference_image_url: referenceImagePath || null,
+        result_url: null,
+        error: null,
+        created_at: new Date().toISOString(),
+      },
+    ]);
 
     setLoading(true);
     setError(null);
@@ -684,26 +716,30 @@ function GalleryContent() {
         ]);
 
         if (confirmResponse.active_task) {
-          setActiveTasks((prev) => [...prev, confirmResponse.active_task!]);
-          // Refresh gallery after a short delay so the "generating" image record appears
-          if (selectedCharacterId) {
-            setTimeout(() => loadMedia(selectedCharacterId), 1500);
-          }
+          // Replace placeholder with real task
+          setActiveTasks((prev) => [
+            ...prev.filter((t) => t.task_id !== placeholderId),
+            confirmResponse.active_task!,
+          ]);
+        } else {
+          setActiveTasks((prev) => prev.filter((t) => t.task_id !== placeholderId));
         }
 
-        if (confirmResponse.action_taken && selectedCharacterId) {
-          await loadMedia(selectedCharacterId);
+        if (confirmResponse.action_taken) {
           refreshUser();
         }
       } else {
+        // Remove placeholder — no real task to show
+        setActiveTasks((prev) => prev.filter((t) => t.task_id !== placeholderId));
         setConversationState(chatResponse.state);
         setPendingGeneration(chatResponse.pending_generation ?? null);
-        if (chatResponse.action_taken && selectedCharacterId) {
-          await loadMedia(selectedCharacterId);
+        if (chatResponse.action_taken) {
+          refreshUser();
           refreshUser();
         }
       }
     } catch (err) {
+      setActiveTasks((prev) => prev.filter((t) => t.task_id !== placeholderId));
       handleApiError(err, "Generation failed");
       refreshUser();
     } finally {
@@ -800,8 +836,9 @@ function GalleryContent() {
               availableImages={images}
               activeTasks={activeTasks}
               onGenerate={handleImageGenerate}
-              onTaskComplete={handleTaskComplete}
+              onTaskComplete={handleImageGenTaskComplete}
               onTaskError={handleTaskError}
+              onSaveToGallery={handleSaveToGallery}
               loading={loading}
             />
           }
