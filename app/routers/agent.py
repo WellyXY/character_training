@@ -1,9 +1,14 @@
 """Agent chat router."""
 import asyncio
+import base64
+import io
 import json
 import logging
 import uuid
 from typing import Optional
+
+import httpx
+from PIL import Image as PILImage
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -248,6 +253,27 @@ def _parse_aspect_ratio(aspect_ratio: str) -> tuple[int, int]:
     return ratios.get(aspect_ratio, (1024, 1820))
 
 
+async def _crop_to_face_data_url(image_url: str) -> Optional[str]:
+    """Download image and crop to top 45% (face/head area), return as base64 data URL."""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(image_url)
+            resp.raise_for_status()
+        img = PILImage.open(io.BytesIO(resp.content))
+        w, h = img.size
+        crop_h = int(h * 0.45)
+        cropped = img.crop((0, 0, w, crop_h))
+        if cropped.mode != "RGB":
+            cropped = cropped.convert("RGB")
+        buf = io.BytesIO()
+        cropped.save(buf, format="JPEG", quality=90)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/jpeg;base64,{b64}"
+    except Exception as e:
+        logger.warning("Failed to crop base image to face: %s", e)
+        return None
+
+
 async def _direct_edit_background(
     character_id: str,
     image_id: str,
@@ -294,19 +320,20 @@ async def _direct_edit_background(
             base_images = base_result.scalars().all()
             base_image_urls = [storage.get_full_url(img.image_url) for img in base_images]
 
-            # Source image for pose/composition, base image appended for face reference only
+            # Source image for pose/composition; base image face-cropped and appended for identity only
             source_full_url = storage.get_full_url(source_image_path)
-            reference_images = [source_full_url] + base_image_urls
-            logger.info(f"Reference images: 1 source + {len(base_image_urls)} base = {len(reference_images)} total")
-
-            # If a base image is included, prepend face-reference instruction to the prompt
-            if base_image_urls:
-                final_prompt = (
-                    f"Use the last reference image ONLY to preserve the character's face and identity. "
-                    f"Do NOT copy the pose, clothing, or background from the last reference image. "
-                    f"{final_prompt}"
-                )
-                logger.info("Prepended face-only base image instruction to prompt")
+            cropped_base_refs = []
+            for url in base_image_urls:
+                cropped = await _crop_to_face_data_url(url)
+                if cropped:
+                    cropped_base_refs.append(cropped)
+                else:
+                    logger.warning("Skipping base image (crop failed): %s", url)
+            reference_images = [source_full_url] + cropped_base_refs
+            logger.info(
+                "Reference images: 1 source + %d face-cropped base = %d total",
+                len(cropped_base_refs), len(reference_images)
+            )
 
             # Generate image with Seedream
             result = await seedream.generate(

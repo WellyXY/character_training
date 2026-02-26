@@ -206,7 +206,7 @@ export default function CharacterSidebar({
       <div className="mt-auto pt-4 border-t border-white/10">
         <button
           onClick={() => onStartOnboarding?.()}
-          className="w-full rounded-lg bg-[#1a1a1a] border border-[#333] px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-white hover:text-gray-300"
+          className="w-full rounded-lg bg-white hover:bg-gray-100 px-4 py-3 text-sm font-mono font-bold uppercase tracking-wide text-black transition-colors"
         >
           + New Character
         </button>

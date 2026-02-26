@@ -430,7 +430,7 @@ export default function VideoGenPanel({
         <div className="p-3 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Duration</p>
           <div className="flex gap-2">
-            {[{ value: 5, label: "5s" }, { value: 10, label: "10s" }, { value: 15, label: "15s" }].map((opt) => (
+            {[{ value: 5, label: "5s" }, { value: 10, label: "10s" }].map((opt) => (
               <button
                 key={opt.value}
                 type="button"

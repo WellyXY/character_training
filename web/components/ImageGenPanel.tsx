@@ -72,11 +72,11 @@ export default function ImageGenPanel({
       .catch(() => {});
   }, []);
 
-  // Pick 2 random samples (stable until allSamples changes)
+  // Pick 10 random samples (stable until allSamples changes)
   const randomSamples = useMemo(() => {
-    if (allSamples.length <= 2) return allSamples;
+    if (allSamples.length <= 10) return allSamples;
     const shuffled = [...allSamples].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 2);
+    return shuffled.slice(0, 10);
   }, [allSamples]);
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [selectedRefImage, setSelectedRefImage] = useState<Image | null>(null);
@@ -108,7 +108,6 @@ export default function ImageGenPanel({
     setCloth(null);
     setSelectedRefImage(null);
     setUploadedRef(null);
-    setShowImagePicker(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,7 +118,6 @@ export default function ImageGenPanel({
       const response = await uploadFile(file);
       setUploadedRef({ url: response.url, fullUrl: response.full_url });
       setSelectedRefImage(null);
-      setShowImagePicker(false);
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
@@ -136,7 +134,7 @@ export default function ImageGenPanel({
     <section className="flex h-full min-h-0 flex-col rounded-2xl border border-[#333] bg-[#111] p-4 overflow-hidden">
       <div className="flex-1 overflow-y-auto space-y-4">
         {/* Community Samples */}
-        {randomSamples.length > 0 && (
+        {randomSamples.length > 0 && !hasRef && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Inspiration</p>
@@ -147,13 +145,18 @@ export default function ImageGenPanel({
                 View All
               </a>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1 snap-x snap-mandatory">
               {randomSamples.map((sample) => (
                 <button
                   key={sample.id}
                   type="button"
-                  onClick={() => setPrompt(sample.caption || "")}
-                  className="relative aspect-[3/2] overflow-hidden rounded-lg border border-white/10 hover:border-white/30 transition-colors group"
+                  onClick={() => {
+                    if (!sample.media_url && !sample.thumbnail_url) return;
+                    const refUrl = sample.media_url || sample.thumbnail_url!;
+                    setUploadedRef({ url: refUrl, fullUrl: resolveApiUrl(refUrl) });
+                    setSelectedRefImage(null);
+                  }}
+                  className="relative aspect-[9/16] w-24 sm:w-28 shrink-0 snap-start overflow-hidden rounded-lg border border-white/10 hover:border-white/30 transition-colors group"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
