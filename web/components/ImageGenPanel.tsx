@@ -135,7 +135,15 @@ export default function ImageGenPanel({
         {/* Community Samples */}
         {randomSamples.length > 0 && (
           <div>
-            <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Inspiration</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Inspiration</p>
+              <a
+                href="/samples"
+                className="text-[10px] text-gray-500 hover:text-white font-mono uppercase tracking-wide transition-colors"
+              >
+                View All
+              </a>
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {randomSamples.map((sample) => (
                 <button
