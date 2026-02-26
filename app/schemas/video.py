@@ -24,6 +24,8 @@ class VideoStatus(str, Enum):
 class VideoMetadata(BaseModel):
     """Video generation metadata."""
     prompt: Optional[str] = None
+    original_prompt: Optional[str] = None
+    enhanced_prompt: Optional[str] = None
     style: Optional[str] = None
     cloth: Optional[str] = None
     content_type: Optional[str] = None

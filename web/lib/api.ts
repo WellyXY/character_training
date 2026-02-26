@@ -310,6 +310,8 @@ export interface AnimateImageRequest {
   reference_video_duration?: number;
   video_model?: string;
   add_subtitles?: boolean;
+  aspect_ratio?: string;
+  duration?: number;
 }
 
 export async function animateImage(request: AnimateImageRequest): Promise<AnimateImageResponse> {

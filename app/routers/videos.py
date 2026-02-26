@@ -147,7 +147,7 @@ async def retry_video(
         except (json.JSONDecodeError, TypeError):
             metadata = {}
 
-    prompt = metadata.get("prompt") or "natural movement, slight motion"
+    prompt = metadata.get("original_prompt") or metadata.get("enhanced_prompt") or metadata.get("prompt") or "natural movement, slight motion"
     resolution = metadata.get("resolution")
 
     source_image_url = metadata.get("source_image_url")

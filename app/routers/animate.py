@@ -119,6 +119,66 @@ async def _extract_video_first_frame(
             os.unlink(tmp_frame_path)
 
 
+async def _enhance_video_prompt(prompt: str) -> str:
+    """
+    Use Gemini to enhance a video generation prompt for better results.
+    Preserves any --flags at the end of the prompt.
+    """
+    # Extract --flags from the end of the prompt
+    import re
+    flags = re.findall(r'\s+(--\w+)', prompt)
+    clean_prompt = re.sub(r'\s+--\w+', '', prompt).strip()
+
+    gemini = get_gemini_client()
+    system_msg = """You are a video generation prompt optimizer. Your job is to enhance user prompts for image-to-video AI models (Pika, LTX).
+
+## Rules:
+1. Keep the CORE intent and action of the original prompt — do NOT change what happens
+2. Add vivid motion details: speed, direction, rhythm, force of movements
+3. Add atmosphere: lighting shifts, fabric movement, hair motion, environmental effects
+4. Specify camera work if not already mentioned: angle, movement (dolly, zoom, orbit, static)
+5. ALWAYS include: "Maintain exact facial features and identity unchanged"
+6. Use NATURAL pacing words — avoid "slowly" or "gently". Prefer "smoothly", "fluidly", "confidently", "briskly"
+7. Keep the prompt under 200 words
+8. Output ONLY the enhanced prompt, no explanations
+9. Do NOT add any --flags or tags
+10. If the original prompt is already detailed and high quality, make minimal changes"""
+
+    try:
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"Enhance this video prompt:\n\n{clean_prompt}"},
+        ]
+        enhanced = await gemini.chat_creative(
+            messages=messages,
+            temperature=0.7,
+            max_tokens=400,
+        )
+        enhanced = enhanced.strip().strip('"').strip()
+
+        # Normalize curly/smart quotes to ASCII for refusal detection
+        lower = enhanced.lower().replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+        refusal_phrases = [
+            "i cannot", "i can't", "i'm unable", "i'm sorry", "i apologize",
+            "cannot assist", "can't help", "not able to", "i must decline",
+            "i will not", "against my", "inappropriate content", "ethical guidelines",
+            "cannot create", "can't create", "not allowed",
+        ]
+        if any(p in lower for p in refusal_phrases) or lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry,", "i'm unable")):
+            logger.warning("Video prompt enhancement refused, using original prompt")
+            enhanced = clean_prompt
+
+        # Re-append flags
+        if flags:
+            enhanced = enhanced + " " + " ".join(flags)
+
+        logger.info("Video prompt enhanced: %s -> %s", prompt[:80], enhanced[:80])
+        return enhanced
+    except Exception as e:
+        logger.warning("Video prompt enhancement failed: %s, using original", e)
+        return prompt
+
+
 class AnalyzeRequest(BaseModel):
     """Request for image analysis."""
     image_id: str
@@ -144,6 +204,8 @@ class GenerateRequest(BaseModel):
     add_subtitles: bool = False
     match_reference_pose: bool = False
     pose_image_aspect_ratio: str = "9:16"  # Aspect ratio for pose-matched image generation
+    aspect_ratio: Optional[str] = None  # Image aspect ratio: "9:16", "16:9", "1:1"
+    duration: Optional[int] = None  # Video duration in seconds (V1: 5/10/15, V2: 5/8)
 
 
 class GenerateResponse(BaseModel):
@@ -315,6 +377,18 @@ async def generate_animation(
     intermediate_image_id = None
     first_frame_url = None
 
+    # Map aspect ratio to video resolution for V1
+    aspect_ratio = request.aspect_ratio or "9:16"
+    v1_resolution_map = {
+        "9:16": "720x1280",
+        "16:9": "1280x720",
+        "1:1": "720x720",
+    }
+    v1_resolution = v1_resolution_map.get(aspect_ratio, "720x1280")
+
+    # V2 (LTX) only supports 1920x1080 resolution
+    v2_resolution = "1920x1080"
+
     try:
         if use_addition_api:
             # Build prompt for Addition API with /pika2p5_animate prefix
@@ -438,8 +512,8 @@ async def generate_animation(
                 prompt_text=enhanced_prompt,
             )
         else:
-            # Add face preservation emphasis to the prompt
-            enhanced_prompt = f"Natural real-time speed movement, not slow motion. Maintain exact facial features and identity unchanged. {request.prompt}"
+            # AI-enhance the video prompt
+            enhanced_prompt = await _enhance_video_prompt(request.prompt)
 
             logger.info(
                 "Starting video generation for image %s with prompt: %s (model=%s)",
@@ -449,10 +523,8 @@ async def generate_animation(
             )
 
             if request.video_model == "v2":
-                # V2: GMI image-to-video
-                # GMI needs a publicly accessible URL or base64 data URI.
-                # Local DB storage URLs (localhost) aren't reachable, so
-                # convert to a base64 data URI when needed.
+                # V2: LTX via GMI - synchronous API (~76s), defer to background task
+                # Prepare the image URL for GMI (needs public URL or base64 data URI)
                 gmi_image_url = image_url
                 if not image_url.startswith("https://"):
                     import base64 as b64
@@ -472,21 +544,29 @@ async def generate_animation(
                             mime = resp.headers.get("content-type", "image/jpeg")
                             gmi_image_url = f"data:{mime};base64,{b64.b64encode(resp.content).decode()}"
 
-                gmi_video = get_gmi_video_client()
-                video_job_id = await gmi_video.create_image_to_video(
-                    image_url=gmi_image_url,
-                    prompt=enhanced_prompt,
-                )
+                # Don't call LTX here - it's synchronous and takes ~76s.
+                # Pass the prepared image URL to the background task instead.
+                video_job_id = None
             else:
                 # V1: Parrot/Pika image-to-video
+                # Append duration flag if specified
+                v1_prompt = enhanced_prompt
+                if request.duration and request.duration >= 15:
+                    v1_prompt += " --15sec"
+                elif request.duration and request.duration >= 10:
+                    v1_prompt += " --10sec"
+
                 video_job_id = await parrot.create_image_to_video(
                     image_source=image_url,
-                    prompt_text=enhanced_prompt,
+                    prompt_text=v1_prompt,
                 )
 
         logger.info("Video job created: %s", video_job_id)
 
         # Build metadata
+        video_resolution = v2_resolution if request.video_model == "v2" else v1_resolution
+        # LTX only supports durations: 6, 8, 10
+        v2_duration = request.duration if request.duration in (6, 8, 10) else 8
         metadata = {
             "original_prompt": request.prompt,
             "enhanced_prompt": enhanced_prompt,
@@ -494,7 +574,15 @@ async def generate_animation(
             "parrot_job_id": video_job_id,
             "video_model": request.video_model,
             "add_subtitles": request.add_subtitles,
+            "resolution": video_resolution,
+            "requested_duration": request.duration,
         }
+        # For V2 (LTX), store prepared image URL, resolution & duration for background task
+        if request.video_model == "v2":
+            metadata["gmi_image_url"] = gmi_image_url
+            metadata["v2_resolution"] = v2_resolution
+            metadata["v2_duration"] = v2_duration
+            metadata["v2_aspect_ratio"] = aspect_ratio
         if use_addition_api:
             metadata["api_type"] = "addition"
             metadata["reference_video_url"] = request.reference_video_url
@@ -508,6 +596,8 @@ async def generate_animation(
 
         # Create Video record immediately with PROCESSING status
         # For Addition API with pose matching, use the intermediate image as source
+        # Exclude gmi_image_url from DB (could be large base64)
+        db_metadata = {k: v for k, v in metadata.items() if k != "gmi_image_url"}
         video = Video(
             character_id=request.character_id,
             type=DBVideoType.VLOG,
@@ -516,7 +606,7 @@ async def generate_animation(
             duration=None,
             source_image_id=intermediate_image_id if intermediate_image_id else request.image_id,
             status=DBVideoStatus.PROCESSING,
-            metadata_json=json.dumps(metadata),
+            metadata_json=json.dumps(db_metadata),
         )
 
         db.add(video)
@@ -562,7 +652,7 @@ async def generate_animation(
         await db.commit()
         return GenerateResponse(
             success=False,
-            message=f"Failed to start video generation: {str(e)}",
+            message=str(e),
         )
 
 
@@ -580,54 +670,80 @@ async def _poll_video_completion(
     storage = get_storage_service()
 
     try:
-        # Poll for video completion with progress updates (up to 10 minutes)
-        timeout = 600
-        poll_interval = 5
-        elapsed = 0
-        last_progress = 0
         result = None
 
-        while elapsed < timeout:
-            if video_model == "v2":
-                gmi_video = get_gmi_video_client()
-                poll_result = await gmi_video.get_request_status(parrot_job_id)
+        if video_model == "v2":
+            # LTX via GMI is synchronous - one call returns the video (~76s)
+            gmi_video = get_gmi_video_client()
+            gmi_image_url = metadata.get("gmi_image_url", "")
+            enhanced_prompt = metadata.get("enhanced_prompt", "")
+            v2_resolution = metadata.get("v2_resolution", "1920x1080")
+            v2_duration = metadata.get("v2_duration", 8)
+            v2_aspect_ratio = metadata.get("v2_aspect_ratio")
+
+            logger.info("Video %s: calling LTX API (resolution=%s, duration=%s, aspect_ratio=%s)...", video_id, v2_resolution, v2_duration, v2_aspect_ratio)
+            request_id = await gmi_video.create_image_to_video(
+                image_url=gmi_image_url,
+                prompt=enhanced_prompt,
+                duration=v2_duration,
+                resolution=v2_resolution,
+                aspect_ratio=v2_aspect_ratio,
+            )
+            # LTX returns synchronously; now fetch the completed status
+            poll_result = await gmi_video.get_request_status(request_id)
+            if poll_result.get("video_url"):
+                result = poll_result
             else:
+                raise ValueError(f"LTX returned no video URL: {poll_result}")
+        else:
+            # V1: Poll for video completion with progress updates (up to 10 minutes)
+            timeout = 600
+            poll_interval = 5
+            elapsed = 0
+            last_progress = 0
+
+            finished_no_url_count = 0
+            while elapsed < timeout:
                 poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
-            status = poll_result.get("status", "").lower()
-            progress = poll_result.get("raw", {}).get("progress") or 0
+                status = poll_result.get("status", "").lower()
+                progress = poll_result.get("raw", {}).get("progress") or 0
 
-            logger.info("Video %s poll: status=%s, progress=%d%%", video_id, status, progress)
+                logger.info("Video %s poll: status=%s, progress=%d%%", video_id, status, progress)
 
-            # Update progress in DB if changed
-            if progress != last_progress:
-                last_progress = progress
-                async with async_session() as progress_db:
-                    video_result = await progress_db.execute(
-                        select(Video).where(Video.id == video_id)
-                    )
-                    video = video_result.scalar_one_or_none()
-                    if video:
-                        metadata["progress"] = progress
-                        video.metadata_json = json.dumps(metadata)
-                        await progress_db.commit()
+                # Update progress in DB if changed
+                if progress != last_progress:
+                    last_progress = progress
+                    async with async_session() as progress_db:
+                        video_result = await progress_db.execute(
+                            select(Video).where(Video.id == video_id)
+                        )
+                        video = video_result.scalar_one_or_none()
+                        if video:
+                            metadata["progress"] = progress
+                            video.metadata_json = json.dumps(metadata)
+                            await progress_db.commit()
 
-            if status in ("finished", "completed", "done", "success"):
-                if poll_result.get("video_url"):
-                    result = poll_result
-                    break
-                else:
-                    logger.warning("Video completed but no URL: %s", poll_result)
+                if status in ("finished", "completed", "done", "success"):
+                    if poll_result.get("video_url"):
+                        result = poll_result
+                        break
+                    else:
+                        finished_no_url_count += 1
+                        logger.warning("Video completed but no URL (attempt %d): %s", finished_no_url_count, poll_result)
+                        # If finished but no URL after 3 consecutive polls, treat as failed
+                        if finished_no_url_count >= 3:
+                            raise ValueError("Video generation completed but no video URL was returned. The API may have rejected the request.")
 
-            if status in ("failed", "error"):
-                raw = poll_result.get("raw", {})
-                error_msg = raw.get("error") or raw.get("message") or str(raw)
-                raise ValueError(f"Video generation failed: {error_msg}")
+                if status in ("failed", "error"):
+                    raw = poll_result.get("raw", {})
+                    error_msg = raw.get("error") or raw.get("message") or str(raw)
+                    raise ValueError(f"Video generation failed: {error_msg}")
 
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
 
         if not result:
-            raise TimeoutError(f"Video generation timed out after {timeout} seconds")
+            raise TimeoutError("Video generation timed out")
 
         video_url = result.get("video_url")
         if not video_url:

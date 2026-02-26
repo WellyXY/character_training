@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ConversationState, PendingGeneration, Image, GenerationTask, ReferenceImageMode } from "@/lib/types";
 import { resolveApiUrl, uploadFile } from "@/lib/api";
+import { REFERENCE_MODES } from "@/lib/constants";
 import GenerationProgressCard from "./GenerationProgressCard";
 
 export interface ChatMessage {
@@ -38,34 +39,6 @@ const ASPECT_RATIO_OPTIONS = [
   { value: "1:1", label: "1:1 (Square)" },
   { value: "16:9", label: "16:9 (Landscape)" },
 ] as const;
-
-// Reference image mode options
-const REFERENCE_MODES: {
-  key: ReferenceImageMode;
-  label: string;
-  description: string;
-}[] = [
-  {
-    key: "face_swap",
-    label: "Face Only",
-    description: "Keep pose, background, outfit from reference, only replace face",
-  },
-  {
-    key: "pose_background",
-    label: "Pose & Background",
-    description: "Reference the pose and background composition",
-  },
-  {
-    key: "clothing_pose",
-    label: "Clothing & Pose",
-    description: "Reference the outfit and pose only",
-  },
-  {
-    key: "custom",
-    label: "Custom",
-    description: "No preset - describe what you want in the message",
-  },
-];
 
 interface ConfirmationCardProps {
   pending: PendingGeneration;
@@ -256,6 +229,7 @@ interface AgentChatPanelProps {
   characterName: string | null;
   availableImages: Image[];
   initialReferenceUrl?: string | null;  // Pre-filled reference image from URL parameter
+  hideHeader?: boolean;
 }
 
 export default function AgentChatPanel({
@@ -274,6 +248,7 @@ export default function AgentChatPanel({
   characterName,
   availableImages,
   initialReferenceUrl,
+  hideHeader,
 }: AgentChatPanelProps) {
   const [input, setInput] = useState("");
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -288,6 +263,7 @@ export default function AgentChatPanel({
   const [dragStartX, setDragStartX] = useState(0);
   const [dragScrollLeft, setDragScrollLeft] = useState(0);
   const [initialRefApplied, setInitialRefApplied] = useState(false);
+  const [showRefModePopup, setShowRefModePopup] = useState(false);
 
   const isAwaitingConfirmation = conversationState === "awaiting_confirmation";
 
@@ -396,24 +372,26 @@ export default function AgentChatPanel({
   return (
     <section className="flex h-full min-h-0 flex-col rounded-2xl border border-[#333] bg-[#111] p-4 overflow-hidden">
       {/* Header */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
-              Agent
-            </p>
-            <h2 className="text-lg font-semibold font-mono">AI Assistant</h2>
+      {!hideHeader && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
+                Agent
+              </p>
+              <h2 className="text-lg font-semibold font-mono">AI Assistant</h2>
+            </div>
+            {getStateLabel() && (
+              <span className="text-xs text-amber-400 animate-pulse font-mono uppercase tracking-wide">
+                {getStateLabel()}
+              </span>
+            )}
           </div>
-          {getStateLabel() && (
-            <span className="text-xs text-amber-400 animate-pulse font-mono uppercase tracking-wide">
-              {getStateLabel()}
-            </span>
-          )}
+          <p className="mt-1 text-xs text-gray-400 font-mono">
+            {characterName ? `Character: ${characterName}` : "Please select a character"}
+          </p>
         </div>
-        <p className="mt-1 text-xs text-gray-400 font-mono">
-          {characterName ? `Character: ${characterName}` : "Please select a character"}
-        </p>
-      </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 flex flex-col rounded-xl border border-white/10 bg-[#0b0b0b] min-h-0 overflow-hidden">
@@ -550,82 +528,6 @@ export default function AgentChatPanel({
           className="hidden"
         />
 
-        {/* Selected/Uploaded Reference Image */}
-        {hasReferenceImage && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/10">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={
-                  uploadedReferenceImage
-                    ? uploadedReferenceImage.fullUrl
-                    : (selectedReferenceImage?.image_url ? resolveApiUrl(selectedReferenceImage.image_url) : "")
-                }
-                alt="Reference"
-                className="w-12 h-12 object-cover rounded"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-400 font-mono uppercase tracking-wide">Reference Image</p>
-                <p className="text-xs text-gray-300 truncate font-mono">
-                  {uploadedReferenceImage
-                    ? "Uploaded"
-                    : `${selectedReferenceImage!.type === "base" ? "Base" : "Content"} - ${selectedReferenceImage!.id.slice(0, 8)}`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={clearReferenceImage}
-                className="w-6 h-6 rounded-full bg-white/10 text-white text-xs hover:bg-white/20"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Reference Mode Selector */}
-            <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10">
-              <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Reference Mode</p>
-              <div className="space-y-1">
-                {REFERENCE_MODES.map((mode) => (
-                  <button
-                    key={mode.key}
-                    type="button"
-                    onClick={() => setReferenceMode(mode.key)}
-                    disabled={loading}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg transition-colors ${
-                      referenceMode === mode.key
-                        ? "bg-white/10 border border-white/30"
-                        : "hover:bg-white/5 border border-transparent"
-                    } disabled:opacity-50`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
-                          referenceMode === mode.key
-                            ? "border-white"
-                            : "border-gray-500"
-                        }`}
-                      >
-                        {referenceMode === mode.key && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-white font-mono uppercase tracking-wide">
-                        {mode.label}
-                        {mode.key === "pose_background" && (
-                          <span className="ml-1 text-amber-400">(Recommended)</span>
-                        )}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 ml-5 mt-0.5 font-mono">
-                      {mode.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Image Picker Dropdown */}
         {showImagePicker && (
           <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 max-h-48 overflow-y-auto">
@@ -689,6 +591,65 @@ export default function AgentChatPanel({
           </div>
         )}
 
+        {/* Apply Ref Popup */}
+        {showRefModePopup && hasReferenceImage && (
+          <div className="p-3 rounded-lg bg-[#1a1a1a] border border-white/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Reference Mode</p>
+              <button
+                type="button"
+                onClick={() => { clearReferenceImage(); setShowRefModePopup(false); }}
+                className="text-[10px] text-gray-500 hover:text-red-400 font-mono uppercase"
+              >
+                Remove Ref
+              </button>
+            </div>
+            <div className="space-y-1">
+              {REFERENCE_MODES.map((mode) => (
+                <button
+                  key={mode.key}
+                  type="button"
+                  onClick={() => setReferenceMode(mode.key)}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg transition-colors ${
+                    referenceMode === mode.key
+                      ? "bg-white/10 border border-white/30"
+                      : "hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
+                        referenceMode === mode.key ? "border-white" : "border-gray-500"
+                      }`}
+                    >
+                      {referenceMode === mode.key && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                    <span className="text-xs font-medium text-white font-mono uppercase tracking-wide">
+                      {mode.label}
+                      {mode.key === "pose_background" && (
+                        <span className="ml-1 text-amber-400">(Recommended)</span>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 ml-5 mt-0.5 font-mono">
+                    {mode.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setShowRefModePopup(false); handleSend(); }}
+              disabled={loading || (referenceMode === "custom" && !input.trim())}
+              className="w-full py-2 rounded-lg bg-white text-black text-xs font-mono font-bold uppercase tracking-wide hover:bg-gray-200 disabled:opacity-50"
+            >
+              Generate
+            </button>
+          </div>
+        )}
+
         {/* Input Row */}
         <div className="flex gap-2">
           <button
@@ -727,10 +688,6 @@ export default function AgentChatPanel({
                 ? "Please select a character first..."
                 : isAwaitingConfirmation
                 ? "Enter adjustments or click confirm..."
-                : hasReferenceImage
-                ? referenceMode === "custom"
-                  ? "Describe how to use this reference image..."
-                  : "Optional: add description or just click Send"
                 : "Enter a message..."
             }
             disabled={!characterName || loading}
@@ -738,14 +695,25 @@ export default function AgentChatPanel({
           />
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={loading || !characterName || (!input.trim() && !(hasReferenceImage && referenceMode !== "custom"))}
-            onClick={handleSend}
-            className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
-          >
-            Send
-          </button>
+          {hasReferenceImage ? (
+            <button
+              type="button"
+              disabled={loading || !characterName}
+              onClick={() => setShowRefModePopup(!showRefModePopup)}
+              className="flex-1 rounded-lg bg-amber-500 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
+            >
+              Apply Ref
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={loading || !characterName || !input.trim()}
+              onClick={handleSend}
+              className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
+            >
+              Send
+            </button>
+          )}
           <button
             type="button"
             disabled={loading || messages.length === 0}

@@ -5,6 +5,7 @@ import type { Image, Video, GenerationTask } from "@/lib/types";
 import { resolveApiUrl, retryImage, retryVideo, setImageAsBase } from "@/lib/api";
 import AnimateModal from "./AnimateModal";
 import ImageEditPanel from "./ImageEditPanel";
+import NavTabs from "./NavTabs";
 
 interface ContentGalleryProps {
   images: Image[];
@@ -22,6 +23,7 @@ interface ContentGalleryProps {
   onCancelTask?: (taskId: string) => void;
   initialVideoRef?: string | null;
   onClearVideoRef?: () => void;
+  onMakeVideo?: (image: Image) => void;
 }
 
 type TabType = "all" | "base" | "images" | "videos";
@@ -42,6 +44,7 @@ export default function ContentGallery({
   onCancelTask,
   initialVideoRef,
   onClearVideoRef,
+  onMakeVideo,
 }: ContentGalleryProps) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [selectedItem, setSelectedItem] = useState<{
@@ -105,8 +108,8 @@ export default function ContentGallery({
   // Handle image click - either open preview or animate modal if in video ref mode
   const handleImageClick = (img: Image) => {
     if (videoRefForAnimate && characterId) {
-      // Video ref mode: directly open animate modal
-      setAnimatingImage(img);
+      // Video ref mode: directly open animate modal or switch to video tab
+      onMakeVideo ? onMakeVideo(img) : setAnimatingImage(img);
     } else {
       // Normal mode: open preview
       setSelectedItem({
@@ -194,7 +197,7 @@ export default function ContentGallery({
     if (onTaskStarted) {
       onTaskStarted({
         task_id: taskId,
-        prompt: video?.metadata?.prompt || "Retrying video...",
+        prompt: video?.metadata?.original_prompt || video?.metadata?.enhanced_prompt || video?.metadata?.prompt || "Retrying video...",
         reference_image_url: video?.thumbnail_url ?? undefined,
       });
     }
@@ -226,11 +229,8 @@ export default function ContentGallery({
   return (
     <section className="flex flex-col rounded-2xl border border-[#333] bg-[#111] p-4 h-full overflow-hidden">
       {/* Header */}
-      <div className="mb-4">
-        <p className="text-xs font-mono uppercase tracking-widest text-[#cbcbcb]">
-          Gallery
-        </p>
-        <h2 className="text-lg font-semibold font-mono">Generated Content</h2>
+      <div className="mb-4 flex">
+        <NavTabs />
       </div>
 
       {/* Tabs */}
@@ -509,11 +509,11 @@ export default function ContentGallery({
                         {characterId && (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setAnimatingImage(item.data); }}
+                            onClick={(e) => { e.stopPropagation(); onMakeVideo ? onMakeVideo(item.data) : setAnimatingImage(item.data); }}
                             disabled={loading}
                             className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
-                            Animate
+                            Make Video
                           </button>
                         )}
                         <button
@@ -681,12 +681,12 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setAnimatingImage(img);
+                            onMakeVideo ? onMakeVideo(img) : setAnimatingImage(img);
                           }}
                           disabled={loading}
                           className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
-                          Animate
+                          Make Video
                         </button>
                       )}
                       <button
@@ -805,12 +805,12 @@ export default function ContentGallery({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setAnimatingImage(img);
+                            onMakeVideo ? onMakeVideo(img) : setAnimatingImage(img);
                           }}
                           disabled={loading}
                           className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
-                          Animate
+                          Make Video
                         </button>
                       )}
                       <button
@@ -908,7 +908,7 @@ export default function ContentGallery({
                     setSelectedItem({
                       type: "video",
                       url: resolveApiUrl(video.video_url!),
-                      prompt: video.metadata?.original_prompt || video.metadata?.prompt,
+                      prompt: video.metadata?.original_prompt || video.metadata?.prompt || video.metadata?.enhanced_prompt,
                       video: video,
                     })
                   }

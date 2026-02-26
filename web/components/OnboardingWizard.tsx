@@ -306,10 +306,14 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
       }
     }
 
-    // Fetch sample images; fall back to fakes if empty
+    // Fetch sample images: 3 from INS tag + 3 from NSFW tag
     try {
-      const sampleList = await listSamples({ limit: 6 });
-      setSamples(sampleList.length > 0 ? sampleList : FAKE_SAMPLES);
+      const [insSamples, nsfwSamples] = await Promise.all([
+        listSamples({ tag: "INS", limit: 3 }),
+        listSamples({ tag: "NSFW", limit: 3 }),
+      ]);
+      const combined = [...insSamples, ...nsfwSamples];
+      setSamples(combined.length > 0 ? combined : FAKE_SAMPLES);
     } catch {
       setSamples(FAKE_SAMPLES);
     }

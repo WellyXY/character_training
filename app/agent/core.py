@@ -3,6 +3,7 @@ import asyncio
 import json
 import uuid
 import logging
+import os
 from typing import Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -33,76 +34,44 @@ from app.schemas.agent import (
 logger = logging.getLogger(__name__)
 
 
-# System prompt for o1-mini reasoning
-AGENT_SYSTEM_PROMPT = """You are an AI character content generation assistant. Your task is to understand user requests and decide what action to take.
+def _load_md(filename: str) -> str:
+    """Load a markdown file from the data/ directory. Returns empty string if not found."""
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "data", filename)
+    try:
+        with open(os.path.abspath(path), "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
 
-## Available Functions:
 
-1. **generate_image** - Generate an image
-   - content_type:
-     - "base" - Create a character base image, used to establish the character's appearance identity
-     - "content_post" - Generate content images, referencing the character's base images
-   - style: sexy, cute, warm, home, exposed, erotic
-   - cloth: daily, fashion, sexy_lingerie, sexy_underwear, home_wear, sports, nude
-   - scene_description: Scene description
+# Lean routing-only system prompt — persona and skills are loaded from SOUL.md / SKILLS.md
+AGENT_SYSTEM_PROMPT = """{soul}
 
-2. **generate_video** - Generate a video (will first generate an image then convert to video)
-   - Same parameters as generate_image
-   - video_prompt: Video action description
+{skills}
 
-3. **create_character** - Create a new character
-   - name: Character name
-   - description: Character description
-   - gender: Gender
-
-4. **update_character** - Update character information
-
-5. **add_base_image** - Add an existing image as a base image for the character (does not generate a new image)
-   - image_url: Image URL (required, the image link provided by the user)
-   - Use this function when the user says "use this image as a base image" and provides a URL
-
-6. **list_characters** - List all characters
-
-7. **general_chat** - General conversation, no action required
-
-8. **fetch_instagram** - Download reference images from an Instagram post
-   - url: Instagram post URL (e.g. https://www.instagram.com/p/ABC123/)
-
-## Response Format:
-
-Respond in JSON format with the following fields:
+## Response Format
+Respond ONLY in valid JSON:
 ```json
-{
-  "intent": "generate_image | generate_video | create_character | update_character | add_base_image | list_characters | general_chat | fetch_instagram",
-  "reasoning": "Your reasoning process, explaining why you chose this intent",
-  "parameters": {
-    // Fill in the corresponding parameters based on intent
-  },
-  "needs_confirmation": true,  // Generation operations require confirmation, others do not
-  "response_message": "Response message to the user"
-}
+{{
+  "intent": "generate_image|generate_video|create_character|update_character|add_base_image|list_characters|general_chat|fetch_instagram",
+  "reasoning": "brief reasoning",
+  "parameters": {{}},
+  "needs_confirmation": true,
+  "response_message": "friendly response to user in English"
+}}
 ```
 
-## Important Rules:
-
-1. When generating images or videos, you must set needs_confirmation: true
-2. If the user has not selected a character, remind them to select one first
-3. **Very Important**: If the number of Base Images is 0, you should:
-   - Set content_type: "base" to generate a base image first
-   - Tell the user in response_message: "I'll first generate a Base Image to establish the character's appearance"
-4. Only use content_type: "content_post" when Base Images count > 0
-5. Video only supports image-to-video, it will automatically generate an image first
-6. Respond to the user in natural, friendly English
-7. **When to use add_base_image**: When the user provides an image URL and says to "use as base image", "set as base image", or "add to base images", use the add_base_image intent and put the URL in parameters.image_url
-8. **Reference image handling**: When "Reference Image" shows as "Yes":
-   - The user has already uploaded a reference image, no need to ask for one
-   - Use the generate_image intent directly
-   - Handle according to the reference mode:
-     * Face Only: Keep the pose, background, and outfit (including nudity state) from the reference, only replace the character's face
-     * Pose & Background: Reference the pose and background, adjust outfit based on user description
-     * Clothing & Pose: Reference the outfit and pose, adjust background based on user description
-     * Custom: Freely reference based on user message
-   - Describe the content to generate in scene_description, no need to ask the user for images
+## Routing Rules
+1. generate_image / generate_video → always set needs_confirmation: true
+2. No character selected → remind user to select a character first
+3. base_image_count == 0 → use content_type: "base"; tell user "I'll generate a Base Image first to establish the character's appearance"
+4. base_image_count > 0 → use content_type: "content_post"
+5. Reference image provided → use generate_image directly without asking; follow the reference mode:
+   - Face Only: keep pose/background/outfit from reference, only replace face
+   - Pose & Background: reference pose and background, generate outfit from user description
+   - Clothing & Pose: reference outfit and pose, generate background from user description
+   - Custom: freely interpret user message with the reference
+6. User provides a URL + says "use as base image" → intent: add_base_image, put URL in parameters.image_url
 """
 
 
@@ -209,8 +178,12 @@ class Agent:
         context: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Build messages for o1-mini reasoning."""
+        system_prompt = AGENT_SYSTEM_PROMPT.format(
+            soul=_load_md("SOUL.md"),
+            skills=_load_md("SKILLS.md"),
+        )
         messages = [
-            {"role": "user", "content": AGENT_SYSTEM_PROMPT},
+            {"role": "user", "content": system_prompt},
         ]
 
         # Add context about current state
@@ -1022,24 +995,31 @@ Current State:
         response_message = intent_result.get("response_message", "")
         suggestions = intent_result.get("suggestions", [])
 
-        # Optimize the edit prompt
-        optimized_prompt, detected_type, analysis = await self.edit_prompt_optimizer.optimize(
-            edit_instruction=message,
-            source_image_path=source_image_path,
-            edit_type=edit_type,
+        # Re-prompt the edit request with DeepSeek, treating source image as reference
+        context = await self._build_context(character_id, db)
+        optimize_result = await self.prompt_optimizer.optimize(
+            prompt=message,
+            style="",
+            cloth="",
+            character_description=context.get("character_description"),
+            character_gender=context.get("character_gender"),
+            reference_image_path=source_image_path,
+            reference_image_mode="custom",
+            reference_description=message,
             db=db,
         )
+        optimized_prompt = optimize_result
 
-        # Create pending edit
+        # Create pending edit (skill=image_generator so confirm uses standard generation)
         session.pending_edit = PendingEdit(
-            skill="image_editor",
+            skill="image_generator",
             params=PendingEditParams(
                 source_image_path=source_image_path,
-                edit_type=detected_type,
+                edit_type=edit_type,
                 edit_instruction=message,
             ),
             optimized_prompt=optimized_prompt,
-            reasoning=reasoning or analysis,
+            reasoning=reasoning,
             suggestions=suggestions if suggestions else [
                 "Change background",
                 "Adjust outfit style",
@@ -1104,15 +1084,17 @@ Current State:
         # Use edited_prompt if provided, otherwise use pending.optimized_prompt
         final_prompt = edited_prompt if edited_prompt else pending.optimized_prompt
 
-        # Execute the edit
-        result = await self.image_editor.edit(
+        # Execute: use image_generator with source image as reference (reprompt flow)
+        result = await self.image_generator.execute(
+            action="generate_content",
+            params={
+                "prompt": final_prompt,
+                "content_type": "content_post",
+                "aspect_ratio": aspect_ratio,
+                "reference_image_path": pending.params.source_image_path,
+                "reference_image_mode": "custom",
+            },
             character_id=session.character_id,
-            prompt=final_prompt,
-            source_image_path=pending.params.source_image_path,
-            aspect_ratio=aspect_ratio,
-            edit_type=pending.params.edit_type,
-            edit_instruction=pending.params.edit_instruction,
-            additional_reference_path=pending.params.additional_reference_path,
             db=db,
         )
 
@@ -1121,10 +1103,10 @@ Current State:
         session.state = ConversationState.IDLE
 
         if result.get("success"):
-            msg = result.get("message", "Image edited successfully!")
+            msg = result.get("message", "Image generated successfully!")
             action = "edited_image"
         else:
-            msg = f"Edit failed: {result.get('error', 'Unknown error')}"
+            msg = f"Generation failed: {result.get('error', 'Unknown error')}"
             action = None
 
         session.add_message("assistant", msg)

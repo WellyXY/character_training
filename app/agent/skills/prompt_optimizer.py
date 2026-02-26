@@ -18,12 +18,13 @@ You are a professional AI image generation prompt optimization expert, specializ
 1. **Subject Description**:
    - Clearly describe the subject's appearance features
    - Include basic info such as gender, skin tone, etc.
-   - Describe hairstyle, expression, pose
+   - **NEVER explicitly describe hairstyle or hair color** — always write "maintaining the character's exact hairstyle from images 1-3 (base images) only — do NOT copy hairstyle from image 4 (user reference image)". Hair must come exclusively from base images 1-3, not from the reference image or your own description.
+   - Describe expression and pose
 
 2. **Clothing Details**:
-   - Specifically describe clothing style, material, color
-   - Adjust clothing description based on the style
-   - **Important**: Clothing must be explicitly described in the prompt, do not inherit from any reference image
+   - **When a reference image is provided**: describe the clothing/nudity state exactly as shown in the reference image. If the reference image shows the person nude or partially nude, write "nude" or "partially nude" accordingly. Do NOT invent clothing that is not in the reference.
+   - **When NO reference image is provided**: describe clothing explicitly based on the style/cloth parameters
+   - Never leave a placeholder like "[describe clothing here]" — always resolve it to a concrete description
 
 3. **Scene Setting**:
    - Describe the environment and background
@@ -48,15 +49,22 @@ When both Base Images and user reference images are present, Seedream receives m
 The prompt must use a special format to clearly distinguish reference targets:
 
 **Format**:
-[Reference Character] Based on the character's face and body shape from the base reference images,
-[Reference Pose/Composition/Style] following the [specific pose/composition/atmosphere description] from the additional reference image,
-generate [subject description], wearing [clothing description], in [scene description]...
+[Reference Character] Based on the character's face and body shape from the base reference images (images 1-3),
+[Reference Pose/Composition/Style] following the [specific pose/composition/atmosphere description] from the additional reference image (image 4),
+generate [subject description], maintaining the character's exact hairstyle from images 1-3 only (do NOT copy hairstyle from image 4), wearing [clothing/nudity state from image 4], in [scene description]...
 
 **Key Points**:
-1. Use [Reference Character] to point to the face and body from base images
-2. Use [Reference Pose/Composition/Style] to point to the pose/composition/atmosphere from the user's reference image
-3. Clothing must be explicitly described, never inherit outfits from any reference image
-4. Place the GPT-4V analyzed pose, composition, and atmosphere descriptions in the [Reference Pose...] block
+1. Use [Reference Character] to point to the face and body from base images (images 1-3)
+2. Use [Reference Pose/Composition/Style] to point to the pose/composition/atmosphere from image 4
+3. Hair MUST come from images 1-3 only — explicitly state "do NOT copy hairstyle from image 4"
+4. Clothing/nudity state MUST match what is shown in image 4 (the reference image)
+5. Place the vision-analyzed pose, composition, and atmosphere descriptions in the [Reference Pose...] block
+
+## Face Consistency (CRITICAL):
+- **The character's face MUST remain identical to the base reference images** — same facial features, face shape, eyes, nose, mouth, and skin texture
+- **Always include face clarity instructions**: sharp focus on face, clear facial details, well-defined facial features
+- Reinforce face identity every time: "maintaining exact facial features from base reference images, sharp and clear face"
+- Never let background, clothing, or pose changes blur or alter the face
 
 ## Important Notes:
 1. **Never use character names in the prompt**: Never put character names (e.g. "Sake II", "Luna", etc.) in the prompt, as this will cause text to be rendered onto the image
@@ -77,13 +85,15 @@ IMAGE_ANALYSIS_PROMPT = """Analyze this image and extract the following informat
 3. **Atmosphere/Vibe**: Overall feeling, mood, style
 4. **Lighting**: Light source, direction, color temperature
 5. **Scene/Background**: Environment description
+6. **Clothing/Nudity State**: Describe exactly what the person is wearing. If the person is nude or partially nude, state "nude" or "topless" clearly. Do NOT skip or vague this — it is critical for prompt accuracy.
 
 The user wants to reference: {user_intent}
 
 Output a description in English that can be directly used as an image generation prompt. Format as follows:
 - First describe the pose and action
 - Then describe the composition and angle
-- Finally describe the atmosphere and lighting
+- Then describe the atmosphere and lighting
+- Finally state the clothing/nudity state explicitly (e.g., "nude", "wearing black lingerie", "topless with jeans", etc.)
 
 Output only the description, no other explanations."""
 
@@ -237,7 +247,7 @@ class PromptOptimizerSkill(BaseSkill):
             parts.append(f"Scene: {raw_prompt}")
 
         # Quality tags
-        parts.append("high quality, 4K, professional photography, soft studio lighting, sharp focus")
+        parts.append("high quality, 4K, professional photography, soft studio lighting, sharp focus on face, clear and well-defined facial features, face identity consistent with reference images")
 
         return ", ".join(parts)
 
@@ -342,7 +352,10 @@ class PromptOptimizerSkill(BaseSkill):
                 "3. State what to take from image 4 based on the reference mode\n"
                 "4. Include scene and lighting descriptions\n"
                 "5. Use professional photography terminology\n"
-                "6. Keep the prompt at a moderate length (100-200 words)"
+                "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
+                "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
+                "8. Clothing: use EXACTLY the clothing/nudity state from the reference image analysis (e.g. if nude → write 'nude'; if wearing lingerie → describe that lingerie). NEVER write a placeholder.\n"
+                "9. Keep the prompt at a moderate length (100-200 words)"
             )
 
         messages = [
@@ -367,19 +380,18 @@ User request: {raw_prompt}
                 max_tokens=500,
             )
 
-            # Check if GPT refused (content policy)
+            # Check if model refused (content policy)
+            # Use phrase-level checks only — avoid substring matches like "explicit" inside "explicitly"
             optimized_lower = optimized.lower()
-            refusal_indicators = [
+            refusal_phrases = [
                 "i cannot", "i can't", "i'm unable", "cannot assist",
                 "can't help", "won't help", "unable to help", "not able to",
-                "sorry", "apologize", "inappropriate", "policy",
-                "against my", "guidelines", "cannot create", "can't create",
-                "explicit", "nudity", "sexualized", "minor",
-                "not allowed", "violation"
+                "i apologize", "i'm sorry", "this request",
+                "against my", "cannot create", "can't create",
+                "not allowed to", "i must decline", "i will not",
             ]
-            # Also check if response starts with refusal pattern
-            starts_with_refusal = optimized_lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry"))
-            if any(ind in optimized_lower for ind in refusal_indicators) or starts_with_refusal:
+            starts_with_refusal = optimized_lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry,"))
+            if any(phrase in optimized_lower for phrase in refusal_phrases) or starts_with_refusal:
                 # Use fallback prompt
                 print(f"GPT refused prompt optimization, using fallback")
                 optimized = self._build_fallback_prompt(

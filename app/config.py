@@ -35,9 +35,10 @@ class Settings(BaseSettings):
     # GMI Cloud (OpenAI-compatible API)
     gmi_api_key: str = ""
     gmi_base_url: str = "https://api.gmi-serving.com/v1"
-    gmi_model: str = "google/gemini-3-flash-preview"
-    gmi_vision_model: str = "google/gemini-3-flash-preview"
-    gmi_video_model: str = "wan2.6-i2v"
+    gmi_model: str = "google/gemini-3-pro-preview"
+    gmi_creative_model: str = "deepseek-ai/DeepSeek-V3-0324"
+    gmi_vision_model: str = "google/gemini-3-pro-preview"
+    gmi_video_model: str = "ltx-2-pro-image-to-video"
 
     # Seedream (Image Generation)
     seedream_api_key: str = ""

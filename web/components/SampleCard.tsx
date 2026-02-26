@@ -91,7 +91,7 @@ export default function SampleCard({
             }}
             className="w-full rounded-lg bg-white px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 pointer-events-auto"
           >
-            Apply
+            Apply Ref
           </button>
         </div>
       </div>

@@ -20,6 +20,7 @@ class GeminiClient:
             base_url=settings.gmi_base_url,
         )
         self.model_name = settings.gmi_model
+        self.creative_model_name = settings.gmi_creative_model
         self.vision_model_name = settings.gmi_vision_model
 
     @staticmethod
@@ -115,12 +116,18 @@ class GeminiClient:
         max_tokens: int = 4096,
         response_format: Optional[dict] = None,
     ) -> str:
-        """Use model for creative tasks like prompt rewriting."""
-        return await self.chat(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        """Use DeepSeek model for creative tasks like prompt rewriting."""
+        kwargs = {
+            "model": self.creative_model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+
+        response = await self.client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
 
     def _detect_mime_type(self, data: bytes, url: str = "", header_mime: str = "") -> str:
         """Detect the correct MIME type for image data."""

@@ -20,7 +20,7 @@ class GMIVideoClient:
         self.api_key = settings.gmi_api_key
         self.model = settings.gmi_video_model
         self.queue_url = f"{GMI_VIDEO_BASE}/requests"
-        self.timeout = httpx.Timeout(60.0)
+        self.timeout = httpx.Timeout(180.0)
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -32,21 +32,28 @@ class GMIVideoClient:
         self,
         image_url: str,
         prompt: str,
-        duration: int = 5,
+        duration: int = 8,
+        resolution: str = "1920x1080",
+        aspect_ratio: Optional[str] = None,
     ) -> str:
         """
-        Submit an image-to-video request to GMI Video API.
+        Submit an image-to-video request to GMI Video API (LTX model).
 
         Returns:
             request_id for polling status.
         """
+        inner_payload: dict[str, Any] = {
+            "image_uri": image_url,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": resolution,
+        }
+        if aspect_ratio:
+            inner_payload["aspect_ratio"] = aspect_ratio
+
         payload = {
             "model": self.model,
-            "payload": {
-                "img_url": image_url,
-                "prompt": prompt,
-                "duration": duration,
-            },
+            "payload": inner_payload,
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -62,11 +69,11 @@ class GMIVideoClient:
                 headers=self._headers(),
             )
             if response.status_code != 200:
-                logger.error(
-                    "GMI Video API error %s: %s",
-                    response.status_code,
-                    response.text[:500],
-                )
+                body = response.text[:500]
+                logger.error("GMI Video API error %s: %s", response.status_code, body)
+                # Surface friendly message for content moderation blocks
+                if "inappropriate" in body.lower() or "content" in body.lower():
+                    raise ValueError("LTX model does not support NSFW content. Please use V1 or try a different image.")
                 response.raise_for_status()
             result = response.json()
 
@@ -113,7 +120,7 @@ class GMIVideoClient:
         return {
             "status": status,
             "video_url": video_url,
-            "thumbnail_url": outcome.get("thumbnail_image_url"),
+            "thumbnail_url": outcome.get("thumbnail_url") or outcome.get("thumbnail_image_url"),
             "raw": result,
         }
 
