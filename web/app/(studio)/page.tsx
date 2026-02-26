@@ -54,7 +54,7 @@ function GalleryContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Right panel tab state
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("assistant");
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("image");
   const [preSelectedVideoImage, setPreSelectedVideoImage] = useState<Image | null>(null);
 
   // Chat state
@@ -662,6 +662,10 @@ function GalleryContent() {
 
         if (confirmResponse.active_task) {
           setActiveTasks((prev) => [...prev, confirmResponse.active_task!]);
+          // Refresh gallery after a short delay so the "generating" image record appears
+          if (selectedCharacterId) {
+            setTimeout(() => loadMedia(selectedCharacterId), 1500);
+          }
         }
 
         if (confirmResponse.action_taken && selectedCharacterId) {

@@ -13,7 +13,7 @@ GMI_VIDEO_BASE = "https://console.gmicloud.ai/api/v1/ie/requestqueue/apikey"
 
 
 class GMIVideoClient:
-    """Client for GMI Cloud's Video generation REST API."""
+    """Client for GMI Cloud's Video generation REST API (Wan 2.6)."""
 
     def __init__(self):
         settings = get_settings()
@@ -33,23 +33,27 @@ class GMIVideoClient:
         image_url: str,
         prompt: str,
         duration: int = 8,
-        resolution: str = "1920x1080",
+        resolution: str = "720P",
         aspect_ratio: Optional[str] = None,
     ) -> str:
         """
-        Submit an image-to-video request to GMI Video API (LTX model).
+        Submit an image-to-video request to GMI Video API (Wan 2.6).
+
+        Args:
+            image_url: Public URL or base64 data URI of the source image.
+            prompt: Text prompt describing desired video motion.
+            duration: Not used by Wan 2.6 (kept for API compatibility).
+            resolution: "720P" or "1080P".
+            aspect_ratio: Not used by Wan 2.6 (auto-detected from image).
 
         Returns:
             request_id for polling status.
         """
         inner_payload: dict[str, Any] = {
-            "image_uri": image_url,
+            "img_url": image_url,
             "prompt": prompt,
-            "duration": duration,
             "resolution": resolution,
         }
-        if aspect_ratio:
-            inner_payload["aspect_ratio"] = aspect_ratio
 
         payload = {
             "model": self.model,
@@ -58,9 +62,10 @@ class GMIVideoClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             logger.info(
-                "GMI Video create -> url=%s model=%s prompt=%s",
+                "GMI Video create -> url=%s model=%s resolution=%s prompt=%s",
                 self.queue_url,
                 self.model,
+                resolution,
                 prompt[:100],
             )
             response = await client.post(
@@ -71,9 +76,8 @@ class GMIVideoClient:
             if response.status_code != 200:
                 body = response.text[:500]
                 logger.error("GMI Video API error %s: %s", response.status_code, body)
-                # Surface friendly message for content moderation blocks
                 if "inappropriate" in body.lower() or "content" in body.lower():
-                    raise ValueError("LTX model does not support NSFW content. Please use V1 or try a different image.")
+                    raise ValueError("Video model does not support NSFW content. Please use V1 or try a different image.")
                 response.raise_for_status()
             result = response.json()
 
@@ -82,7 +86,7 @@ class GMIVideoClient:
                 logger.error("GMI Video response missing request_id: %s", result)
                 raise ValueError("GMI Video did not return a request_id")
 
-            logger.info("GMI Video request created: %s", request_id)
+            logger.info("GMI Video request queued: %s (status=%s)", request_id, result.get("status"))
             return request_id
 
     async def get_request_status(self, request_id: str) -> dict[str, Any]:
@@ -90,7 +94,7 @@ class GMIVideoClient:
         Poll for request status.
 
         Returns:
-            Normalized dict with keys: status, video_url, raw
+            Normalized dict with keys: status, video_url, thumbnail_url, raw
         """
         url = f"{self.queue_url}/{request_id}"
 
@@ -102,14 +106,30 @@ class GMIVideoClient:
         raw_status = (result.get("status") or "").lower()
         outcome = result.get("outcome") or {}
 
-        # Video URL can be in outcome.video_url OR outcome.media_urls[0].url
+        # Check for error in outcome
+        if outcome.get("error"):
+            return {
+                "status": "failed",
+                "video_url": None,
+                "thumbnail_url": None,
+                "error": outcome["error"],
+                "raw": result,
+            }
+
+        # Video URL: outcome.media_urls[0].url or outcome.video_url
         video_url = outcome.get("video_url") or outcome.get("videoUrl")
         if not video_url:
             media_urls = outcome.get("media_urls") or []
             if media_urls and isinstance(media_urls, list):
                 video_url = media_urls[0].get("url") if isinstance(media_urls[0], dict) else None
 
-        # Normalize status: dispatched/processing -> processing, success -> finished
+        # Thumbnail: thumbnail_image_url (Wan 2.6) or thumbnail_url (LTX)
+        thumbnail_url = (
+            outcome.get("thumbnail_image_url")
+            or outcome.get("thumbnail_url")
+        )
+
+        # Normalize status
         if raw_status in ("success", "completed", "done"):
             status = "finished"
         elif raw_status in ("failed", "error"):
@@ -120,7 +140,7 @@ class GMIVideoClient:
         return {
             "status": status,
             "video_url": video_url,
-            "thumbnail_url": outcome.get("thumbnail_url") or outcome.get("thumbnail_image_url"),
+            "thumbnail_url": thumbnail_url,
             "raw": result,
         }
 

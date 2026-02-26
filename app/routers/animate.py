@@ -386,8 +386,8 @@ async def generate_animation(
     }
     v1_resolution = v1_resolution_map.get(aspect_ratio, "720x1280")
 
-    # V2 (LTX) only supports 1920x1080 resolution
-    v2_resolution = "1920x1080"
+    # V2 (Wan 2.6) resolution: "720P" or "1080P"
+    v2_resolution = "720P"
 
     try:
         if use_addition_api:
@@ -523,10 +523,10 @@ async def generate_animation(
             )
 
             if request.video_model == "v2":
-                # V2: LTX via GMI - synchronous API (~76s), defer to background task
-                # Prepare the image URL for GMI (needs public URL or base64 data URI)
+                # V2: Wan 2.6 via GMI - async API, needs public URL
                 gmi_image_url = image_url
                 if not image_url.startswith("https://"):
+                    # Wan 2.6 needs a fetchable URL; upload to storage first
                     import base64 as b64
                     if request.image_url.startswith("/uploads/"):
                         file_id = request.image_url.replace("/uploads/", "")
@@ -537,15 +537,13 @@ async def generate_animation(
                         else:
                             raise ValueError("Image file not found in storage")
                     else:
-                        # Fetch from local URL and convert
                         async with httpx.AsyncClient(timeout=30.0) as _c:
                             resp = await _c.get(image_url)
                             resp.raise_for_status()
                             mime = resp.headers.get("content-type", "image/jpeg")
                             gmi_image_url = f"data:{mime};base64,{b64.b64encode(resp.content).decode()}"
 
-                # Don't call LTX here - it's synchronous and takes ~76s.
-                # Pass the prepared image URL to the background task instead.
+                # Wan 2.6 is async - submit and poll in background task
                 video_job_id = None
             else:
                 # V1: Parrot/Pika image-to-video
@@ -565,8 +563,6 @@ async def generate_animation(
 
         # Build metadata
         video_resolution = v2_resolution if request.video_model == "v2" else v1_resolution
-        # LTX only supports durations: 6, 8, 10
-        v2_duration = request.duration if request.duration in (6, 8, 10) else 8
         metadata = {
             "original_prompt": request.prompt,
             "enhanced_prompt": enhanced_prompt,
@@ -577,12 +573,10 @@ async def generate_animation(
             "resolution": video_resolution,
             "requested_duration": request.duration,
         }
-        # For V2 (LTX), store prepared image URL, resolution & duration for background task
+        # For V2 (Wan 2.6), store prepared image URL & resolution for background task
         if request.video_model == "v2":
             metadata["gmi_image_url"] = gmi_image_url
             metadata["v2_resolution"] = v2_resolution
-            metadata["v2_duration"] = v2_duration
-            metadata["v2_aspect_ratio"] = aspect_ratio
         if use_addition_api:
             metadata["api_type"] = "addition"
             metadata["reference_video_url"] = request.reference_video_url
@@ -673,28 +667,42 @@ async def _poll_video_completion(
         result = None
 
         if video_model == "v2":
-            # LTX via GMI is synchronous - one call returns the video (~76s)
+            # V2: Wan 2.6 via GMI - async API, submit then poll
             gmi_video = get_gmi_video_client()
             gmi_image_url = metadata.get("gmi_image_url", "")
             enhanced_prompt = metadata.get("enhanced_prompt", "")
-            v2_resolution = metadata.get("v2_resolution", "1920x1080")
-            v2_duration = metadata.get("v2_duration", 8)
-            v2_aspect_ratio = metadata.get("v2_aspect_ratio")
+            v2_resolution = metadata.get("v2_resolution", "720P")
 
-            logger.info("Video %s: calling LTX API (resolution=%s, duration=%s, aspect_ratio=%s)...", video_id, v2_resolution, v2_duration, v2_aspect_ratio)
+            logger.info("Video %s: submitting to Wan 2.6 (resolution=%s)...", video_id, v2_resolution)
             request_id = await gmi_video.create_image_to_video(
                 image_url=gmi_image_url,
                 prompt=enhanced_prompt,
-                duration=v2_duration,
                 resolution=v2_resolution,
-                aspect_ratio=v2_aspect_ratio,
             )
-            # LTX returns synchronously; now fetch the completed status
-            poll_result = await gmi_video.get_request_status(request_id)
-            if poll_result.get("video_url"):
-                result = poll_result
-            else:
-                raise ValueError(f"LTX returned no video URL: {poll_result}")
+
+            # Poll for completion (Wan 2.6 typically ~40-80s)
+            wan_timeout = 300
+            wan_interval = 10
+            wan_elapsed = 0
+            while wan_elapsed < wan_timeout:
+                await asyncio.sleep(wan_interval)
+                wan_elapsed += wan_interval
+                poll_result = await gmi_video.get_request_status(request_id)
+                wan_status = poll_result.get("status", "")
+                logger.info("Video %s Wan poll: status=%s (elapsed=%ds)", video_id, wan_status, wan_elapsed)
+
+                if wan_status == "finished":
+                    if poll_result.get("video_url"):
+                        result = poll_result
+                        break
+                    else:
+                        raise ValueError(f"Wan 2.6 finished but no video URL: {poll_result}")
+                elif wan_status == "failed":
+                    error_msg = poll_result.get("error") or poll_result.get("raw", {}).get("outcome", {}).get("error", "Unknown error")
+                    raise ValueError(f"Wan 2.6 generation failed: {error_msg}")
+
+            if not result:
+                raise TimeoutError("Wan 2.6 video generation timed out after 5 minutes")
         else:
             # V1: Poll for video completion with progress updates (up to 10 minutes)
             timeout = 600

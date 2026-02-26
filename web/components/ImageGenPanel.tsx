@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import type { Image, GenerationTask, ReferenceImageMode } from "@/lib/types";
-import { resolveApiUrl, uploadFile } from "@/lib/api";
+import { useState, useRef, useEffect, useMemo } from "react";
+import type { Image, GenerationTask, ReferenceImageMode, SamplePost } from "@/lib/types";
+import { resolveApiUrl, uploadFile, listSamples } from "@/lib/api";
 import { REFERENCE_MODES } from "@/lib/constants";
 import GenerationProgressCard from "./GenerationProgressCard";
 
@@ -57,9 +57,24 @@ export default function ImageGenPanel({
   onTaskError,
   loading,
 }: ImageGenPanelProps) {
+  const [allSamples, setAllSamples] = useState<SamplePost[]>([]);
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<string | null>(null);
   const [cloth, setCloth] = useState<string | null>(null);
+
+  // Fetch community samples once
+  useEffect(() => {
+    listSamples({ media_type: "image", limit: 20 })
+      .then(setAllSamples)
+      .catch(() => {});
+  }, []);
+
+  // Pick 4 random samples (stable until allSamples changes)
+  const randomSamples = useMemo(() => {
+    if (allSamples.length <= 4) return allSamples;
+    const shuffled = [...allSamples].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 4);
+  }, [allSamples]);
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [selectedRefImage, setSelectedRefImage] = useState<Image | null>(null);
   const [uploadedRef, setUploadedRef] = useState<{ url: string; fullUrl: string } | null>(null);
@@ -117,6 +132,35 @@ export default function ImageGenPanel({
   return (
     <section className="flex h-full min-h-0 flex-col rounded-2xl border border-[#333] bg-[#111] p-4 overflow-hidden">
       <div className="flex-1 overflow-y-auto space-y-4">
+        {/* Community Samples */}
+        {randomSamples.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Inspiration</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {randomSamples.map((sample) => (
+                <button
+                  key={sample.id}
+                  type="button"
+                  onClick={() => setPrompt(sample.caption || "")}
+                  className="relative aspect-[4/3] overflow-hidden rounded-lg border border-white/10 hover:border-white/30 transition-colors group"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveApiUrl(sample.thumbnail_url || sample.media_url)}
+                    alt={sample.caption || "Sample"}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
+                    <span className="text-[9px] text-white font-mono leading-tight line-clamp-2">
+                      {sample.caption || "Use as inspiration"}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Prompt */}
         <div>
           <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1.5">Prompt</p>

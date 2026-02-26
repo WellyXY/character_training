@@ -381,7 +381,7 @@ export default function VideoGenPanel({
           <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Video Model</p>
           <div className="flex gap-2">
             <button
-              onClick={() => { setVideoModel("v1"); setDuration(5); }}
+              onClick={() => setVideoModel("v1")}
               disabled={!!referenceVideo}
               className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
                 (referenceVideo ? "v1" : videoModel) === "v1"
@@ -392,7 +392,7 @@ export default function VideoGenPanel({
               V1
             </button>
             <button
-              onClick={() => { setVideoModel("v2"); setDuration(8); }}
+              onClick={() => setVideoModel("v2")}
               disabled={!!referenceVideo}
               className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
                 (referenceVideo ? "v1" : videoModel) === "v2"
@@ -406,19 +406,13 @@ export default function VideoGenPanel({
           {referenceVideo && (
             <p className="text-[10px] text-gray-500 font-mono mt-1">V2 unavailable with reference video</p>
           )}
-          {videoModel === "v2" && !referenceVideo && (
-            <p className="text-[10px] text-yellow-500/80 font-mono mt-1">V2 output is landscape (1920x1080) only</p>
-          )}
         </div>
 
         {/* Duration */}
         <div className="p-3 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Duration</p>
           <div className="flex gap-2">
-            {(videoModel === "v2" && !referenceVideo
-              ? [{ value: 6, label: "6s" }, { value: 8, label: "8s" }, { value: 10, label: "10s" }]
-              : [{ value: 5, label: "5s" }, { value: 10, label: "10s" }, { value: 15, label: "15s" }]
-            ).map((opt) => (
+            {[{ value: 5, label: "5s" }, { value: 10, label: "10s" }, { value: 15, label: "15s" }].map((opt) => (
               <button
                 key={opt.value}
                 type="button"

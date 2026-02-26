@@ -145,7 +145,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
 
   // Review step
   const [characterId, setCharacterId] = useState<string | null>(null);
-  const [characterName, setCharacterName] = useState("My Character");
+  const [characterName, setCharacterName] = useState("");
   const [baseImages, setBaseImages] = useState<Image[]>([]);
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
 
@@ -496,7 +496,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
 
   // ── Step 0: Upload Photos ──
   if (step === "upload") {
-    const canCreate = referenceFiles.length > 0 || description.trim().length > 0;
+    const canCreate = characterName.trim().length > 0 && (referenceFiles.length > 0 || description.trim().length > 0);
 
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
@@ -579,6 +579,15 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
               placeholder="Describe your character... e.g. young asian woman, long black hair, slim build"
               rows={3}
               className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-4 py-3 text-sm text-white font-mono focus:border-white/30 focus:outline-none resize-none"
+            />
+
+            {/* Character Name */}
+            <input
+              type="text"
+              value={characterName}
+              onChange={(e) => setCharacterName(e.target.value)}
+              placeholder="Character name"
+              className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-4 py-3 text-sm text-white font-mono placeholder-gray-600 focus:border-white/30 focus:outline-none transition-colors"
             />
 
             {/* Gender */}
