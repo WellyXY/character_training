@@ -143,9 +143,10 @@ function PlaygroundContent() {
   // Lipsync fields
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [voiceId, setVoiceId] = useState("");
-  const [motionPrompt, setMotionPrompt] = useState("");
-  const [silentPrompt, setSilentPrompt] = useState("");
+
+  const LIPSYNC_VOICE_ID = "sample_by_welly";
+  const LIPSYNC_MOTION_PROMPT = "A young person is facing towards the camera while speaking. Their facial expression is emotional and expressive. Their head and body shows little natural movement. The camera maintains focus on their face and upper torso, capturing the emotion and grace of their performance in a static, intimate close-up. Their eyes are expressive, conveying the emotion as their poised presence fills the frame with an engaging energy. Camera Motion: Handheld camera, natural camera motion.";
+  const LIPSYNC_SILENT_PROMPT = "A young person is facing the camera silently, blinking naturally while keeping their mouth still.";
 
   // img2vid fields
   const [vidImageFile, setVidImageFile] = useState<File | null>(null);
@@ -224,9 +225,9 @@ function PlaygroundContent() {
       if (activeApi === "lipsync") {
         const formData = new FormData();
         formData.append("image", imageFile!);
-        if (voiceId) formData.append("voice_id", voiceId);
-        if (motionPrompt) formData.append("motion_prompt", motionPrompt);
-        if (silentPrompt) formData.append("silent_prompt", silentPrompt);
+        formData.append("voice_id", LIPSYNC_VOICE_ID);
+        formData.append("motion_prompt", LIPSYNC_MOTION_PROMPT);
+        formData.append("silent_prompt", LIPSYNC_SILENT_PROMPT);
 
         const res = await fetch("/api/playground/lipsync", {
           method: "POST",
@@ -399,31 +400,11 @@ function PlaygroundContent() {
 
                 {/* ── Lipsync fields ── */}
                 {activeApi === "lipsync" && (
-                  <>
-                    <ImageUpload
-                      file={imageFile}
-                      previewUrl={imagePreviewUrl}
-                      onChange={(f) => handleImageChange(f, setImageFile, setImagePreviewUrl)}
-                    />
-                    <div>
-                      <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">voice_id</label>
-                      <input type="text" placeholder="e.g. sample_by_welly" value={voiceId}
-                        onChange={(e) => setVoiceId(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3.5 py-2.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors" />
-                    </div>
-                    <div>
-                      <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">motion_prompt</label>
-                      <input type="text" placeholder="e.g. nodding slowly and smiling" value={motionPrompt}
-                        onChange={(e) => setMotionPrompt(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3.5 py-2.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors" />
-                    </div>
-                    <div>
-                      <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">silent_prompt</label>
-                      <input type="text" placeholder="Text to lipsync without audio..." value={silentPrompt}
-                        onChange={(e) => setSilentPrompt(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3.5 py-2.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors" />
-                    </div>
-                  </>
+                  <ImageUpload
+                    file={imageFile}
+                    previewUrl={imagePreviewUrl}
+                    onChange={(f) => handleImageChange(f, setImageFile, setImagePreviewUrl)}
+                  />
                 )}
 
                 {/* ── Image to Video fields ── */}
