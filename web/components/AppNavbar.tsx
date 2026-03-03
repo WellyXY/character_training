@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AppNavbarProps {
@@ -11,7 +11,10 @@ interface AppNavbarProps {
 
 export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout, isAuthenticated } = useAuth();
+
+  const isPlayground = pathname?.startsWith("/playground");
 
   const handleLogout = () => {
     logout();
@@ -21,10 +24,25 @@ export default function AppNavbar({ loading, statusText }: AppNavbarProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#333] bg-black/50 backdrop-blur-md">
       <div className="px-4 py-3 flex items-center justify-between">
-        {/* Brand */}
-        <h1 className="text-sm font-mono font-bold uppercase tracking-widest text-white">
-          AI Studio
-        </h1>
+        {/* Brand + Nav */}
+        <div className="flex items-center gap-1">
+          <Link
+            href="/"
+            className={`text-xs font-mono font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors ${
+              !isPlayground ? "text-white bg-white/10" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            AI Studio
+          </Link>
+          <Link
+            href="/playground"
+            className={`text-xs font-mono font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors ${
+              isPlayground ? "text-white bg-white/10" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Playground
+          </Link>
+        </div>
 
         {/* Spacer */}
         <div />
