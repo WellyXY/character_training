@@ -24,10 +24,7 @@ export default function ReferenceModal({
   const [customMessage, setCustomMessage] = useState("");
 
   const handleGenerate = () => {
-    if (selectedMode === "custom" && !customMessage.trim()) {
-      return;
-    }
-    onGenerated(selectedMode, selectedMode === "custom" ? customMessage.trim() : undefined);
+    onGenerated(selectedMode, customMessage.trim() || undefined);
   };
 
   return (
@@ -113,24 +110,22 @@ export default function ReferenceModal({
                 ))}
               </div>
 
-              {/* Custom message input */}
-              {selectedMode === "custom" && (
-                <div className="mb-4">
-                  <textarea
-                    value={customMessage}
-                    onChange={(e) => setCustomMessage(e.target.value)}
-                    placeholder="Describe what you want..."
-                    rows={3}
-                    className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 resize-none font-mono"
-                  />
-                </div>
-              )}
+              {/* Tailoring notes (always visible) */}
+              <div className="mb-4">
+                <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Tailor Changes <span className="normal-case text-gray-600">(optional)</span></p>
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="e.g. change background to beach, add sunglasses..."
+                  rows={3}
+                  className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 resize-none font-mono"
+                />
+              </div>
 
               {/* Generate Button */}
               <button
                 onClick={handleGenerate}
-                disabled={selectedMode === "custom" && !customMessage.trim()}
-                className="w-full py-3 rounded-xl bg-white hover:bg-gray-200 disabled:bg-gray-400 disabled:cursor-not-allowed text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors"
+                className="w-full py-3 rounded-xl bg-white hover:bg-gray-200 text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors"
               >
                 Generate
               </button>
