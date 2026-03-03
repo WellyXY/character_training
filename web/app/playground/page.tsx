@@ -106,18 +106,18 @@ function FileDropZone({
       onClick={() => ref.current?.click()}
       onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onChange(f); }}
       onDragOver={(e) => e.preventDefault()}
-      className="border border-dashed border-[#2a2a2a] rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:border-[#444] hover:bg-white/[0.02] transition-all"
+      className="border border-dashed border-[#333] rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:border-[#555] hover:bg-white/[0.02] transition-all"
     >
       {previewUrl ? (
         <img src={previewUrl} alt="" className="w-14 h-14 object-cover rounded-lg flex-shrink-0" />
       ) : (
-        <div className="w-14 h-14 rounded-lg bg-[#111] flex items-center justify-center flex-shrink-0 text-gray-600">
+        <div className="w-14 h-14 rounded-lg bg-[#161616] flex items-center justify-center flex-shrink-0 text-gray-500">
           {icon}
         </div>
       )}
       <div className="min-w-0">
-        <p className="text-[13px] text-gray-300 truncate">{file ? file.name : `Click or drop ${hint}`}</p>
-        <p className="text-[11px] text-gray-600 mt-0.5">{file ? `${(file.size / 1024).toFixed(0)} KB` : accept.replace("/*", "").replace("/", " / ").toUpperCase()}</p>
+        <p className="text-[13px] text-gray-200 truncate">{file ? file.name : `Click or drop ${hint}`}</p>
+        <p className="text-[11px] text-gray-500 mt-0.5">{file ? `${(file.size / 1024).toFixed(0)} KB` : accept.replace("/*", "").replace("/", " / ").toUpperCase()}</p>
       </div>
       <input ref={ref} type="file" accept={accept} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f); }} />
     </div>
@@ -125,7 +125,7 @@ function FileDropZone({
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{children}</p>;
+  return <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{children}</p>;
 }
 
 function TextInput({ label, value, onChange, placeholder, type = "text" }: {
@@ -139,7 +139,7 @@ function TextInput({ label, value, onChange, placeholder, type = "text" }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-[#111] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors"
+        className="w-full bg-[#161616] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] font-mono transition-colors"
       />
     </div>
   );
@@ -149,7 +149,7 @@ function SegmentControl({ value, options, onChange }: {
   value: string; options: string[]; onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex gap-1.5 p-1 bg-[#111] border border-[#2a2a2a] rounded-lg">
+    <div className="flex gap-1.5 p-1 bg-[#161616] border border-[#2a2a2a] rounded-lg">
       {options.map((o) => (
         <button key={o} onClick={() => onChange(o)}
           className={`flex-1 py-1.5 rounded-md text-[12px] font-mono font-medium transition-colors ${
@@ -311,22 +311,22 @@ function PlaygroundContent() {
   const doc = API_DOCS[activeApi];
 
   return (
-    <div className="fixed inset-0 bg-[#080808] text-gray-200 flex flex-col">
+    <div className="fixed inset-0 bg-[#0c0c0c] text-gray-200 flex flex-col">
       <AppNavbar />
 
       <div className="flex flex-1 min-h-0 pt-[52px]">
 
         {/* ── LEFT: Form panel ── */}
-        <div className="w-[340px] flex-shrink-0 border-r border-[#1a1a1a] flex flex-col">
+        <div className="w-[340px] flex-shrink-0 border-r border-[#222] flex flex-col">
 
           {/* API tabs */}
-          <div className="flex-shrink-0 border-b border-[#1a1a1a] p-3 flex flex-col gap-1">
+          <div className="flex-shrink-0 border-b border-[#222] p-3 flex flex-col gap-1">
             {APIS.map((api) => (
               <button key={api.id} onClick={() => switchApi(api.id)}
                 className={`w-full text-left px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors flex items-center justify-between ${
                   activeApi === api.id
-                    ? "bg-white/10 text-white border border-white/10"
-                    : "text-gray-500 hover:text-white hover:bg-white/5"
+                    ? "bg-white/10 text-white border border-white/15"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
                 }`}>
                 {api.label}
                 {activeApi === api.id && (
@@ -348,7 +348,7 @@ function PlaygroundContent() {
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="w-full bg-[#111] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors"
+                className="w-full bg-[#161616] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] font-mono transition-colors"
               />
             </div>
 
@@ -403,7 +403,7 @@ function PlaygroundContent() {
           </div>
 
           {/* Run button */}
-          <div className="flex-shrink-0 p-4 border-t border-[#1a1a1a]">
+          <div className="flex-shrink-0 p-4 border-t border-[#222]">
             <button
               onClick={handleSubmit}
               disabled={!canSubmit}
@@ -431,35 +431,35 @@ function PlaygroundContent() {
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
           {/* Endpoint strip */}
-          <div className="flex-shrink-0 border-b border-[#1a1a1a] px-5 py-2.5 flex items-center gap-2.5">
+          <div className="flex-shrink-0 border-b border-[#222] px-5 py-2.5 flex items-center gap-2.5">
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">POST</span>
-            <code className="text-[12px] font-mono text-gray-500">{doc.endpoint.replace("POST ", "")}</code>
+            <code className="text-[12px] font-mono text-gray-300">{doc.endpoint.replace("POST ", "")}</code>
           </div>
 
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto">
 
             {/* Output section */}
-            <div className="p-5 border-b border-[#1a1a1a]">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Output</p>
+            <div className="p-5 border-b border-[#222]">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Output</p>
 
               {status === "idle" && (
-                <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-700 rounded-xl border border-dashed border-[#1e1e1e]">
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-500 rounded-xl border border-dashed border-[#2a2a2a]">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                       d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  <p className="text-[13px]">Run a request to see output</p>
+                  <p className="text-[13px] text-gray-400">Run a request to see output</p>
                 </div>
               )}
 
               {isRunning && (
-                <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-600 rounded-xl border border-dashed border-[#1e1e1e]">
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-500 rounded-xl border border-dashed border-[#2a2a2a]">
                   <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  <p className="text-[13px]">
+                  <p className="text-[13px] text-gray-300">
                     {status === "polling"
                       ? <><span className="text-amber-400 font-mono">{pollStatusText}</span> — polling every 3s</>
                       : "Submitting…"}
@@ -477,7 +477,7 @@ function PlaygroundContent() {
                     }`}>
                       {httpStatus} {status === "success" ? "OK" : "Error"}
                     </span>
-                    {elapsed !== null && <span className="text-[12px] text-gray-600">{elapsed}s</span>}
+                    {elapsed !== null && <span className="text-[12px] text-gray-400">{elapsed}s</span>}
                   </div>
 
                   {videoUrl && (
@@ -486,7 +486,7 @@ function PlaygroundContent() {
                   )}
 
                   {responseData && (
-                    <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-400 overflow-auto max-h-40 leading-relaxed">
+                    <pre className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-300 overflow-auto max-h-40 leading-relaxed">
                       {JSON.stringify(responseData, null, 2)}
                     </pre>
                   )}
@@ -496,20 +496,20 @@ function PlaygroundContent() {
 
             {/* API Docs section */}
             <div className="p-5 flex flex-col gap-5">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">API Reference</p>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">API Reference</p>
 
               {/* Params */}
               <div>
-                <p className="text-[11px] text-gray-600 mb-2">Parameters · multipart/form-data</p>
-                <div className="rounded-xl border border-[#1a1a1a] overflow-hidden">
+                <p className="text-[11px] text-gray-400 mb-2">Parameters · multipart/form-data</p>
+                <div className="rounded-xl border border-[#2a2a2a] overflow-hidden">
                   {doc.params.map((p, i) => (
-                    <div key={p.name} className={`flex items-center gap-3 px-4 py-3 ${i < doc.params.length - 1 ? "border-b border-[#141414]" : ""}`}>
+                    <div key={p.name} className={`flex items-center gap-3 px-4 py-3 ${i < doc.params.length - 1 ? "border-b border-[#222]" : ""}`}>
                       <code className="text-[12px] font-mono text-white w-28 flex-shrink-0">{p.name}</code>
                       <span className="text-[11px] font-mono text-blue-400 w-14 flex-shrink-0">{p.type}</span>
-                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 ${p.required ? "text-red-400" : "text-gray-600"}`}>
+                      <span className={`text-[10px] font-semibold w-14 flex-shrink-0 ${p.required ? "text-red-400" : "text-gray-500"}`}>
                         {p.required ? "required" : "optional"}
                       </span>
-                      <span className="text-[12px] text-gray-500">{p.desc}</span>
+                      <span className="text-[12px] text-gray-300">{p.desc}</span>
                     </div>
                   ))}
                 </div>
@@ -518,31 +518,31 @@ function PlaygroundContent() {
               {/* Response examples */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[11px] text-gray-600 mb-2"><span className="text-green-400 font-mono">200</span> Success</p>
-                  <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-400 leading-relaxed">{doc.successJson}</pre>
+                  <p className="text-[11px] text-gray-400 mb-2"><span className="text-green-400 font-mono">200</span> Success</p>
+                  <pre className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-300 leading-relaxed">{doc.successJson}</pre>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 mb-2"><span className="text-red-400 font-mono">4xx</span> Error</p>
-                  <pre className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-400 leading-relaxed">{`{\n  "error_code": "INVALID_API_KEY",\n  "message": "..."\n}`}</pre>
+                  <p className="text-[11px] text-gray-400 mb-2"><span className="text-red-400 font-mono">4xx</span> Error</p>
+                  <pre className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 text-[12px] font-mono text-gray-300 leading-relaxed">{`{\n  "error_code": "INVALID_API_KEY",\n  "message": "..."\n}`}</pre>
                 </div>
               </div>
 
               {/* Polling */}
               {doc.polling && (
                 <div>
-                  <p className="text-[11px] text-gray-600 mb-2">Status polling</p>
-                  <div className="flex items-center gap-2 bg-[#0d0d0d] border border-[#1a1a1a] rounded-xl px-4 py-3 mb-3">
+                  <p className="text-[11px] text-gray-400 mb-2">Status polling</p>
+                  <div className="flex items-center gap-2 bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 mb-3">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">GET</span>
-                    <code className="text-[12px] font-mono text-gray-400">{doc.polling.replace("GET ", "")}</code>
+                    <code className="text-[12px] font-mono text-gray-300">{doc.polling.replace("GET ", "")}</code>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {POLL_STATUSES.map((s) => (
-                      <div key={s.value} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d0d0d] border border-[#1a1a1a]">
+                      <div key={s.value} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#161616] border border-[#2a2a2a]">
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                           s.color === "green" ? "bg-green-400" : s.color === "red" ? "bg-red-400" : "bg-amber-400"
                         }`} />
-                        <code className="text-[11px] font-mono text-gray-300">{s.value}</code>
-                        <span className="text-[11px] text-gray-600">{s.desc}</span>
+                        <code className="text-[11px] font-mono text-gray-200">{s.value}</code>
+                        <span className="text-[11px] text-gray-400">{s.desc}</span>
                       </div>
                     ))}
                   </div>
