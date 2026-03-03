@@ -152,6 +152,7 @@ function PlaygroundContent() {
   const [vidImagePreviewUrl, setVidImagePreviewUrl] = useState<string | null>(null);
   const [promptText, setPromptText] = useState("");
   const [resolution, setResolution] = useState("720p");
+  const [duration, setDuration] = useState("");
 
   // img2vid-audio fields
   const [audImageFile, setAudImageFile] = useState<File | null>(null);
@@ -159,6 +160,7 @@ function PlaygroundContent() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audPromptText, setAudPromptText] = useState("");
   const [audResolution, setAudResolution] = useState("720p");
+  const [audDuration, setAudDuration] = useState("");
 
   // Response state
   const [status, setStatus] = useState<ApiStatus>("idle");
@@ -244,6 +246,7 @@ function PlaygroundContent() {
         formData.append("image", vidImageFile!);
         if (promptText) formData.append("promptText", promptText);
         formData.append("resolution", resolution);
+        if (duration) formData.append("duration", duration);
 
         const res = await fetch("/api/playground/img2vid", {
           method: "POST",
@@ -270,6 +273,7 @@ function PlaygroundContent() {
         if (audioFile) formData.append("audio", audioFile);
         if (audPromptText) formData.append("promptText", audPromptText);
         formData.append("resolution", audResolution);
+        if (audDuration) formData.append("duration", audDuration);
 
         const res = await fetch("/api/playground/img2vid-audio", {
           method: "POST",
@@ -451,6 +455,12 @@ function PlaygroundContent() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">duration <span className="text-gray-600 normal-case">(optional)</span></label>
+                      <input type="number" min="1" step="1" placeholder="e.g. 5" value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3.5 py-2.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors" />
+                    </div>
                   </>
                 )}
 
@@ -483,6 +493,12 @@ function PlaygroundContent() {
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div>
+                      <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">duration <span className="text-gray-600 normal-case">(optional)</span></label>
+                      <input type="number" min="1" step="1" placeholder="e.g. 5" value={audDuration}
+                        onChange={(e) => setAudDuration(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3.5 py-2.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#444] font-mono transition-colors" />
                     </div>
                   </>
                 )}
@@ -625,6 +641,7 @@ function ApiDocs({ apiId }: { apiId: ApiId }) {
           { name: "image", type: "file", required: true, desc: "Source image. JPEG / PNG / WebP." },
           { name: "promptText", type: "string", required: false, desc: "Describe the desired motion or scene." },
           { name: "resolution", type: "string", required: false, desc: "Output resolution: 480p or 720p." },
+          { name: "duration", type: "number", required: false, desc: "Video duration in seconds." },
         ]} />
         <hr className="border-[#1e1e1e] my-6" />
         <ResponseDocs
@@ -660,9 +677,10 @@ function ApiDocs({ apiId }: { apiId: ApiId }) {
       <hr className="border-[#1e1e1e] mb-6" />
       <ParamTable params={[
         { name: "image", type: "file", required: true, desc: "Source image. JPEG / PNG / WebP." },
-        { name: "audio", type: "file", required: false, desc: "Audio file driving lip-sync. MP3 / WAV / AAC." },
+        { name: "audio", type: "file", required: false, desc: "Audio file driving lip-sync. MP3 / WAV / AAC. Optional — omit to generate without audio." },
         { name: "promptText", type: "string", required: false, desc: "Describe the desired motion or scene." },
         { name: "resolution", type: "string", required: false, desc: "Output resolution: 480p or 720p." },
+        { name: "duration", type: "number", required: false, desc: "Video duration in seconds." },
       ]} />
       <hr className="border-[#1e1e1e] my-6" />
       <ResponseDocs
