@@ -163,6 +163,17 @@ class EditPromptOptimizerSkill(BaseSkill):
     def get_actions(self) -> list[str]:
         return ["optimize"]
 
+    def _strip_preamble(self, text: str) -> str:
+        """Remove common model preamble phrases before the actual prompt."""
+        import re
+        text = re.sub(
+            r"^(?:here(?:'s| is)(?: the)?(?: optimized)?(?: seedream)?(?: prompt)?[:\s]*\n?)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text.strip()
+
     def _build_fallback_prompt(self, edit_instruction: str, edit_type: str) -> str:
         """Build a fallback prompt when GPT refuses due to content policy."""
         templates = {
@@ -235,7 +246,7 @@ Output ONLY the optimized prompt.""",
             return {
                 "success": True,
                 "original_instruction": edit_instruction,
-                "optimized_prompt": optimized.strip(),
+                "optimized_prompt": self._strip_preamble(optimized.strip()),
                 "edit_type": edit_type,
                 "image_analysis": image_analysis,
             }

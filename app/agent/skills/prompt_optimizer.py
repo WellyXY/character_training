@@ -403,7 +403,7 @@ User request: {raw_prompt}
             return {
                 "success": True,
                 "original_prompt": raw_prompt,
-                "optimized_prompt": optimized.strip(),
+                "optimized_prompt": self._strip_preamble(optimized.strip()),
                 "style": style,
                 "cloth": cloth,
             }
@@ -422,6 +422,18 @@ User request: {raw_prompt}
                 "style": style,
                 "cloth": cloth,
             }
+
+    def _strip_preamble(self, text: str) -> str:
+        """Remove common model preamble phrases before the actual prompt."""
+        import re
+        # Match lines like "Here's the optimized Seedream prompt:" or "Here is the prompt:"
+        text = re.sub(
+            r"^(?:here(?:'s| is)(?: the)?(?: optimized)?(?: seedream)?(?: prompt)?[:\s]*\n?)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text.strip()
 
     def _get_mode_instructions(self, mode: Optional[str]) -> str:
         """Return specific prompt instructions based on reference image mode."""
