@@ -138,7 +138,7 @@ function AudioUpload({
 
 function PlaygroundContent() {
   const [activeApi, setActiveApi] = useState<ApiId>("lipsync");
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState("pika_od5V2jd_vAjF8Ts5h6eIytl9FCyVK2XTv6MRk6qQC9E");
 
   // Lipsync fields
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -158,7 +158,6 @@ function PlaygroundContent() {
   // img2vid-audio fields
   const [audImageFile, setAudImageFile] = useState<File | null>(null);
   const [audImagePreviewUrl, setAudImagePreviewUrl] = useState<string | null>(null);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audPromptText, setAudPromptText] = useState("");
   const [audResolution, setAudResolution] = useState("720p");
   const [audDuration, setAudDuration] = useState("");
@@ -271,7 +270,6 @@ function PlaygroundContent() {
       } else {
         const formData = new FormData();
         formData.append("image", audImageFile!);
-        if (audioFile) formData.append("audio", audioFile);
         if (audPromptText) formData.append("promptText", audPromptText);
         formData.append("resolution", audResolution);
         if (audDuration) formData.append("duration", audDuration);
@@ -453,7 +451,7 @@ function PlaygroundContent() {
                       previewUrl={audImagePreviewUrl}
                       onChange={(f) => handleImageChange(f, setAudImageFile, setAudImagePreviewUrl)}
                     />
-                    <AudioUpload file={audioFile} onChange={setAudioFile} />
+
                     <div>
                       <label className="text-[13px] font-medium text-gray-400 block mb-1.5 font-mono">promptText</label>
                       <input type="text" placeholder="Describe the motion or scene..." value={audPromptText}
@@ -580,195 +578,142 @@ function PlaygroundContent() {
   );
 }
 
+// ─── API doc configs ────────────────────────────────────────────────────────
+
+const API_DOCS = {
+  lipsync: {
+    title: "Streaming Lipsync",
+    endpoint: { method: "POST", url: "https://candy-api.pika.art/test/api/v1/realtime/session" },
+    note: "Synchronous — connection stays open until video is ready.",
+    params: [
+      { name: "image", type: "file", required: true, desc: "Portrait image (JPEG / PNG / WebP)" },
+      { name: "voice_id", type: "string", required: false, desc: "TTS voice ID" },
+      { name: "motion_prompt", type: "string", required: false, desc: "Facial motion description" },
+      { name: "silent_prompt", type: "string", required: false, desc: "Lipsync text without audio" },
+    ],
+    successJson: `{\n  "video_url": "https://cdn.pika.art/outputs/abc.mp4",\n  "duration": 3.5\n}`,
+    polling: null,
+  },
+  img2vid: {
+    title: "Image to Video v2",
+    endpoint: { method: "POST", url: "https://parrot.pika.art/api/v1/generate/v0/image-to-video-v2" },
+    note: "Async — returns video_id immediately, poll for result.",
+    params: [
+      { name: "image", type: "file", required: true, desc: "Source image (JPEG / PNG / WebP)" },
+      { name: "promptText", type: "string", required: false, desc: "Motion or scene description" },
+      { name: "resolution", type: "string", required: false, desc: "480p or 720p" },
+      { name: "duration", type: "number", required: false, desc: "Duration in seconds" },
+    ],
+    successJson: `{\n  "video_id": "550e8400-e29b-41d4-a716-446655440000"\n}`,
+    polling: "https://parrot.pika.art/api/v1/generate/v0/videos/{video_id}",
+  },
+  "img2vid-audio": {
+    title: "Image to Video v2 + Audio",
+    endpoint: { method: "POST", url: "https://parrot.pika.art/api/v1/generate/v0/image-to-video-v2-audio" },
+    note: "Async — returns video_id immediately, poll for result.",
+    params: [
+      { name: "image", type: "file", required: true, desc: "Source image (JPEG / PNG / WebP)" },
+      { name: "audio", type: "file", required: false, desc: "Audio file (MP3 / WAV / AAC)" },
+      { name: "promptText", type: "string", required: false, desc: "Motion or scene description" },
+      { name: "resolution", type: "string", required: false, desc: "480p or 720p" },
+      { name: "duration", type: "number", required: false, desc: "Duration in seconds" },
+    ],
+    successJson: `{\n  "video_id": "550e8400-e29b-41d4-a716-446655440000"\n}`,
+    polling: "https://parrot.pika.art/api/v1/generate/v0/videos/{video_id}",
+  },
+} as const;
+
+const POLL_STATUSES = [
+  { value: "queued", color: "amber", desc: "Waiting in queue" },
+  { value: "started", color: "amber", desc: "Generating" },
+  { value: "finished", color: "green", desc: "Done — video_url available" },
+  { value: "failed", color: "red", desc: "Generation failed" },
+];
+
 function ApiDocs({ apiId }: { apiId: ApiId }) {
-  if (apiId === "lipsync") {
-    return (
-      <div className="bg-[#111] border border-[#1e1e1e] rounded-xl p-8">
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-2">Streaming Lipsync</h3>
-          <p className="text-[14px] text-gray-400 leading-relaxed">
-            Submits a portrait image and optional prompts to generate a lipsync video synchronously.
-            The connection stays open until the video is ready.
-          </p>
-        </div>
-        <hr className="border-[#1e1e1e] mb-6" />
-        <ParamTable params={[
-          { name: "image", type: "file", required: true, desc: "Portrait image. JPEG / PNG / WebP." },
-          { name: "voice_id", type: "string", required: false, desc: "Azure Neural TTS voice ID (e.g. en-US-JennyNeural)." },
-          { name: "motion_prompt", type: "string", required: false, desc: 'Facial motion description (e.g. "nodding slowly").' },
-          { name: "silent_prompt", type: "string", required: false, desc: "Text to visually lipsync without generating audio." },
-        ]} />
-        <hr className="border-[#1e1e1e] my-6" />
-        <ResponseDocs
-          success={`{ "video_url": "https://cdn.pika.art/outputs/abc.mp4", "duration": 3.5 }`}
-          error={`{ "error_code": "FACE_NOT_DETECTED", "message": "No face detected." }`}
-        />
-      </div>
-    );
-  }
+  const doc = API_DOCS[apiId];
 
-  if (apiId === "img2vid") {
-    return (
-      <div className="bg-[#111] border border-[#1e1e1e] rounded-xl p-8">
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-2">Image to Video v2</h3>
-          <p className="text-[14px] text-gray-400 leading-relaxed">
-            Generates a video from a still image. Returns a <code className="text-gray-200 bg-[#1a1a1a] px-1 rounded">video_id</code> immediately;
-            poll the status endpoint until <code className="text-gray-200 bg-[#1a1a1a] px-1 rounded">finished</code>.
-          </p>
+  return (
+    <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-xl overflow-hidden">
+      {/* Title bar */}
+      <div className="px-5 py-4 border-b border-[#1e1e1e] flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-white">{doc.title}</span>
+        <span className="text-[11px] text-gray-500 font-mono">{doc.note}</span>
+      </div>
+
+      <div className="p-5 flex flex-col gap-5">
+
+        {/* Endpoint */}
+        <div className="flex items-center gap-2 bg-[#080808] border border-[#1a1a1a] rounded-lg px-3.5 py-2.5">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 flex-shrink-0">{doc.endpoint.method}</span>
+          <code className="text-[12px] font-mono text-gray-400 break-all">{doc.endpoint.url}</code>
         </div>
-        <hr className="border-[#1e1e1e] mb-6" />
-        <ParamTable params={[
-          { name: "image", type: "file", required: true, desc: "Source image. JPEG / PNG / WebP." },
-          { name: "promptText", type: "string", required: false, desc: "Describe the desired motion or scene." },
-          { name: "resolution", type: "string", required: false, desc: "Output resolution: 480p or 720p." },
-          { name: "duration", type: "number", required: false, desc: "Video duration in seconds." },
-        ]} />
-        <hr className="border-[#1e1e1e] my-6" />
-        <ResponseDocs
-          success={`{ "video_id": "550e8400-e29b-41d4-a716-446655440000" }`}
-          error={`{ "error_code": "INVALID_API_KEY", "message": "Authentication failed." }`}
-        />
-        <hr className="border-[#1e1e1e] my-6" />
+
+        {/* Params */}
         <div>
-          <h4 className="text-[15px] font-semibold text-white mb-3">Status Polling</h4>
-          <p className="text-[14px] text-gray-400 mb-3">
-            After submission, poll until <code className="text-gray-200 bg-[#1a1a1a] px-1 rounded">status</code> is{" "}
-            <code className="text-green-300 bg-green-500/10 px-1 rounded">finished</code>.
-          </p>
-          <div className="bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 flex items-center gap-3 mb-4">
-            <span className="text-[11px] font-bold uppercase px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">GET</span>
-            <code className="text-[13px] font-mono text-gray-300">https://parrot.pika.art/api/v1/generate/v0/videos/{"{video_id}"}</code>
-          </div>
-          <StatusTable />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-[#111] border border-[#1e1e1e] rounded-xl p-8">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold text-white mb-2">Image to Video v2 + Audio</h3>
-        <p className="text-[14px] text-gray-400 leading-relaxed">
-          Generates a video driven by an audio file. Returns a <code className="text-gray-200 bg-[#1a1a1a] px-1 rounded">video_id</code>;
-          poll until <code className="text-gray-200 bg-[#1a1a1a] px-1 rounded">finished</code>.
-        </p>
-      </div>
-      <hr className="border-[#1e1e1e] mb-6" />
-      <ParamTable params={[
-        { name: "image", type: "file", required: true, desc: "Source image. JPEG / PNG / WebP." },
-        { name: "audio", type: "file", required: false, desc: "Audio file driving lip-sync. MP3 / WAV / AAC. Optional — omit to generate without audio." },
-        { name: "promptText", type: "string", required: false, desc: "Describe the desired motion or scene." },
-        { name: "resolution", type: "string", required: false, desc: "Output resolution: 480p or 720p." },
-        { name: "duration", type: "number", required: false, desc: "Video duration in seconds." },
-      ]} />
-      <hr className="border-[#1e1e1e] my-6" />
-      <ResponseDocs
-        success={`{ "video_id": "550e8400-e29b-41d4-a716-446655440000" }`}
-        error={`{ "error_code": "INVALID_API_KEY", "message": "Authentication failed." }`}
-      />
-      <hr className="border-[#1e1e1e] my-6" />
-      <div>
-        <h4 className="text-[15px] font-semibold text-white mb-3">Status Polling</h4>
-        <div className="bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 flex items-center gap-3 mb-4">
-          <span className="text-[11px] font-bold uppercase px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">GET</span>
-          <code className="text-[13px] font-mono text-gray-300">https://parrot.pika.art/api/v1/generate/v0/videos/{"{video_id}"}</code>
-        </div>
-        <StatusTable />
-      </div>
-    </div>
-  );
-}
-
-function ParamTable({ params }: { params: { name: string; type: string; required: boolean; desc: string }[] }) {
-  return (
-    <div className="rounded-lg border border-[#222] overflow-hidden mb-2">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-[#222] bg-[#0d0d0d]">
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400 w-36">Parameter</th>
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400 w-20">Type</th>
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400 w-20">Required</th>
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400">Description</th>
-          </tr>
-        </thead>
-        <tbody className="text-[14px]">
-          {params.map((p, i) => (
-            <tr key={p.name} className={i < params.length - 1 ? "border-b border-[#1a1a1a]" : ""}>
-              <td className="px-4 py-3.5 align-top">
-                <code className="text-[13px] text-white font-mono bg-[#1a1a1a] px-1.5 py-0.5 rounded border border-[#2a2a2a]">{p.name}</code>
-              </td>
-              <td className="px-4 py-3.5 align-top">
-                <span className="text-[13px] text-blue-300 font-mono">{p.type}</span>
-              </td>
-              <td className="px-4 py-3.5 align-top">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Parameters</p>
+          <div className="flex flex-col gap-1">
+            {doc.params.map((p) => (
+              <div key={p.name} className="flex items-baseline gap-3 px-3 py-2 rounded-lg bg-[#080808] border border-[#1a1a1a]">
+                <code className="text-[12px] font-mono text-white flex-shrink-0 w-28">{p.name}</code>
+                <span className="text-[11px] font-mono text-blue-400 flex-shrink-0 w-12">{p.type}</span>
                 {p.required
-                  ? <span className="text-[12px] font-medium text-red-400">Yes</span>
-                  : <span className="text-[12px] text-gray-600">No</span>}
-              </td>
-              <td className="px-4 py-3.5 align-top text-[14px] text-gray-400 leading-relaxed">{p.desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ResponseDocs({ success, error }: { success: string; error: string }) {
-  return (
-    <div>
-      <h4 className="text-[15px] font-semibold text-white mb-3">Response</h4>
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[12px] font-semibold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded">200</span>
-          <span className="text-[14px] text-gray-300">Success</span>
+                  ? <span className="text-[10px] font-bold text-red-400 flex-shrink-0">required</span>
+                  : <span className="text-[10px] text-gray-600 flex-shrink-0">optional</span>}
+                <span className="text-[12px] text-gray-500">{p.desc}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <pre className="bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-[14px] font-mono text-gray-300 overflow-auto leading-relaxed">{success}</pre>
-      </div>
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[12px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded">4xx / 5xx</span>
-          <span className="text-[14px] text-gray-300">Error</span>
-        </div>
-        <pre className="bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-[14px] font-mono text-gray-300 overflow-auto leading-relaxed">{error}</pre>
-      </div>
-    </div>
-  );
-}
 
-function StatusTable() {
-  const rows = [
-    { status: "queued", desc: "Job is waiting in queue." },
-    { status: "started", desc: "Generation is in progress." },
-    { status: "finished", desc: "Complete — video_url is available." },
-    { status: "failed", desc: "Generation failed." },
-  ];
-  return (
-    <div className="rounded-lg border border-[#222] overflow-hidden">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-[#222] bg-[#0d0d0d]">
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400 w-32">Status</th>
-            <th className="text-left px-4 py-3 text-[12px] font-semibold text-gray-400">Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.status} className={i < rows.length - 1 ? "border-b border-[#1a1a1a]" : ""}>
-              <td className="px-4 py-3">
-                <code className={`text-[13px] font-mono px-1.5 py-0.5 rounded border ${
-                  r.status === "finished" ? "text-green-300 bg-green-500/10 border-green-500/20"
-                  : r.status === "failed" ? "text-red-300 bg-red-500/10 border-red-500/20"
-                  : "text-amber-300 bg-amber-500/10 border-amber-500/20"
-                }`}>{r.status}</code>
-              </td>
-              <td className="px-4 py-3 text-[14px] text-gray-400">{r.desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        {/* Auth */}
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Auth Header</p>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#080808] border border-[#1a1a1a]">
+            <span className="text-[12px] font-mono text-purple-300">X-API-KEY</span>
+            <span className="text-gray-600">:</span>
+            <span className="text-[12px] font-mono text-yellow-200/70">pk_xxxxxxxxxxxxxxxx</span>
+          </div>
+        </div>
+
+        {/* Response */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              <span className="text-green-400">200</span> Success
+            </p>
+            <pre className="bg-[#080808] border border-[#1a1a1a] rounded-lg px-3 py-2.5 text-[12px] font-mono text-gray-300 leading-relaxed">{doc.successJson}</pre>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              <span className="text-red-400">4xx</span> Error
+            </p>
+            <pre className="bg-[#080808] border border-[#1a1a1a] rounded-lg px-3 py-2.5 text-[12px] font-mono text-gray-300 leading-relaxed">{`{\n  "error_code": "INVALID_API_KEY",\n  "message": "..."\n}`}</pre>
+          </div>
+        </div>
+
+        {/* Polling (only for async APIs) */}
+        {doc.polling && (
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Status Polling</p>
+            <div className="flex items-center gap-2 bg-[#080808] border border-[#1a1a1a] rounded-lg px-3.5 py-2.5 mb-3">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0">GET</span>
+              <code className="text-[12px] font-mono text-gray-400">{doc.polling}</code>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {POLL_STATUSES.map((s) => (
+                <div key={s.value} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#080808] border border-[#1a1a1a]">
+                  <code className={`text-[11px] font-mono font-bold ${
+                    s.color === "green" ? "text-green-400" : s.color === "red" ? "text-red-400" : "text-amber-400"
+                  }`}>{s.value}</code>
+                  <span className="text-[11px] text-gray-500">{s.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
