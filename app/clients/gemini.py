@@ -135,6 +135,21 @@ class GeminiClient:
         )
         return response.choices[0].message.content
 
+    async def chat_grok(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """Use Grok (xAI) for instruction-following tasks like prompt reprompting."""
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content
+
     async def chat_creative(
         self,
         messages: list[dict[str, Any]],
@@ -201,7 +216,7 @@ class GeminiClient:
         prompt: str,
         detail: str = "high",
     ) -> str:
-        """Analyze an image using vision model."""
+        """Analyze an image using Grok vision model."""
         data_url = await self._load_image_as_data_url(image_url)
 
         messages = [
@@ -211,18 +226,19 @@ class GeminiClient:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": data_url, "detail": detail},
+                        "image_url": {"url": data_url},
                     },
                 ],
             }
         ]
 
-        response = await self.client.chat.completions.create(
-            model=self.vision_model_name,
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
             messages=messages,
             max_tokens=4096,
+            temperature=0,
         )
-        return self._strip_thinking(response.choices[0].message.content)
+        return response.choices[0].message.content
 
 
     async def analyze_image_deepseek(
@@ -263,9 +279,11 @@ class GeminiClient:
     ) -> str:
         """Analyze an image using Grok vision (grok-4-latest).
 
-        Passes the image URL directly — Grok supports URL-based image input.
+        Converts image to base64 data URL first to handle localhost/private URLs.
         Used for reference image analysis in prompt generation.
         """
+        data_url = await self._load_image_as_data_url(image_url)
+
         messages = [
             {
                 "role": "user",
@@ -273,7 +291,7 @@ class GeminiClient:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": image_url},
+                        "image_url": {"url": data_url},
                     },
                 ],
             }
@@ -293,24 +311,25 @@ class GeminiClient:
         prompt: str,
         detail: str = "high",
     ) -> str:
-        """Compare multiple images using vision model."""
+        """Compare multiple images using Grok vision model."""
         content = [{"type": "text", "text": prompt}]
 
         for url in image_urls:
             data_url = await self._load_image_as_data_url(url)
             content.append({
                 "type": "image_url",
-                "image_url": {"url": data_url, "detail": detail},
+                "image_url": {"url": data_url},
             })
 
         messages = [{"role": "user", "content": content}]
 
-        response = await self.client.chat.completions.create(
-            model=self.vision_model_name,
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
             messages=messages,
             max_tokens=4096,
+            temperature=0,
         )
-        return self._strip_thinking(response.choices[0].message.content)
+        return response.choices[0].message.content
 
     async def chat_with_tools(
         self,

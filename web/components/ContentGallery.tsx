@@ -145,7 +145,7 @@ export default function ContentGallery({
   const completedImages = sortedImages.filter((img) => img.status !== "generating");
 
   // Filter out processing videos to show them separately with spinner
-  const processingVideos = sortedVideos.filter((v) => v.status === "processing" || !v.video_url);
+  const processingVideos = sortedVideos.filter((v) => v.status === "processing");
   const completedVideos = sortedVideos.filter((v) => v.status !== "processing" && v.video_url);
 
   // Filter images by type (from completed list)

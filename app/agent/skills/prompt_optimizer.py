@@ -1,4 +1,5 @@
 """Prompt optimization skill using GPT-4o."""
+import logging
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.skills.base import BaseSkill
 from app.clients.gemini import get_gemini_client
 from app.services.storage import get_storage_service
+
+logger = logging.getLogger(__name__)
 
 
 # Seedream prompt optimization guide
@@ -133,15 +136,15 @@ class PromptOptimizerSkill(BaseSkill):
         prompt = IMAGE_ANALYSIS_PROMPT.format(user_intent=user_intent)
 
         try:
-            # Use Grok vision for reference image analysis
+            logger.info(f"Analyzing reference image via Grok: {image_url[:100]}...")
             analysis = await self.gemini_client.analyze_image_grok(
                 image_url=image_url,
                 prompt=prompt,
             )
+            logger.info(f"Grok reference analysis succeeded: {len(analysis)} chars")
             return analysis.strip()
         except Exception as e:
-            # If analysis fails, return empty string
-            print(f"Reference image analysis failed: {e}")
+            logger.error(f"Reference image analysis failed: {e}", exc_info=True)
             return ""
 
     async def execute(
@@ -223,8 +226,8 @@ class PromptOptimizerSkill(BaseSkill):
             if cloth_desc:
                 parts.append(cloth_desc)
 
-        # Scene from raw prompt
-        if raw_prompt:
+        # Scene from raw prompt (skip generic default messages)
+        if raw_prompt and raw_prompt.lower() not in ("generate using reference image", ""):
             parts.append(f"Scene: {raw_prompt}")
 
         # Quality tags
@@ -355,27 +358,29 @@ User request: {raw_prompt}
         ]
 
         try:
-            # Use GPT-4o via GMI for reprompt generation — superior instruction following
-            optimized = await self.gemini_client.chat_gpt(
+            optimized = await self.gemini_client.chat_grok(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500,
             )
 
             # Check if model refused (content policy)
-            # Use phrase-level checks only — avoid substring matches like "explicit" inside "explicitly"
             optimized_lower = optimized.lower()
+            starts_with_refusal = optimized_lower.startswith((
+                "i can't", "i cannot", "i'm sorry", "sorry,",
+                "i apologize", "i'm unable", "i must decline",
+                "i will not", "i won't",
+            ))
             refusal_phrases = [
-                "i cannot", "i can't", "i'm unable", "cannot assist",
-                "can't help", "won't help", "unable to help", "not able to",
-                "i apologize", "i'm sorry", "this request",
-                "against my", "cannot create", "can't create",
-                "not allowed to", "i must decline", "i will not",
+                "cannot assist with", "can't help with", "unable to help with",
+                "not able to generate", "against my guidelines",
+                "cannot create this", "can't create this",
+                "not allowed to generate", "violates my",
+                "content policy", "safety guidelines",
             ]
-            starts_with_refusal = optimized_lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry,"))
-            if any(phrase in optimized_lower for phrase in refusal_phrases) or starts_with_refusal:
-                # Use fallback prompt
-                print(f"GPT refused prompt optimization, using fallback")
+            has_refusal = any(phrase in optimized_lower for phrase in refusal_phrases)
+            if starts_with_refusal or has_refusal:
+                logger.warning(f"GPT refused prompt optimization: {optimized[:200]}")
                 optimized = self._build_fallback_prompt(
                     raw_prompt, style, cloth, character_description,
                     has_reference_image=bool(reference_image_path),
@@ -390,8 +395,7 @@ User request: {raw_prompt}
                 "cloth": cloth,
             }
         except Exception as e:
-            # Use fallback on error
-            print(f"Prompt optimization failed: {e}, using fallback")
+            logger.error(f"Prompt optimization failed: {e}", exc_info=True)
             fallback = self._build_fallback_prompt(
                 raw_prompt, style, cloth, character_description,
                 has_reference_image=bool(reference_image_path),
