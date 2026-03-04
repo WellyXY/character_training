@@ -99,11 +99,16 @@ class ImageGeneratorSkill(BaseSkill):
                 ]
 
             # Generate image with Seedream
+            negative_prompt = params.get(
+                "negative_prompt",
+                "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
+            )
             result = await self.seedream.generate(
                 prompt=prompt,
                 width=width,
                 height=height,
                 reference_images=reference_images,
+                negative_prompt=negative_prompt,
             )
 
             image_url = result.get("image_url")
@@ -251,11 +256,16 @@ class ImageGeneratorSkill(BaseSkill):
             # Generate image with Seedream using all reference images
             # The prompt uses [Reference Character] for base images (face/body)
             # and [Reference Pose/Composition/Style] for user reference (pose/atmosphere)
+            negative_prompt = params.get(
+                "negative_prompt",
+                "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
+            )
             result = await self.seedream.generate(
                 prompt=prompt,
                 width=width,
                 height=height,
                 reference_images=reference_images,
+                negative_prompt=negative_prompt,
             )
 
             image_url = result.get("image_url")

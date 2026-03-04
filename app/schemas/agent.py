@@ -55,6 +55,7 @@ class PendingGenerationParams(BaseModel):
     reference_image_path: Optional[str] = None  # User uploaded reference image
     reference_image_mode: Optional[ReferenceImageMode] = None  # How to use the reference image
     video_prompt: Optional[str] = None
+    negative_prompt: Optional[str] = "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley"
 
 
 class PendingGeneration(BaseModel):
