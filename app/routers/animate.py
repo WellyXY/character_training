@@ -304,10 +304,9 @@ Example good prompts:
 The motion_types should include body actions, facial expressions, AND camera movements, e.g. ["hair flip", "lip bite", "hip sway", "wink", "zoom in", "dolly forward"]."""
 
     try:
-        response = await gemini.analyze_image(
+        response = await gemini.analyze_image_grok(
             image_url=image_url,
             prompt=analysis_prompt,
-            detail="high",
         )
 
         # Parse JSON response
