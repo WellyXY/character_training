@@ -133,11 +133,10 @@ class PromptOptimizerSkill(BaseSkill):
         prompt = IMAGE_ANALYSIS_PROMPT.format(user_intent=user_intent)
 
         try:
-            # Use DeepSeek Vision for stronger creative understanding of reference images
-            analysis = await self.gemini_client.analyze_image_deepseek(
+            # Use Grok vision for reference image analysis
+            analysis = await self.gemini_client.analyze_image_grok(
                 image_url=image_url,
                 prompt=prompt,
-                detail="high",
             )
             return analysis.strip()
         except Exception as e:

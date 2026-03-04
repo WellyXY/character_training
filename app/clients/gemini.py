@@ -24,6 +24,13 @@ class GeminiClient:
         self.vision_model_name = settings.gmi_vision_model
         self.gpt_model_name = settings.gmi_gpt_model
 
+        # xAI Grok client (for reference image analysis)
+        self.grok_client = AsyncOpenAI(
+            api_key=settings.xai_api_key,
+            base_url=settings.xai_base_url,
+        )
+        self.grok_vision_model = settings.xai_vision_model
+
     @staticmethod
     def _strip_thinking(text: str) -> str:
         """Strip Gemini's thinking/reasoning block from response.
@@ -246,6 +253,37 @@ class GeminiClient:
             model=self.vision_model_name,  # moonshotai/Kimi-K2.5
             messages=messages,
             max_tokens=4096,
+        )
+        return response.choices[0].message.content
+
+    async def analyze_image_grok(
+        self,
+        image_url: str,
+        prompt: str,
+    ) -> str:
+        """Analyze an image using Grok vision (grok-4-latest).
+
+        Passes the image URL directly — Grok supports URL-based image input.
+        Used for reference image analysis in prompt generation.
+        """
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_url},
+                    },
+                ],
+            }
+        ]
+
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            max_tokens=2048,
+            temperature=0,
         )
         return response.choices[0].message.content
 

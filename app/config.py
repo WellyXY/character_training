@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     gmi_gpt_model: str = "openai/gpt-4o"
     gmi_video_model: str = "wan2.6-i2v"
 
+    # xAI Grok (vision model for reference image analysis)
+    xai_api_key: str = ""
+    xai_base_url: str = "https://api.x.ai/v1"
+    xai_vision_model: str = "grok-4-latest"
+
     # Seedream (Image Generation)
     seedream_api_key: str = ""
     seedream_server_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
