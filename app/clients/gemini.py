@@ -22,6 +22,7 @@ class GeminiClient:
         self.model_name = settings.gmi_model
         self.creative_model_name = settings.gmi_creative_model
         self.vision_model_name = settings.gmi_vision_model
+        self.gpt_model_name = settings.gmi_gpt_model
 
     @staticmethod
     def _strip_thinking(text: str) -> str:
@@ -108,6 +109,24 @@ class GeminiClient:
             if json_match:
                 return json.loads(json_match.group(0))
             raise ValueError(f"Could not parse JSON from response: {response[:500]}")
+
+    async def chat_gpt(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """Use GPT-4o via GMI for instruction-following tasks like reprompting.
+
+        Routes through GMI OpenAI-compatible API using gmi_gpt_model setting.
+        """
+        response = await self.client.chat.completions.create(
+            model=self.gpt_model_name,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content
 
     async def chat_creative(
         self,
