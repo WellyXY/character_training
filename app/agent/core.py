@@ -317,10 +317,25 @@ Current State:
         last_message = session.messages[-1].content if session.messages else ""
 
         try:
-            result = await self.gemini_client.chat_reasoning_json(
+            # Use DeepSeek (creative model) for intent parsing — better Chinese support, no Gemini quota limits
+            raw = await self.gemini_client.chat_creative(
                 messages=messages,
+                temperature=0.3,
                 max_tokens=2000,
             )
+            import json as _json, re as _re
+            try:
+                result = _json.loads(raw)
+            except _json.JSONDecodeError:
+                m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
+                if m:
+                    result = _json.loads(m.group(1))
+                else:
+                    m = _re.search(r'\{[\s\S]*\}', raw)
+                    if m:
+                        result = _json.loads(m.group(0))
+                    else:
+                        raise ValueError(f"No JSON in response: {raw[:200]}")
 
             # Check if GPT refused (content policy)
             response_msg = result.get("response_message", "").lower()
