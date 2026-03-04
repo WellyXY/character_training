@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     # Parrot (Video Generation)
     parrot_api_key: str = ""
     parrot_api_url: str = "https://parrot.pika.art/api/v1/generate/v0"
+    parrot_v2_audio_api_key: str = ""  # Key for image-to-video-v2-audio endpoint
 
     # Pika Addition API (Reference Video Generation)
     pika_addition_api_key: str = ""
