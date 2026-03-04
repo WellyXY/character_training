@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     gmi_model: str = "google/gemini-3-pro-preview"
     gmi_creative_model: str = "deepseek-ai/DeepSeek-V3-0324"
     gmi_vision_model: str = "google/gemini-3-pro-preview"
+    gmi_gpt_model: str = "openai/gpt-4o"
     gmi_video_model: str = "wan2.6-i2v"
 
     # Seedream (Image Generation)

@@ -250,22 +250,26 @@ Current State:
                 "response_message": "Adding the image as a Base Image...",
             }
 
-        # Check for image generation keywords
-        image_keywords = ["image", "photo", "generate", "create", "picture", "shoot", "selfie"]
-        video_keywords = ["video", "clip", "vlog", "dance"]
+        # Check for image generation keywords (English + Chinese)
+        image_keywords = [
+            "image", "photo", "generate", "create", "picture", "shoot", "selfie",
+            # Chinese keywords
+            "生成", "照片", "圖片", "拍", "畫面", "創作", "產生",
+        ]
+        video_keywords = ["video", "clip", "vlog", "dance", "影片", "視頻", "影像"]
 
-        is_image = any(kw in message_lower for kw in image_keywords)
-        is_video = any(kw in message_lower for kw in video_keywords)
+        is_image = any(kw in message_lower for kw in image_keywords) or any(kw in message for kw in ["生成", "照片", "圖片", "拍", "畫面", "創作", "產生"])
+        is_video = any(kw in message_lower for kw in video_keywords) or any(kw in message for kw in ["影片", "視頻", "影像"])
 
-        # Detect style/cloth from message
+        # Detect style/cloth from message (English + Chinese)
         style = None
         cloth = None
-        if any(kw in message_lower for kw in ["sexy", "seductive", "sensual"]):
+        if any(kw in message_lower for kw in ["sexy", "seductive", "sensual"]) or any(kw in message for kw in ["性感", "誘人", "撩人", "撩", "色情"]):
             style = "sexy"
-        if any(kw in message_lower for kw in ["nude", "naked"]):
+        if any(kw in message_lower for kw in ["nude", "naked"]) or any(kw in message for kw in ["裸", "全裸", "裸體"]):
             cloth = "nude"
             style = "erotic"
-        elif any(kw in message_lower for kw in ["lingerie", "underwear"]):
+        elif any(kw in message_lower for kw in ["lingerie", "underwear"]) or any(kw in message for kw in ["內衣", "蕾絲"]):
             cloth = "sexy_lingerie"
 
         if is_video:
@@ -313,10 +317,25 @@ Current State:
         last_message = session.messages[-1].content if session.messages else ""
 
         try:
-            result = await self.gemini_client.chat_reasoning_json(
+            # Use DeepSeek (creative model) for intent parsing — better Chinese support, no Gemini quota limits
+            raw = await self.gemini_client.chat_creative(
                 messages=messages,
+                temperature=0.3,
                 max_tokens=2000,
             )
+            import json as _json, re as _re
+            try:
+                result = _json.loads(raw)
+            except _json.JSONDecodeError:
+                m = _re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
+                if m:
+                    result = _json.loads(m.group(1))
+                else:
+                    m = _re.search(r'\{[\s\S]*\}', raw)
+                    if m:
+                        result = _json.loads(m.group(0))
+                    else:
+                        raise ValueError(f"No JSON in response: {raw[:200]}")
 
             # Check if GPT refused (content policy)
             response_msg = result.get("response_message", "").lower()
