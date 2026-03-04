@@ -365,6 +365,7 @@ class ImageGeneratorSkill(BaseSkill):
         cloth: Optional[str] = None,
         reference_image_path: Optional[str] = None,
         reference_image_mode: Optional[str] = None,
+        negative_prompt: Optional[str] = None,
         db: AsyncSession = None,
         existing_image_id: Optional[str] = None,
     ) -> dict[str, Any]:
@@ -383,6 +384,7 @@ class ImageGeneratorSkill(BaseSkill):
                 "reference_image_path": reference_image_path,
                 "reference_image_mode": reference_image_mode,
                 "existing_image_id": existing_image_id,
+                "negative_prompt": negative_prompt,
             },
             character_id=character_id,
             db=db,
