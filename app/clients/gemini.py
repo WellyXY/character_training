@@ -224,13 +224,11 @@ class GeminiClient:
         prompt: str,
         detail: str = "high",
     ) -> str:
-        """Analyze an image using DeepSeek Vision (creative model with vision support).
+        """Analyze an image using Kimi vision model.
 
-        Use this for reference image analysis in content generation — DeepSeek V3
-        provides stronger creative reasoning than the default vision model.
+        Passes the image URL directly — no base64 conversion.
+        Kimi-K2.5 supports URL-based image input natively.
         """
-        data_url = await self._load_image_as_data_url(image_url)
-
         messages = [
             {
                 "role": "user",
@@ -238,14 +236,14 @@ class GeminiClient:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": data_url, "detail": detail},
+                        "image_url": {"url": image_url},
                     },
                 ],
             }
         ]
 
         response = await self.client.chat.completions.create(
-            model=self.creative_model_name,  # DeepSeek-V3-0324 (supports multimodal)
+            model=self.vision_model_name,  # moonshotai/Kimi-K2.5
             messages=messages,
             max_tokens=4096,
         )

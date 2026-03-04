@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -360,7 +361,14 @@ async def generate_base_images(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    description = character.description or character.name
+    raw_description = character.description or character.name or ""
+    # Remove "character" from prompts and ensure realistic wording
+    description = re.sub(r"\bcharacter\b", "", raw_description, flags=re.IGNORECASE)
+    description = re.sub(r"\s+", " ", description).strip()
+    if not description:
+        description = character.name or "realistic person"
+    if "realistic" not in description.lower() and "photorealistic" not in description.lower():
+        description = f"realistic {description}"
     gender = character.gender or "person"
 
     prompts = [

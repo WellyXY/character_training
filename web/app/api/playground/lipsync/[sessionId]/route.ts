@@ -9,7 +9,7 @@ export async function GET(
   const apiKey = req.headers.get("x-api-key") ?? "";
 
   const response = await fetch(
-    `${BASE_URL}/api/realtime/session/${params.sessionId}`,
+    `${BASE_URL}/realtime/session/${params.sessionId}`,
     { headers: { "X-API-Key": apiKey } }
   );
 
@@ -24,7 +24,7 @@ export async function DELETE(
   const apiKey = req.headers.get("x-api-key") ?? "";
 
   const response = await fetch(
-    `${BASE_URL}/api/realtime/session/${params.sessionId}`,
+    `${BASE_URL}/realtime/session/${params.sessionId}`,
     { method: "DELETE", headers: { "X-API-Key": apiKey } }
   );
 

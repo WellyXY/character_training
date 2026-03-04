@@ -10,7 +10,7 @@ export async function POST(
   const body = await req.json();
 
   const response = await fetch(
-    `${BASE_URL}/api/realtime/session/${params.sessionId}/text`,
+    `${BASE_URL}/realtime/session/${params.sessionId}/text`,
     {
       method: "POST",
       headers: {

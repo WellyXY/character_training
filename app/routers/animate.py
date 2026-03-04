@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db, async_session
-from app.clients.gemini import get_gemini_client
 from app.clients.parrot import get_parrot_client
 from app.clients.gmi_video import get_gmi_video_client
 from app.clients.seedream import get_seedream_client
@@ -129,7 +128,12 @@ async def _enhance_video_prompt(prompt: str) -> str:
     flags = re.findall(r'\s+(--\w+)', prompt)
     clean_prompt = re.sub(r'\s+--\w+', '', prompt).strip()
 
-    gemini = get_gemini_client()
+    try:
+        from app.clients.gemini import get_gemini_client
+        gemini = get_gemini_client()
+    except Exception as e:
+        logger.warning("Gemini client unavailable for video prompt enhancement: %s", e)
+        return prompt
     system_msg = """You are a video generation prompt optimizer. Your job is to enhance user prompts for image-to-video AI models (Pika, LTX).
 
 ## Rules:
@@ -200,7 +204,7 @@ class GenerateRequest(BaseModel):
     prompt: str
     reference_video_url: Optional[str] = None
     reference_video_duration: Optional[float] = None
-    video_model: str = "v1"  # "v1" = Parrot/Pika, "v2" = GMI LTX
+    video_model: str = "v1"  # "v1" = Parrot/Pika, "v2" = Google Veo3
     add_subtitles: bool = False
     match_reference_pose: bool = False
     pose_image_aspect_ratio: str = "9:16"  # Aspect ratio for pose-matched image generation
@@ -227,7 +231,12 @@ async def analyze_image_for_animation(
     Uses GPT-4o Vision to understand the image content.
     """
     import base64
-    gemini = get_gemini_client()
+    try:
+        from app.clients.gemini import get_gemini_client
+        gemini = get_gemini_client()
+    except Exception as e:
+        logger.error("Gemini client unavailable for image analysis: %s", e)
+        raise HTTPException(status_code=503, detail="Gemini client unavailable")
     storage = get_storage_service()
 
     # Convert local image to base64 data URL for GPT-4o Vision
@@ -523,10 +532,9 @@ async def generate_animation(
             )
 
             if request.video_model == "v2":
-                # V2: Wan 2.6 via GMI - async API, needs public URL
+                # V2: Veo3 via GMI - async API, needs fetchable URL or base64
                 gmi_image_url = image_url
                 if not image_url.startswith("https://"):
-                    # Wan 2.6 needs a fetchable URL; upload to storage first
                     import base64 as b64
                     if request.image_url.startswith("/uploads/"):
                         file_id = request.image_url.replace("/uploads/", "")
@@ -543,7 +551,7 @@ async def generate_animation(
                             mime = resp.headers.get("content-type", "image/jpeg")
                             gmi_image_url = f"data:{mime};base64,{b64.b64encode(resp.content).decode()}"
 
-                # Wan 2.6 is async - submit and poll in background task
+                # Veo3 via GMI is async - submit and poll in background task
                 video_job_id = None
             else:
                 # V1: Parrot/Pika image-to-video
@@ -573,7 +581,7 @@ async def generate_animation(
             "resolution": video_resolution,
             "requested_duration": request.duration,
         }
-        # For V2 (Wan 2.6), store prepared image URL & resolution for background task
+        # For V2 (Veo3 via GMI), store prepared image URL & resolution for background task
         if request.video_model == "v2":
             metadata["gmi_image_url"] = gmi_image_url
             metadata["v2_resolution"] = v2_resolution
@@ -667,42 +675,60 @@ async def _poll_video_completion(
         result = None
 
         if video_model == "v2":
-            # V2: Wan 2.6 via GMI - async API, submit then poll
+            # V2: Veo3 via GMI - async API, submit then poll
             gmi_video = get_gmi_video_client()
             gmi_image_url = metadata.get("gmi_image_url", "")
             enhanced_prompt = metadata.get("enhanced_prompt", "")
             v2_resolution = metadata.get("v2_resolution", "720P")
 
-            logger.info("Video %s: submitting to Wan 2.6 (resolution=%s)...", video_id, v2_resolution)
+            logger.info("Video %s: submitting to Veo3 via GMI (resolution=%s)...", video_id, v2_resolution)
             request_id = await gmi_video.create_image_to_video(
                 image_url=gmi_image_url,
                 prompt=enhanced_prompt,
                 resolution=v2_resolution,
             )
 
-            # Poll for completion (Wan 2.6 typically ~40-80s)
-            wan_timeout = 300
-            wan_interval = 10
-            wan_elapsed = 0
-            while wan_elapsed < wan_timeout:
-                await asyncio.sleep(wan_interval)
-                wan_elapsed += wan_interval
+            # Poll for completion
+            veo3_timeout = 600
+            veo3_interval = 10
+            veo3_elapsed = 0
+            while veo3_elapsed < veo3_timeout:
+                await asyncio.sleep(veo3_interval)
+                veo3_elapsed += veo3_interval
                 poll_result = await gmi_video.get_request_status(request_id)
-                wan_status = poll_result.get("status", "")
-                logger.info("Video %s Wan poll: status=%s (elapsed=%ds)", video_id, wan_status, wan_elapsed)
+                veo3_status = poll_result.get("status", "")
+                logger.info("Video %s Veo3 poll: status=%s (elapsed=%ds)", video_id, veo3_status, veo3_elapsed)
 
-                if wan_status == "finished":
+                # Persist interim status/progress for UI feedback
+                try:
+                    async with async_session() as progress_db:
+                        video_result = await progress_db.execute(
+                            select(Video).where(Video.id == video_id)
+                        )
+                        video = video_result.scalar_one_or_none()
+                        if video:
+                            metadata["gmi_status"] = veo3_status
+                            estimated = int((veo3_elapsed / veo3_timeout) * 100)
+                            estimated = min(90, max(1, estimated))
+                            prev = metadata.get("progress") or 0
+                            metadata["progress"] = max(prev, estimated)
+                            video.metadata_json = json.dumps(metadata)
+                            await progress_db.commit()
+                except Exception as e:
+                    logger.warning("Failed to update Veo3 progress metadata: %s", e)
+
+                if veo3_status == "finished":
                     if poll_result.get("video_url"):
                         result = poll_result
                         break
                     else:
-                        raise ValueError(f"Wan 2.6 finished but no video URL: {poll_result}")
-                elif wan_status == "failed":
+                        raise ValueError(f"Veo3 finished but no video URL: {poll_result}")
+                elif veo3_status == "failed":
                     error_msg = poll_result.get("error") or poll_result.get("raw", {}).get("outcome", {}).get("error", "Unknown error")
-                    raise ValueError(f"Wan 2.6 generation failed: {error_msg}")
+                    raise ValueError(f"Veo3 generation failed: {error_msg}")
 
             if not result:
-                raise TimeoutError("Wan 2.6 video generation timed out after 5 minutes")
+                raise TimeoutError("Veo3 video generation timed out after 10 minutes")
         else:
             # V1: Poll for video completion with progress updates (up to 10 minutes)
             timeout = 600
