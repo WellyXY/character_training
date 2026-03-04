@@ -489,6 +489,7 @@ Current State:
                         aspect_ratio="9:16",
                         reference_image_path=reference_image_path,
                         reference_image_mode=reference_image_mode,
+                        negative_prompt="deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
                     ),
                     optimized_prompt=fallback_prompt,
                     reasoning="Content policy bypass — using user prompt directly",
@@ -895,6 +896,7 @@ Current State:
                             cloth=pending.params.cloth,
                             reference_image_path=pending.params.reference_image_path,
                             reference_image_mode=pending.params.reference_image_mode.value if pending.params.reference_image_mode else None,
+                            negative_prompt=pending.params.negative_prompt,
                             db=db,
                             existing_image_id=existing_image_id,
                         )
