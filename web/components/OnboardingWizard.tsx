@@ -309,8 +309,8 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     // Fetch sample images: 3 from INS tag + 3 from NSFW tag
     try {
       const [insSamples, nsfwSamples] = await Promise.all([
-        listSamples({ tag: "INS", limit: 3 }),
-        listSamples({ tag: "NSFW", limit: 3 }),
+        listSamples({ tag: "INS", limit: 3, media_type: "image" }),
+        listSamples({ tag: "NSFW", limit: 3, media_type: "image" }),
       ]);
       const combined = [...insSamples, ...nsfwSamples];
       setSamples(combined.length > 0 ? combined : FAKE_SAMPLES);
@@ -766,8 +766,10 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                     key={sample.id}
                     onClick={() => {
                       setSelectedSample(selectedSample?.id === sample.id ? null : sample);
-                      if (selectedSample?.id !== sample.id && sample.caption) {
-                        setPrompt(sample.caption);
+                      if (selectedSample?.id !== sample.id) {
+                        // Use caption first, fallback to tags, fallback to empty
+                        const samplePrompt = sample.caption || (sample.tags?.length ? sample.tags.join(", ") : "");
+                        setPrompt(samplePrompt);
                       } else if (selectedSample?.id === sample.id) {
                         setPrompt("");
                       }

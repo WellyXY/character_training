@@ -28,13 +28,14 @@ Respond ONLY in valid JSON with this exact structure:
 {
   "content_concept": "one-sentence creative concept",
   "scene_framing": "shot type, camera distance, composition details",
-  "lighting": "light source, direction, quality, mood",
+  "lighting": "light source, direction, quality, mood — always include catchlights in eyes",
   "pose_action": "what the character is doing, body language, expression",
   "outfit": "specific clothing description with colors, fabrics, fit",
   "background": "environment, depth, key elements",
   "camera_style": "lens, depth of field, color grading",
   "mood_vibe": "overall emotional tone and atmosphere",
   "caption_suggestion": "short social media caption that fits the vibe",
+  "negative_prompt": "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
   "full_prompt": "complete optimized prompt combining all elements above, ready for image generation"
 }
 
@@ -42,8 +43,11 @@ Respond ONLY in valid JSON with this exact structure:
 1. Always maintain character visual identity — face, hair, body proportions must be consistent with base images
 2. Never be generic — every detail should feel intentional and specific
 3. Match the platform vibe (Instagram = aspirational, Twitter/X = authentic/raw)
-4. Lighting is everything — specify it precisely
-5. full_prompt should be 150-250 words, professional photography language
+4. Lighting is everything — always specify: direction (e.g. 45-degree Rembrandt), aperture (e.g. f/2.2 bokeh), and catchlights in eyes visible
+5. full_prompt must START with: "masterpiece, best quality, ultra-detailed, professional photography,"
+6. full_prompt must include skin detail: "natural skin texture, visible pores, subsurface scattering, translucent skin"
+7. full_prompt should be 150-250 words total
+8. negative_prompt is FIXED — always use the exact value shown above, never change it
 """
 
 
@@ -168,10 +172,14 @@ Platform: {platform}
 
 Generate a detailed content plan. The full_prompt must:
 1. Reference "the character from base reference images" (never use names)
-2. Include precise scene, lighting, pose, outfit, background, camera details
-3. End with quality tags: "high quality, 4K, photorealistic, sharp focus on face"
-4. Be 150-250 words
-5. Match the {platform} platform aesthetic
+2. START with: "masterpiece, best quality, ultra-detailed, professional photography,"
+3. Include precise scene, lighting with "45-degree Rembrandt window light, f/2.2 bokeh, catchlights in eyes visible", pose, outfit, background, camera details
+4. Include skin detail: "natural skin texture, visible pores, subsurface scattering, translucent skin"
+5. End with: "high quality, 4K, photorealistic, sharp focus on face"
+6. Be 150-250 words total
+7. Match the {platform} platform aesthetic
+
+The negative_prompt field must ALWAYS be exactly: "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley"
 
 Respond in JSON only.""",
             },
@@ -196,6 +204,10 @@ Respond in JSON only.""",
                 "success": True,
                 "plan": plan,
                 "full_prompt": plan.get("full_prompt", ""),
+                "negative_prompt": plan.get(
+                    "negative_prompt",
+                    "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
+                ),
                 "caption": plan.get("caption_suggestion", ""),
             }
 

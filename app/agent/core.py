@@ -532,6 +532,7 @@ Current State:
             cloth = parameters.get("cloth", "")
 
             brain_prompt = ""
+            brain_negative_prompt = "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley"
             if not reference_image_path:
                 content_plan = await self.content_brain.plan_content(
                     user_request=scene_desc or message,
@@ -544,6 +545,7 @@ Current State:
                 )
                 if content_plan.get("success") and content_plan.get("full_prompt"):
                     brain_prompt = content_plan["full_prompt"]
+                    brain_negative_prompt = content_plan.get("negative_prompt", brain_negative_prompt)
                     logger.info(f"ContentBrain brief (preview): {brain_prompt[:120]}...")
 
             # Pass reference image to DeepSeek Vision for analysis; use GPT-4o for reprompt
@@ -573,6 +575,7 @@ Current State:
                     reference_image_path=reference_image_path,
                     reference_image_mode=reference_image_mode,
                     video_prompt=parameters.get("video_prompt"),
+                    negative_prompt=brain_negative_prompt,
                 ),
                 optimized_prompt=optimized_prompt,
                 reasoning=reasoning,
