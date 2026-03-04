@@ -82,7 +82,6 @@ export default function ImageGenPanel({
   const [selectedRefImage, setSelectedRefImage] = useState<Image | null>(null);
   const [uploadedRef, setUploadedRef] = useState<{ url: string; fullUrl: string } | null>(null);
   const [referenceMode, setReferenceMode] = useState<ReferenceImageMode>("pose_background");
-  const [showImagePicker, setShowImagePicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -304,50 +303,6 @@ export default function ImageGenPanel({
             </div>
           )}
 
-          {/* Reference select — always visible when no ref attached */}
-          {!hasRef && (
-            <div className="mt-2">
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowImagePicker(!showImagePicker)}
-                  disabled={!characterId}
-                  className="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
-                >
-                  Select Reference Image
-                </button>
-              </div>
-              {showImagePicker && (
-                <div className="p-2 rounded-lg bg-[#0b0b0b] border border-white/10 max-h-36 overflow-y-auto">
-                  {availableImages.filter(img => img.image_url).length > 0 ? (
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {availableImages.filter(img => img.image_url).map((img) => (
-                        <button
-                          key={img.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedRefImage(img);
-                            setUploadedRef(null);
-                            setShowImagePicker(false);
-                          }}
-                          className="relative aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-white/30 transition-colors"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={resolveApiUrl(img.image_url!)}
-                            alt="Select"
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 font-mono text-center py-4">No images available</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           <input
             ref={fileInputRef}

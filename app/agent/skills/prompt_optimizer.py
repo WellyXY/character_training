@@ -1,5 +1,4 @@
 """Prompt optimization skill using GPT-4o."""
-import base64
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,24 +107,9 @@ class PromptOptimizerSkill(BaseSkill):
         self.gemini_client = get_gemini_client()
         self.storage = get_storage_service()
 
-    async def _get_image_url_or_base64(self, image_path: str, db: AsyncSession) -> str:
-        """
-        Convert image path to a URL that GPT-4V can access.
-
-        For localhost URLs, convert to base64 data URI since GPT-4V can't access them.
-        For remote URLs, return as-is.
-        """
-        full_url = self.storage.get_full_url(image_path)
-
-        if image_path.startswith("/uploads/"):
-            file_id = image_path.replace("/uploads/", "")
-            blob = await self.storage.get_file_blob(file_id, db)
-            if blob:
-                mime_type = blob.content_type or "image/jpeg"
-                base64_data = base64.b64encode(blob.data).decode("utf-8")
-                return f"data:{mime_type};base64,{base64_data}"
-
-        return full_url
+    def _get_image_url(self, image_path: str) -> str:
+        """Return the full public URL for the image — passed directly to Kimi vision API."""
+        return self.storage.get_full_url(image_path)
 
     async def analyze_reference_image(
         self,
@@ -143,8 +127,8 @@ class PromptOptimizerSkill(BaseSkill):
         Returns:
             Text description of the image that can be used in the prompt
         """
-        # Convert to URL (or base64 data URI for localhost)
-        image_url = await self._get_image_url_or_base64(image_path, db)
+        # Get public URL — passed directly to Kimi vision API (no base64 conversion)
+        image_url = self._get_image_url(image_path)
 
         prompt = IMAGE_ANALYSIS_PROMPT.format(user_intent=user_intent)
 
@@ -202,46 +186,43 @@ class PromptOptimizerSkill(BaseSkill):
         # For other modes with reference image:
         # Image order: [base_image_1, base_image_2, base_image_3, user_reference (last)]
         # Images 1-3 = base images for character face/body consistency
-        # Image 4 (last) = user reference for pose/background/clothing
+        # Image 4 (last) = user reference for pose/clothing
         if has_reference_image:
             if reference_image_mode == "pose_background":
                 parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
-                parts.append("Use image 4 (last reference image) for the exact pose, body position, camera angle, background environment, and lighting")
-                parts.append("Generate clothing based on the style/cloth parameters, do not copy clothing from any reference image")
+                parts.append("Follow the exact pose, body position, camera angle, background environment, and lighting from image 4 (user reference image)")
+                parts.append("Follow the clothing/outfit exactly as shown in image 4")
             elif reference_image_mode == "clothing_pose":
                 parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
-                parts.append("Use image 4 (last reference image) for the exact pose, body position, and clothing/outfit details")
-                parts.append("Generate background based on the scene description")
+                parts.append("Follow the exact pose, body position, and clothing/outfit exactly as shown in image 4 (user reference image)")
             else:  # custom or default
                 parts.append("Use images 1-3 (base images) for the character's face and body features to maintain identity consistency")
-                parts.append("Use image 4 (last reference image) for pose, composition, and atmosphere reference")
+                parts.append("Follow the exact pose and clothing as shown in image 4 (user reference image)")
         else:
-            # No reference image - just use base images
+            # No reference image - use base images + style/cloth params
             parts.append("Use the base reference images (images 1-3) for the character's face and body features")
 
-        # Style mapping (only for non-face_swap modes)
-        style_desc = {
-            "sexy": "sensual and alluring pose, confident expression",
-            "cute": "cute and sweet expression, playful pose",
-            "warm": "warm and inviting atmosphere, soft expression",
-            "home": "relaxed home setting, casual and comfortable",
-            "exposed": "revealing pose, artistic nude photography style",
-            "erotic": "artistic erotic photography, sensual pose, intimate atmosphere",
-        }.get(style, "elegant and natural pose")
-        parts.append(style_desc)
+            style_desc = {
+                "sexy": "sensual and alluring pose, confident expression",
+                "cute": "cute and sweet expression, playful pose",
+                "warm": "warm and inviting atmosphere, soft expression",
+                "home": "relaxed home setting, casual and comfortable",
+                "exposed": "revealing pose, artistic nude photography style",
+                "erotic": "artistic erotic photography, sensual pose, intimate atmosphere",
+            }.get(style, "elegant and natural pose")
+            parts.append(style_desc)
 
-        # Cloth mapping (only for non-face_swap modes)
-        cloth_desc = {
-            "nude": "nude, artistic nude photography, tasteful exposure",
-            "sexy_lingerie": "wearing sexy lingerie, lace details",
-            "sexy_underwear": "wearing underwear, intimate apparel",
-            "home_wear": "wearing comfortable home clothes",
-            "daily": "wearing casual daily outfit",
-            "fashion": "wearing fashionable outfit",
-            "sports": "wearing athletic wear",
-        }.get(cloth, "")
-        if cloth_desc:
-            parts.append(cloth_desc)
+            cloth_desc = {
+                "nude": "nude, artistic nude photography, tasteful exposure",
+                "sexy_lingerie": "wearing sexy lingerie, lace details",
+                "sexy_underwear": "wearing underwear, intimate apparel",
+                "home_wear": "wearing comfortable home clothes",
+                "daily": "wearing casual daily outfit",
+                "fashion": "wearing fashionable outfit",
+                "sports": "wearing athletic wear",
+            }.get(cloth, "")
+            if cloth_desc:
+                parts.append(cloth_desc)
 
         # Scene from raw prompt
         if raw_prompt:

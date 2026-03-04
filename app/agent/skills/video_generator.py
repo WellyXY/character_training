@@ -1,4 +1,5 @@
-"""Video generation skill using Parrot API."""
+"""Video generation skill using Parrot API (V1) or Veo3 via GMI (V2)."""
+import asyncio
 import json
 import uuid
 from typing import Any, Optional
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.skills.base import BaseSkill
 from app.agent.skills.image_generator import ImageGeneratorSkill
 from app.clients.parrot import get_parrot_client
+from app.clients.gmi_video import get_gmi_video_client
 from app.models.video import Video, VideoType, VideoStatus
 from app.models.image import Image, ImageType
 from app.services.storage import get_storage_service
@@ -22,6 +24,7 @@ class VideoGeneratorSkill(BaseSkill):
 
     def __init__(self):
         self.parrot = get_parrot_client()
+        self.gmi_video = get_gmi_video_client()
         self.storage = get_storage_service()
         self.image_skill = ImageGeneratorSkill()
 
@@ -59,17 +62,37 @@ class VideoGeneratorSkill(BaseSkill):
 
         prompt = params.get("prompt", "natural movement, slight motion")
         resolution = params.get("resolution")
+        video_model = params.get("video_model", "v1")
 
         try:
-            # Create video job
-            video_id = await self.parrot.create_image_to_video(
-                image_source=source_image_url,
-                prompt_text=prompt,
-                resolution=resolution,
-            )
-
-            # Wait for video completion
-            result = await self.parrot.wait_for_video(video_id)
+            if video_model == "v2":
+                # V2: Veo3 via GMI
+                request_id = await self.gmi_video.create_image_to_video(
+                    image_url=source_image_url,
+                    prompt=prompt,
+                    resolution="720P",
+                )
+                # Poll for completion (up to 10 minutes)
+                video_url = None
+                for _ in range(60):
+                    await asyncio.sleep(10)
+                    status_result = await self.gmi_video.get_request_status(request_id)
+                    if status_result["status"] == "finished":
+                        video_url = status_result.get("video_url")
+                        break
+                    elif status_result["status"] == "failed":
+                        return {"success": False, "error": status_result.get("error", "Veo3 generation failed")}
+                if not video_url:
+                    return {"success": False, "error": "Veo3 generation timed out"}
+                result = {"video_url": video_url, "thumbnail_url": None, "duration": 8}
+            else:
+                # V1: Parrot/Pika
+                video_id = await self.parrot.create_image_to_video(
+                    image_source=source_image_url,
+                    prompt_text=prompt,
+                    resolution=resolution,
+                )
+                result = await self.parrot.wait_for_video(video_id)
 
             video_url = result.get("video_url")
             if not video_url:
@@ -159,6 +182,7 @@ class VideoGeneratorSkill(BaseSkill):
                 "source_image_url": source_image_url,
                 "prompt": video_prompt,
                 "resolution": resolution,
+                "video_model": params.get("video_model", "v1"),
             },
             character_id=character_id,
             db=db,

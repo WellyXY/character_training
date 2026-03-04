@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     gmi_base_url: str = "https://api.gmi-serving.com/v1"
     gmi_model: str = "google/gemini-3-pro-preview"
     gmi_creative_model: str = "deepseek-ai/DeepSeek-V3-0324"
-    gmi_vision_model: str = "google/gemini-3-pro-preview"
+    gmi_vision_model: str = "moonshotai/Kimi-K2.5"
     gmi_gpt_model: str = "openai/gpt-4o"
     gmi_video_model: str = "wan2.6-i2v"
 

@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import AppNavbar from "@/components/AppNavbar";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { Room, RoomEvent, Track } from "livekit-client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,10 @@ interface VideoResponse {
   video_id?: string;
   id?: string;
   session_id?: string;
+  livekit_url?: string;
+  livekit_token?: string;
+  tts_worker_connected?: boolean;
+  video_worker_connected?: boolean;
   status?: string;
   duration?: number;
   error_code?: string;
@@ -26,7 +31,7 @@ interface VideoResponse {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_API_KEY = "pika_od5V2jd_vAjF8Ts5h6eIytl9FCyVK2XTv6MRk6qQC9E";
+const DEFAULT_API_KEY = "pika_TvWK2wLZCC7RDzlPdby_CQ-VI2B4d9Lvr6knq8D8tYo";
 const POLL_INTERVAL = 3000;
 const FINISHED_STATUSES = ["finished", "completed", "done", "success"];
 const FAILED_STATUSES = ["failed", "error"];
@@ -238,7 +243,8 @@ function PlaygroundContent() {
   // Lipsync session
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("none");
-  const [sessionLog, setSessionLog] = useState<{ role: "system" | "user" | "api"; text: string }[]>([]);
+  const [sessionLog, setSessionLog] = useState<{ role: "system" | "user" | "ai"; text: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: string; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingText, setSendingText] = useState(false);
 
@@ -254,6 +260,8 @@ function PlaygroundContent() {
   const [liveElapsed, setLiveElapsed] = useState(0);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveKitRoomRef = useRef<Room | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
 
   const stopPolling = () => {
     if (pollRef.current) clearTimeout(pollRef.current);
@@ -311,9 +319,17 @@ function PlaygroundContent() {
   };
 
   const resetSession = () => {
+    if (liveKitRoomRef.current) {
+      liveKitRoomRef.current.disconnect();
+      liveKitRoomRef.current = null;
+    }
+    if (videoContainerRef.current) {
+      videoContainerRef.current.innerHTML = "";
+    }
     setSessionId(null);
     setSessionPhase("none");
     setSessionLog([]);
+    setChatHistory([]);
     setChatInput("");
     setSendingText(false);
   };
@@ -333,21 +349,35 @@ function PlaygroundContent() {
 
   const handleSendText = async () => {
     if (!sessionId || !chatInput.trim() || sendingText) return;
-    const text = chatInput.trim();
+    const userText = chatInput.trim();
     setChatInput("");
     setSendingText(true);
-    setSessionLog((prev) => [...prev, { role: "user", text }]);
+    setSessionLog((prev) => [...prev, { role: "user", text: userText }]);
+
+    const newHistory = [...chatHistory, { role: "user", text: userText }];
+    setChatHistory(newHistory);
 
     try {
-      const res = await fetch(`/api/playground/lipsync/${sessionId}/text`, {
+      // 1. Ask Gemini AI
+      const aiRes = await fetch("/api/playground/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newHistory }),
+      });
+      const aiData = await aiRes.json();
+      const aiText = aiData.text || "...";
+
+      setSessionLog((prev) => [...prev, { role: "ai", text: aiText }]);
+      setChatHistory((prev) => [...prev, { role: "model", text: aiText }]);
+
+      // 2. Send AI reply to lipsync
+      await fetch(`/api/playground/lipsync/${sessionId}/text`, {
         method: "POST",
         headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: aiText }),
       });
-      const data = await res.json();
-      setSessionLog((prev) => [...prev, { role: "api", text: res.ok ? "Text sent successfully." : (data.message || `Error ${res.status}`) }]);
     } catch (err) {
-      setSessionLog((prev) => [...prev, { role: "api", text: `Error: ${err}` }]);
+      setSessionLog((prev) => [...prev, { role: "ai", text: `Error: ${err}` }]);
     }
     setSendingText(false);
   };
@@ -385,9 +415,51 @@ function PlaygroundContent() {
           setSessionLog((prev) => [
             ...prev,
             { role: "api", text: `Session created: ${data.session_id}` },
-            { role: "system", text: "Session ready. Type a message below to make the character speak." },
+            { role: "system", text: "Connecting to LiveKit…" },
           ]);
           setStatus("success");
+
+          // Connect to LiveKit for streaming video/audio
+          if (data.livekit_url && data.livekit_token) {
+            const room = new Room({ adaptiveStream: true, dynacast: true });
+            liveKitRoomRef.current = room;
+
+            room.on(RoomEvent.TrackSubscribed, (track) => {
+              const el = track.attach();
+              if (track.kind === Track.Kind.Video) {
+                el.style.width = "100%";
+                el.style.height = "auto";
+                el.style.display = "block";
+                (el as HTMLVideoElement).style.objectFit = "contain";
+                videoContainerRef.current?.appendChild(el);
+              } else if (track.kind === Track.Kind.Audio) {
+                document.body.appendChild(el);
+              }
+            });
+
+            room.on(RoomEvent.TrackUnsubscribed, (track) => {
+              track.detach();
+            });
+
+            room.on(RoomEvent.Disconnected, () => {
+              setSessionLog((prev) => [...prev, { role: "system", text: "LiveKit disconnected." }]);
+            });
+
+            try {
+              await room.connect(data.livekit_url as string, data.livekit_token as string);
+              setSessionLog((prev) => [
+                ...prev,
+                { role: "system", text: "LiveKit connected. Type a message to make the character speak." },
+              ]);
+            } catch (err) {
+              setSessionLog((prev) => [...prev, { role: "system", text: `LiveKit connect failed: ${err}` }]);
+            }
+          } else {
+            setSessionLog((prev) => [
+              ...prev,
+              { role: "system", text: "Session ready. Type a message below to make the character speak." },
+            ]);
+          }
         } else {
           setSessionPhase("error");
           setSessionLog((prev) => [...prev, { role: "api", text: data.message || `Error ${res.status}` }]);
@@ -441,6 +513,10 @@ function PlaygroundContent() {
     } catch (err) {
       setResponseData({ message: String(err) });
       setStatus("error");
+      if (activeApi === "lipsync") {
+        setSessionPhase("error");
+        setSessionLog((prev) => [...prev, { role: "api", text: String(err) }]);
+      }
     }
   };
 
@@ -702,8 +778,13 @@ function PlaygroundContent() {
               {activeApi === "lipsync" ? (
                 <div className="flex flex-col gap-4">
 
-                  {/* Video container for LiveKit */}
-                  <div id="lipsyncVideoContainer" className="w-full rounded-xl bg-black border border-[#2a2a2a] overflow-hidden" style={{ maxWidth: "80rem", maxHeight: 620, minHeight: 200 }}>
+                  {/* Video container: React overlays + isolated LiveKit div */}
+                  <div
+                    id="lipsyncVideoContainer"
+                    className="w-full rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative"
+                    style={{ maxWidth: "80rem", maxHeight: 620, minHeight: 200 }}
+                  >
+                    {/* React-managed overlays */}
                     {sessionPhase === "none" && (
                       <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-500">
                         <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -722,16 +803,6 @@ function PlaygroundContent() {
                         <p className="text-[15px]">Creating session… this may take 30-60s</p>
                       </div>
                     )}
-                    {sessionPhase === "ready" && (
-                      <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-400">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                          <span className="text-green-400 text-[14px] font-medium">Session Active</span>
-                        </div>
-                        <p className="text-[13px] text-gray-500 font-mono">{sessionId}</p>
-                        <p className="text-[14px] text-gray-500 mt-1">LiveKit video will appear here when connected</p>
-                      </div>
-                    )}
                     {sessionPhase === "error" && (
                       <div className="flex flex-col items-center justify-center gap-2 py-16 text-red-400">
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -740,6 +811,12 @@ function PlaygroundContent() {
                         <p className="text-[15px]">Session creation failed</p>
                       </div>
                     )}
+                    {/* LiveKit-only div — React renders nothing inside, safe for imperative DOM ops */}
+                    <div
+                      ref={videoContainerRef}
+                      className="w-full h-full"
+                      style={{ display: sessionPhase === "ready" ? "block" : "none" }}
+                    />
                   </div>
 
                   {/* Chat log */}
@@ -749,8 +826,9 @@ function PlaygroundContent() {
                         <div key={i} className={`px-4 py-2.5 text-[14px] flex items-start gap-2.5 ${i < sessionLog.length - 1 ? "border-b border-[#222]" : ""}`}>
                           <span className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider mt-0.5 w-12 ${
                             msg.role === "system" ? "text-gray-500" :
-                            msg.role === "user" ? "text-blue-400" : "text-green-400"
-                          }`}>{msg.role}</span>
+                            msg.role === "user" ? "text-blue-400" :
+                            msg.role === "ai" ? "text-pink-400" : "text-green-400"
+                          }`}>{msg.role === "ai" ? "Mia" : msg.role}</span>
                           <span className={`${msg.role === "user" ? "text-white" : "text-gray-300"}`}>{msg.text}</span>
                         </div>
                       ))}
