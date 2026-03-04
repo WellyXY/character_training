@@ -198,6 +198,40 @@ class GeminiClient:
         )
         return self._strip_thinking(response.choices[0].message.content)
 
+
+    async def analyze_image_deepseek(
+        self,
+        image_url: str,
+        prompt: str,
+        detail: str = "high",
+    ) -> str:
+        """Analyze an image using DeepSeek Vision (creative model with vision support).
+
+        Use this for reference image analysis in content generation — DeepSeek V3
+        provides stronger creative reasoning than the default vision model.
+        """
+        data_url = await self._load_image_as_data_url(image_url)
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url, "detail": detail},
+                    },
+                ],
+            }
+        ]
+
+        response = await self.client.chat.completions.create(
+            model=self.creative_model_name,  # DeepSeek-V3-0324 (supports multimodal)
+            messages=messages,
+            max_tokens=4096,
+        )
+        return response.choices[0].message.content
+
     async def compare_images(
         self,
         image_urls: list[str],
