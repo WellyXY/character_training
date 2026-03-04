@@ -766,8 +766,10 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                     key={sample.id}
                     onClick={() => {
                       setSelectedSample(selectedSample?.id === sample.id ? null : sample);
-                      if (selectedSample?.id !== sample.id && sample.caption) {
-                        setPrompt(sample.caption);
+                      if (selectedSample?.id !== sample.id) {
+                        // Use caption first, fallback to tags, fallback to empty
+                        const samplePrompt = sample.caption || (sample.tags?.length ? sample.tags.join(", ") : "");
+                        setPrompt(samplePrompt);
                       } else if (selectedSample?.id === sample.id) {
                         setPrompt("");
                       }
