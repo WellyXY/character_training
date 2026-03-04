@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.skills.base import BaseSkill
 from app.clients.gemini import get_gemini_client
-from app.clients.gpt import GPTClient
 from app.services.storage import get_storage_service
 
 
@@ -107,7 +106,6 @@ class PromptOptimizerSkill(BaseSkill):
 
     def __init__(self):
         self.gemini_client = get_gemini_client()
-        self.gpt_client = GPTClient()  # GPT-4o for reprompt generation
         self.storage = get_storage_service()
 
     async def _get_image_url_or_base64(self, image_path: str, db: AsyncSession) -> str:
@@ -377,8 +375,8 @@ User request: {raw_prompt}
         ]
 
         try:
-            # Use GPT-4o for reprompt generation — superior instruction following
-            optimized = await self.gpt_client.chat(
+            # Use GPT-4o via GMI for reprompt generation — superior instruction following
+            optimized = await self.gemini_client.chat_gpt(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500,
