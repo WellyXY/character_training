@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session
 from app.clients.gemini import get_gemini_client, GeminiClient
 from app.agent.skills.character import CharacterSkill
+from app.agent.skills.content_brain import ContentBrainSkill
 from app.agent.skills.prompt_optimizer import PromptOptimizerSkill
 from app.agent.skills.image_generator import ImageGeneratorSkill
 from app.agent.skills.video_generator import VideoGeneratorSkill
@@ -144,6 +145,7 @@ class Agent:
 
         # Initialize skills
         self.character_skill = CharacterSkill()
+        self.content_brain = ContentBrainSkill()  # DeepSeek content planning
         self.prompt_optimizer = PromptOptimizerSkill()
         self.image_generator = ImageGeneratorSkill()
         self.video_generator = VideoGeneratorSkill()
@@ -504,14 +506,30 @@ Current State:
                     state=ConversationState.IDLE,
                 )
 
-            # Optimize prompt
+            # ContentBrain: DeepSeek LLM expands vague user request into detailed creative brief
+            # Only for non-reference-image generations (reference images lock the composition)
             scene_desc = parameters.get("scene_description", message)
             style = parameters.get("style", "")
             cloth = parameters.get("cloth", "")
 
-            # Pass reference image path and mode for GPT-4V analysis (not for Seedream reference)
+            brain_prompt = ""
+            if not reference_image_path:
+                content_plan = await self.content_brain.plan_content(
+                    user_request=scene_desc or message,
+                    character_name=context.get("character_name", ""),
+                    character_description=context.get("character_description", ""),
+                    style=style,
+                    cloth=cloth,
+                    platform="instagram",
+                    db=db,
+                )
+                if content_plan.get("success") and content_plan.get("full_prompt"):
+                    brain_prompt = content_plan["full_prompt"]
+                    logger.info(f"ContentBrain brief (preview): {brain_prompt[:120]}...")
+
+            # Pass reference image to DeepSeek Vision for analysis; use GPT-4o for reprompt
             optimized_prompt = await self.prompt_optimizer.optimize(
-                prompt=scene_desc,
+                prompt=brain_prompt or scene_desc,
                 style=style,
                 cloth=cloth,
                 character_description=context.get("character_description"),
