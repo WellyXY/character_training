@@ -247,6 +247,7 @@ export default function VideoGenPanel({
         prompt: prompt.trim(),
         reference_video_url: referenceVideo?.url ?? undefined,
         reference_video_duration: referenceVideo?.duration ?? undefined,
+        match_reference_pose: referenceVideo ? matchReferencePose : false,
         video_model: effectiveModel,
         add_subtitles: addSubtitles,
         aspect_ratio: aspectRatio,
