@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # xAI Grok (vision model for reference image analysis)
     xai_api_key: str = ""
     xai_base_url: str = "https://api.x.ai/v1"
-    xai_vision_model: str = "grok-4-0709"
+    xai_vision_model: str = "grok-4-1-fast-non-reasoning"
     xai_text_model: str = "grok-4-fast-non-reasoning"
 
     # Seedream (Image Generation)
