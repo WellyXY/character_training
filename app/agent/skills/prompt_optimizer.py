@@ -267,11 +267,15 @@ class PromptOptimizerSkill(BaseSkill):
                         clean_description = parts[1]
                         break
             if reference_image_path:
-                # When a reference image is provided, clothing comes from image 4 — not character description
-                context_parts.append(
-                    f"Character appearance (use for face/body/hair features ONLY — "
-                    f"IGNORE any clothing mentioned here, clothing comes from image 4): {clean_description}"
-                )
+                # When a reference image is provided, strip clothing sentences so Grok
+                # cannot accidentally use character description clothing instead of image 4.
+                import re
+                clothing_keywords = r"\b(wear(ing|s)?|dress(ed)?|outfit|cloth(es|ing)?|shirt|turtleneck|sweater|blouse|top|dress|skirt|pants|jeans|coat|jacket|lingerie|bra|underwear|bikini|swimsuit|nude|naked)\b"
+                # Remove sentences containing clothing keywords
+                sentences = re.split(r'(?<=[.!?])\s+|(?<=\.)\s*', clean_description)
+                filtered = [s for s in sentences if not re.search(clothing_keywords, s, re.IGNORECASE)]
+                stripped_description = " ".join(filtered).strip() or clean_description
+                context_parts.append(f"Character appearance (face/body/hair only): {stripped_description}")
             else:
                 context_parts.append(f"Character appearance: {clean_description}")
         if style:
