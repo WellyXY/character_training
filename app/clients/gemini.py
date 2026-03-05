@@ -24,12 +24,13 @@ class GeminiClient:
         self.vision_model_name = settings.gmi_vision_model
         self.gpt_model_name = settings.gmi_gpt_model
 
-        # xAI Grok client (for reference image analysis)
+        # xAI Grok client (vision model for image analysis, fast model for text-only)
         self.grok_client = AsyncOpenAI(
             api_key=settings.xai_api_key,
             base_url=settings.xai_base_url,
         )
-        self.grok_vision_model = settings.xai_vision_model
+        self.grok_vision_model = settings.xai_vision_model  # grok-4-0709 (accurate vision)
+        self.grok_text_model = settings.xai_text_model      # grok-4-fast-non-reasoning (fast text)
 
     @staticmethod
     def _strip_thinking(text: str) -> str:
@@ -141,9 +142,9 @@ class GeminiClient:
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> str:
-        """Use Grok (xAI) for instruction-following tasks like prompt reprompting."""
+        """Use Grok fast model (xAI) for text-only tasks like prompt optimization."""
         response = await self.grok_client.chat.completions.create(
-            model=self.grok_vision_model,
+            model=self.grok_text_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
