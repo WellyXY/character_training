@@ -110,6 +110,28 @@ async def list_character_images(
     result = await db.execute(query)
     images = result.scalars().all()
 
+    # Auto-kill GENERATING tasks that have been running over 5 minutes
+    from datetime import datetime, timezone
+    STALE_TIMEOUT = 300
+    now = datetime.now(timezone.utc)
+    stale_found = False
+    for img in images:
+        if img.status == DBImageStatus.GENERATING:
+            created = img.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if (now - created).total_seconds() > STALE_TIMEOUT:
+                img.status = DBImageStatus.FAILED
+                try:
+                    meta = json.loads(img.metadata_json) if img.metadata_json else {}
+                except Exception:
+                    meta = {}
+                meta["error"] = f"Generation timed out after {STALE_TIMEOUT}s (auto-killed on refresh)"
+                img.metadata_json = json.dumps(meta)
+                stale_found = True
+    if stale_found:
+        await db.commit()
+
     return [_image_to_response(img) for img in images]
 
 
