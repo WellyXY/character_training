@@ -243,7 +243,7 @@ function PlaygroundContent() {
   // Lipsync session
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionPhase, setSessionPhase] = useState<SessionPhase>("none");
-  const [sessionLog, setSessionLog] = useState<{ role: "system" | "user" | "ai"; text: string }[]>([]);
+  const [sessionLog, setSessionLog] = useState<{ role: "system" | "user" | "ai" | "api"; text: string }[]>([]);
   const [chatHistory, setChatHistory] = useState<{ role: string; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingText, setSendingText] = useState(false);
