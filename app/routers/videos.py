@@ -123,13 +123,16 @@ async def delete_video(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a video (character must belong to current user)."""
-    result = await db.execute(
-        select(Video)
-        .join(Character)
-        .where(Video.id == video_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Delete a video (character must belong to current user, or admin)."""
+    if current_user.is_admin:
+        result = await db.execute(select(Video).where(Video.id == video_id))
+    else:
+        result = await db.execute(
+            select(Video)
+            .join(Character)
+            .where(Video.id == video_id)
+            .where(Character.user_id == current_user.id)
+        )
     video = result.scalar_one_or_none()
 
     if not video:

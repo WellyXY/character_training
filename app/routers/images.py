@@ -256,13 +256,16 @@ async def delete_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete an image (character must belong to current user)."""
-    result = await db.execute(
-        select(Image)
-        .join(Character)
-        .where(Image.id == image_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Delete an image (character must belong to current user, or admin)."""
+    if current_user.is_admin:
+        result = await db.execute(select(Image).where(Image.id == image_id))
+    else:
+        result = await db.execute(
+            select(Image)
+            .join(Character)
+            .where(Image.id == image_id)
+            .where(Character.user_id == current_user.id)
+        )
     image = result.scalar_one_or_none()
 
     if not image:
