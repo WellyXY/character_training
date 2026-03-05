@@ -21,8 +21,9 @@ class ParrotClient:
         # Pika Addition API (separate credentials)
         self.addition_api_url = settings.pika_addition_api_url.strip().rstrip("/")
         self.addition_api_key = settings.pika_addition_api_key
-        # V2 Audio API key (image-to-video-v2-audio endpoint)
+        # V2 Audio API (image-to-video-v2-audio endpoint)
         self.v2_audio_api_key = settings.parrot_v2_audio_api_key or self.api_key
+        self.v2_audio_api_url = settings.parrot_v2_audio_api_url.strip().rstrip("/")
         self.timeout = httpx.Timeout(60.0)  # 60 seconds for initial request
         self.long_timeout = httpx.Timeout(300.0)  # 5 minutes for polling
 
@@ -351,9 +352,7 @@ class ParrotClient:
             files["audio"] = (audio_filename, audio_data, self._infer_audio_content_type(audio_filename))
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # V2 endpoint is at /api/v1/generate/image-to-video-v2-audio (strip /v0 from base)
-            v2_base = self.base_url.rsplit("/v0", 1)[0]
-            url = f"{v2_base}/image-to-video-v2-audio"
+            url = self.v2_audio_api_url
             logger.info("Parrot v2-audio -> url=%s prompt=%s", url, prompt_text[:100])
             response = await self._post_with_auth_fallback(
                 client,
