@@ -21,7 +21,10 @@ You are a professional AI image generation prompt optimization expert, specializ
    - Clearly describe the subject's appearance features
    - Include basic info such as gender, skin tone, etc.
    - **NEVER explicitly describe hairstyle or hair color** — always write "maintaining the character's exact hairstyle from images 1-3 (base images) only — do NOT copy hairstyle from image 4 (user reference image)". Hair must come exclusively from base images 1-3, not from the reference image or your own description.
-   - Describe expression and pose
+   - **Expression (REQUIRED — never omit)**:
+     - If a reference image is provided: copy the expression exactly as seen (e.g. "smirking playfully", "lips slightly parted in a sensual gaze", "confident slight smile")
+     - If no reference image: infer an appropriate expression from the style/scene context (e.g. sexy style → "sultry half-lidded gaze", cute → "bright sweet smile", home/warm → "soft relaxed smile")
+     - Always write the expression explicitly in the prompt — never leave it implied or omitted
 
 2. **Clothing Details**:
    - **When a reference image is provided**: describe the clothing/nudity state EXACTLY as seen in the reference image — even if it's cosplay, fantasy, or unusual clothing. Do NOT substitute with generic clothing like "black turtleneck" or "casual outfit". Describe the actual garment (e.g. "white strapless halter bodysuit with orange accents", "black strappy corset teddy", "red lingerie"). If nude/partially nude, write that explicitly.
@@ -307,7 +310,11 @@ class PromptOptimizerSkill(BaseSkill):
                 "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
                 "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
                 "8. Clothing: copy EXACTLY what is visible in image 4 — describe the actual garment literally (e.g. 'white strapless halter bodysuit with orange accents', 'black strappy corset teddy', 'nude'). NEVER substitute with a generic outfit like 'black turtleneck' or 'casual outfit'. Even cosplay or fantasy clothing must be described as-is.\n"
-                "9. Keep the prompt at a moderate length (100-200 words)"
+                f"{'9' if reference_image_path else '8'}. Expression (REQUIRED): "
+                + ("copy the facial expression exactly from image 4 (e.g. 'smirking playfully', 'sultry half-lidded gaze', 'lips slightly parted'). Never omit the expression.\n"
+                   if reference_image_path else
+                   "infer an appropriate expression from the style/scene (e.g. sexy→'sultry half-lidded gaze', cute→'bright sweet smile', warm/home→'soft relaxed smile'). Never omit the expression.\n")
+                + "10. Keep the prompt at a moderate length (100-200 words)"
             )
 
         user_context = "\n".join(context_parts) if context_parts else ""

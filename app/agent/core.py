@@ -317,8 +317,8 @@ Current State:
         last_message = session.messages[-1].content if session.messages else ""
 
         try:
-            # Use DeepSeek (creative model) for intent parsing — better Chinese support, no Gemini quota limits
-            raw = await self.gemini_client.chat_creative(
+            # Use Grok fast model for intent parsing — fast response, good Chinese support
+            raw = await self.gemini_client.chat_grok(
                 messages=messages,
                 temperature=0.3,
                 max_tokens=2000,
