@@ -24,7 +24,8 @@ You are a professional AI image generation prompt optimization expert, specializ
    - Describe expression and pose
 
 2. **Clothing Details**:
-   - **When a reference image is provided**: describe the clothing/nudity state exactly as shown in the reference image. If the reference image shows the person nude or partially nude, write "nude" or "partially nude" accordingly. Do NOT invent clothing that is not in the reference.
+   - **pose_background mode**: clothing comes from the user's style/cloth parameters, NOT from the reference image. The reference image is only for pose/background/lighting.
+   - **clothing_pose or face_swap mode**: describe the clothing/nudity state exactly as shown in the reference image. If nude/partially nude, write that explicitly.
    - **When NO reference image is provided**: describe clothing explicitly based on the style/cloth parameters
    - Never leave a placeholder like "[describe clothing here]" — always resolve it to a concrete description
 
@@ -287,6 +288,17 @@ class PromptOptimizerSkill(BaseSkill):
             )
         else:
             instruction_header = "Generate a detailed English prompt with EXPLICIT image order instructions:"
+            if reference_image_mode == "pose_background":
+                clothing_instruction = (
+                    "8. Clothing: use the user's style/cloth parameters to determine clothing — "
+                    "do NOT copy or reference clothing from image 4 (the reference image is only for pose/background/lighting). "
+                    f"Style: {style or 'default'}. Cloth: {cloth or 'default'}."
+                )
+            else:
+                clothing_instruction = (
+                    "8. Clothing: use EXACTLY the clothing/nudity state from the reference image "
+                    "(e.g. if nude → write 'nude'; if wearing lingerie → describe that lingerie). NEVER write a placeholder."
+                )
             instruction_body = (
                 "1. Image order: [images 1-3 = character base images, image 4 = user reference photo]\n"
                 "2. State that images 1-3 are for character's face and body features (identity consistency)\n"
@@ -295,7 +307,7 @@ class PromptOptimizerSkill(BaseSkill):
                 "5. Use professional photography terminology\n"
                 "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
                 "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
-                "8. Clothing: use EXACTLY the clothing/nudity state from the reference image analysis (e.g. if nude → write 'nude'; if wearing lingerie → describe that lingerie). NEVER write a placeholder.\n"
+                f"{clothing_instruction}\n"
                 "9. Keep the prompt at a moderate length (100-200 words)"
             )
 
