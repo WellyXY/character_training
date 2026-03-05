@@ -461,6 +461,17 @@ Current State:
         logger.info(f"Detected intent: {intent}")
         logger.info(f"Parameters: {parameters}")
 
+        # If LLM returned general_chat but a character is selected and the user typed something,
+        # treat it as a generation request instead of a conversation dead-end.
+        if intent == "general_chat" and character_id and message.strip():
+            intent = "generate_image"
+            if not parameters.get("scene_description"):
+                parameters["scene_description"] = message
+            if not parameters.get("content_type"):
+                parameters["content_type"] = "content_post"
+            response_message = response_message or "Sure, let me generate that for you!"
+            logger.info("Overriding general_chat → generate_image (character selected + non-empty message)")
+
         # Handle different intents
         if intent == "general_chat":
             # Check if this is a content-policy refusal for a generation request

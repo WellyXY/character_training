@@ -72,8 +72,8 @@ async def list_character_videos(
     )
     videos = result.scalars().all()
 
-    # Auto-kill PROCESSING tasks that have been running over 120 seconds
-    STALE_TIMEOUT = 120
+    # Auto-kill PROCESSING tasks that have been running over 10 minutes
+    STALE_TIMEOUT = 600
     now = datetime.now(timezone.utc)
     stale_found = False
     for video in videos:
