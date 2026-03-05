@@ -119,6 +119,7 @@ export default function VideoGenPanel({
   const [suggesting, setSuggesting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState<ReferenceVideo | null>(null);
+  const [refVideoPreviewUrl, setRefVideoPreviewUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoModel, setVideoModel] = useState<"v1" | "v2">("v1");
   const [addSubtitles, setAddSubtitles] = useState(false);
@@ -139,9 +140,21 @@ export default function VideoGenPanel({
         url: initialReferenceVideo.url,
         duration: initialReferenceVideo.duration,
       });
+      setRefVideoPreviewUrl(resolveApiUrl(initialReferenceVideo.url));
       onClearInitialReferenceVideo?.();
     }
   }, [initialReferenceVideo]);
+
+  // Manage object URL lifecycle for uploaded video previews
+  useEffect(() => {
+    if (referenceVideo?.file) {
+      const url = URL.createObjectURL(referenceVideo.file);
+      setRefVideoPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else if (!referenceVideo) {
+      setRefVideoPreviewUrl(null);
+    }
+  }, [referenceVideo?.file]);
 
   const completedImages = availableImages.filter(
     (img) => img.status !== "generating" && img.image_url
@@ -246,6 +259,7 @@ export default function VideoGenPanel({
         // Reset form
         setPrompt("");
         setReferenceVideo(null);
+        setRefVideoPreviewUrl(null);
       } else {
         setError(result.message);
       }
@@ -468,7 +482,7 @@ export default function VideoGenPanel({
             {referenceVideo && (
               <button
                 type="button"
-                onClick={() => setReferenceVideo(null)}
+                onClick={() => { setReferenceVideo(null); setRefVideoPreviewUrl(null); }}
                 className="text-[10px] text-gray-500 hover:text-red-400 font-mono uppercase"
               >
                 Remove
@@ -476,18 +490,30 @@ export default function VideoGenPanel({
             )}
           </div>
           {referenceVideo ? (
-            <div className="p-2 rounded-lg bg-white/5 border border-white/10">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-xs text-white font-mono">Video uploaded</span>
-                {referenceVideo.duration && (
-                  <span className="text-[10px] text-gray-500 font-mono">{referenceVideo.duration.toFixed(1)}s</span>
-                )}
-              </div>
+            <div className="rounded-lg overflow-hidden border border-white/10 bg-white/5">
+              {/* Video preview */}
+              {refVideoPreviewUrl && (
+                <div className="relative aspect-video bg-black">
+                  <video
+                    src={refVideoPreviewUrl}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    loop
+                    autoPlay
+                  />
+                  {referenceVideo.duration && (
+                    <span className="absolute bottom-1 right-1 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-white font-mono">
+                      {referenceVideo.duration.toFixed(1)}s
+                    </span>
+                  )}
+                  <span className="absolute top-1 left-1 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-green-400 font-mono uppercase">
+                    {referenceVideo.file ? "Uploaded" : "Community"}
+                  </span>
+                </div>
+              )}
               {/* Match Pose Toggle */}
-              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <label className="flex items-center gap-2 p-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={matchReferencePose}
