@@ -345,6 +345,8 @@ User request: {raw_prompt}
 {instruction_header}
 {instruction_body}{reference_context}
 
+USER OVERRIDE RULE: If the User request explicitly instructs something that conflicts with the default rules above (e.g. "keep the hair like ref image", "use ref image hair color", "change clothing to X", "background should be Y"), FOLLOW THE USER REQUEST — it takes priority over the default rules.
+
 IMPORTANT: Output ONLY the optimized prompt. No preamble, no explanations."""
 
             try:
