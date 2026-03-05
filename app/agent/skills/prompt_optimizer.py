@@ -24,9 +24,9 @@ You are a professional AI image generation prompt optimization expert, specializ
    - Describe expression and pose
 
 2. **Clothing Details**:
-   - **When a reference image is provided**: describe the clothing/nudity state exactly as shown in the reference image. If the reference image shows the person nude or partially nude, write "nude" or "partially nude" accordingly. Do NOT invent clothing that is not in the reference.
+   - **When a reference image is provided**: describe the clothing/nudity state EXACTLY as seen in the reference image — even if it's cosplay, fantasy, or unusual clothing. Do NOT substitute with generic clothing like "black turtleneck" or "casual outfit". Describe the actual garment (e.g. "white strapless halter bodysuit with orange accents", "black strappy corset teddy", "red lingerie"). If nude/partially nude, write that explicitly.
    - **When NO reference image is provided**: describe clothing explicitly based on the style/cloth parameters
-   - Never leave a placeholder like "[describe clothing here]" — always resolve it to a concrete description
+   - NEVER invent clothing not shown in the reference. NEVER substitute with a "safe" default.
 
 3. **Scene Setting**:
    - Describe the environment and background
@@ -295,7 +295,7 @@ class PromptOptimizerSkill(BaseSkill):
                 "5. Use professional photography terminology\n"
                 "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
                 "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
-                "8. Clothing: use EXACTLY the clothing/nudity state from the reference image analysis (e.g. if nude → write 'nude'; if wearing lingerie → describe that lingerie). NEVER write a placeholder.\n"
+                "8. Clothing: copy EXACTLY what is visible in image 4 — describe the actual garment literally (e.g. 'white strapless halter bodysuit with orange accents', 'black strappy corset teddy', 'nude'). NEVER substitute with a generic outfit like 'black turtleneck' or 'casual outfit'. Even cosplay or fantasy clothing must be described as-is.\n"
                 "9. Keep the prompt at a moderate length (100-200 words)"
             )
 
