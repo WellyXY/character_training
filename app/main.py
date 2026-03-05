@@ -96,7 +96,7 @@ app.add_middleware(
 # Uploads are served from database via /uploads/{file_id}
 
 # Import and include routers
-from app.routers import characters, images, videos, agent, animate, samples, twitter, auth
+from app.routers import characters, images, videos, agent, animate, samples, twitter, auth, share
 
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(characters.router, prefix="/api/v1", tags=["characters"])
@@ -106,6 +106,7 @@ app.include_router(agent.router, prefix="/api/v1", tags=["agent"])
 app.include_router(animate.router, prefix="/api/v1", tags=["animate"])
 app.include_router(samples.router, prefix="/api/v1", tags=["samples"])
 app.include_router(twitter.router, prefix="/api/v1", tags=["twitter"])
+app.include_router(share.router, prefix="/api/v1", tags=["share"])
 
 
 @app.get("/")

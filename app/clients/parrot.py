@@ -21,6 +21,8 @@ class ParrotClient:
         # Pika Addition API (separate credentials)
         self.addition_api_url = settings.pika_addition_api_url.strip().rstrip("/")
         self.addition_api_key = settings.pika_addition_api_key
+        # V2 Audio API key (image-to-video-v2-audio endpoint)
+        self.v2_audio_api_key = settings.parrot_v2_audio_api_key or self.api_key
         self.timeout = httpx.Timeout(60.0)  # 60 seconds for initial request
         self.long_timeout = httpx.Timeout(300.0)  # 5 minutes for polling
 
@@ -281,6 +283,96 @@ class ParrotClient:
             logger.info("Pika Addition job created: %s", video_id)
             return video_id
 
+    async def create_image_to_video_v2_audio(
+        self,
+        image_source: str,
+        prompt_text: str,
+        duration: int = 5,
+        resolution: str = "720p",
+        audio_source: Optional[str] = None,
+    ) -> str:
+        """
+        Create a video using Parrot image-to-video-v2-audio endpoint.
+
+        Args:
+            image_source: Local image path or URL
+            prompt_text: Description of desired video motion/action
+            duration: Video duration in seconds (default 5)
+            resolution: Video resolution (default "720p")
+            audio_source: Optional audio file path or URL
+
+        Returns:
+            Video generation ID for polling
+        """
+        import base64
+
+        # Prepare image data
+        content_type = "image/jpeg"
+        if image_source.startswith("http://") or image_source.startswith("https://"):
+            image_data = await self._download_binary(image_source)
+            filename = "image.jpg"
+        elif image_source.startswith("data:"):
+            header, encoded = image_source.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            content_type = header.split(";")[0].split(":")[1]
+            ext = content_type.split("/")[1]
+            filename = f"image.{ext}"
+        else:
+            path = Path(image_source)
+            image_data = path.read_bytes()
+            filename = path.name
+            ext = path.suffix.lower()
+            if ext == ".png":
+                content_type = "image/png"
+            elif ext == ".webp":
+                content_type = "image/webp"
+
+        files: dict = {"image": (filename, image_data, content_type)}
+        data: dict = {
+            "promptText": prompt_text,
+            "duration": str(duration),
+            "resolution": resolution,
+        }
+
+        # Attach audio if provided
+        if audio_source:
+            if audio_source.startswith("http://") or audio_source.startswith("https://"):
+                audio_data = await self._download_binary(audio_source)
+                audio_filename = Path(audio_source).name or "audio.mp3"
+            elif audio_source.startswith("data:"):
+                header, encoded = audio_source.split(",", 1)
+                audio_data = base64.b64decode(encoded)
+                mime_type = header.split(";")[0].split(":")[1]
+                audio_filename = f"audio.{mime_type.split('/')[1]}"
+            else:
+                path = Path(audio_source)
+                audio_data = path.read_bytes()
+                audio_filename = path.name
+            files["audio"] = (audio_filename, audio_data, self._infer_audio_content_type(audio_filename))
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # V2 endpoint is at /api/v1/generate/image-to-video-v2-audio (strip /v0 from base)
+            v2_base = self.base_url.rsplit("/v0", 1)[0]
+            url = f"{v2_base}/image-to-video-v2-audio"
+            logger.info("Parrot v2-audio -> url=%s prompt=%s", url, prompt_text[:100])
+            response = await self._post_with_auth_fallback(
+                client,
+                url,
+                files=files,
+                data=data,
+                log_prefix="Parrot v2-audio",
+                api_key=self.v2_audio_api_key,
+            )
+
+            result = response.json()
+            video_id = result.get("id") or result.get("video_id") or result.get("jobId")
+            if not video_id:
+                logger.error("Parrot v2-audio response missing video ID: %s", result)
+                raise ValueError("Parrot v2-audio did not return a video ID")
+
+            logger.info("Parrot v2-audio job created: %s", video_id)
+            return video_id
+
     async def create_audio_to_video(
         self,
         image_source: str,
@@ -359,7 +451,7 @@ class ParrotClient:
             logger.info("Parrot job created: %s", video_id)
             return video_id
 
-    async def get_video_status(self, video_id: str, use_addition_api: bool = False) -> dict[str, Any]:
+    async def get_video_status(self, video_id: str, use_addition_api: bool = False, use_v2_audio_api: bool = False) -> dict[str, Any]:
         """
         Get the status of a video generation job.
 
@@ -373,6 +465,9 @@ class ParrotClient:
         if use_addition_api:
             base_url = self.addition_api_url
             api_key = self.addition_api_key
+        elif use_v2_audio_api:
+            base_url = self.base_url
+            api_key = self.v2_audio_api_key
         else:
             base_url = self.base_url
             api_key = self.api_key

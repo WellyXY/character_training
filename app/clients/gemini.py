@@ -24,6 +24,13 @@ class GeminiClient:
         self.vision_model_name = settings.gmi_vision_model
         self.gpt_model_name = settings.gmi_gpt_model
 
+        # xAI Grok client (for reference image analysis)
+        self.grok_client = AsyncOpenAI(
+            api_key=settings.xai_api_key,
+            base_url=settings.xai_base_url,
+        )
+        self.grok_vision_model = settings.xai_vision_model
+
     @staticmethod
     def _strip_thinking(text: str) -> str:
         """Strip Gemini's thinking/reasoning block from response.
@@ -128,6 +135,21 @@ class GeminiClient:
         )
         return response.choices[0].message.content
 
+    async def chat_grok(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """Use Grok (xAI) for instruction-following tasks like prompt reprompting."""
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content
+
     async def chat_creative(
         self,
         messages: list[dict[str, Any]],
@@ -194,7 +216,7 @@ class GeminiClient:
         prompt: str,
         detail: str = "high",
     ) -> str:
-        """Analyze an image using vision model."""
+        """Analyze an image using Grok vision model."""
         data_url = await self._load_image_as_data_url(image_url)
 
         messages = [
@@ -204,18 +226,19 @@ class GeminiClient:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": data_url, "detail": detail},
+                        "image_url": {"url": data_url},
                     },
                 ],
             }
         ]
 
-        response = await self.client.chat.completions.create(
-            model=self.vision_model_name,
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
             messages=messages,
             max_tokens=4096,
+            temperature=0,
         )
-        return self._strip_thinking(response.choices[0].message.content)
+        return response.choices[0].message.content
 
 
     async def analyze_image_deepseek(
@@ -249,30 +272,101 @@ class GeminiClient:
         )
         return response.choices[0].message.content
 
+    async def analyze_image_grok(
+        self,
+        image_url: str,
+        prompt: str,
+    ) -> str:
+        """Analyze an image using Grok vision (grok-4-latest).
+
+        Converts image to base64 data URL first to handle localhost/private URLs.
+        Used for reference image analysis in prompt generation.
+        """
+        data_url = await self._load_image_as_data_url(image_url)
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
+                ],
+            }
+        ]
+
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            max_tokens=2048,
+            temperature=0,
+        )
+        return response.choices[0].message.content
+
+    async def generate_prompt_with_reference_image(
+        self,
+        image_url: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 0.7,
+    ) -> str:
+        """Single Grok vision call: analyze reference image AND generate optimized prompt in one shot.
+
+        Combines what was previously two sequential calls (analyze_image_grok + chat_grok)
+        into one call, cutting latency roughly in half.
+        """
+        data_url = await self._load_image_as_data_url(image_url)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
+                ],
+            },
+        ]
+
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content
+
     async def compare_images(
         self,
         image_urls: list[str],
         prompt: str,
         detail: str = "high",
     ) -> str:
-        """Compare multiple images using vision model."""
+        """Compare multiple images using Grok vision model."""
         content = [{"type": "text", "text": prompt}]
 
         for url in image_urls:
             data_url = await self._load_image_as_data_url(url)
             content.append({
                 "type": "image_url",
-                "image_url": {"url": data_url, "detail": detail},
+                "image_url": {"url": data_url},
             })
 
         messages = [{"role": "user", "content": content}]
 
-        response = await self.client.chat.completions.create(
-            model=self.vision_model_name,
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
             messages=messages,
             max_tokens=4096,
+            temperature=0,
         )
-        return self._strip_thinking(response.choices[0].message.content)
+        return response.choices[0].message.content
 
     async def chat_with_tools(
         self,

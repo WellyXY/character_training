@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     gmi_gpt_model: str = "openai/gpt-4o"
     gmi_video_model: str = "wan2.6-i2v"
 
+    # xAI Grok (vision model for reference image analysis)
+    xai_api_key: str = ""
+    xai_base_url: str = "https://api.x.ai/v1"
+    xai_vision_model: str = "grok-4-fast-non-reasoning"
+
     # Seedream (Image Generation)
     seedream_api_key: str = ""
     seedream_server_url: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
@@ -54,6 +59,7 @@ class Settings(BaseSettings):
     # Parrot (Video Generation)
     parrot_api_key: str = ""
     parrot_api_url: str = "https://parrot.pika.art/api/v1/generate/v0"
+    parrot_v2_audio_api_key: str = ""  # Key for image-to-video-v2-audio endpoint
 
     # Pika Addition API (Reference Video Generation)
     pika_addition_api_key: str = ""
@@ -67,6 +73,13 @@ class Settings(BaseSettings):
     # Twitter OAuth 2.0
     twitter_client_id: str = ""
     twitter_client_secret: str = ""
+
+    # Email sharing (SMTP)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
     # Storage
     public_base_url: str = "http://localhost:8000"

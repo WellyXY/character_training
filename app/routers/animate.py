@@ -15,7 +15,6 @@ from sqlalchemy import select
 
 from app.database import get_db, async_session
 from app.clients.parrot import get_parrot_client
-from app.clients.gmi_video import get_gmi_video_client
 from app.clients.seedream import get_seedream_client
 from app.services.storage import get_storage_service, StorageService
 from app.models.video import Video, VideoType as DBVideoType, VideoStatus as DBVideoStatus
@@ -204,12 +203,13 @@ class GenerateRequest(BaseModel):
     prompt: str
     reference_video_url: Optional[str] = None
     reference_video_duration: Optional[float] = None
-    video_model: str = "v1"  # "v1" = Parrot/Pika, "v2" = Google Veo3
+    video_model: str = "v1"  # "v1" = Parrot/Pika, "v2" = Parrot v2-audio
     add_subtitles: bool = False
     match_reference_pose: bool = False
     pose_image_aspect_ratio: str = "9:16"  # Aspect ratio for pose-matched image generation
     aspect_ratio: Optional[str] = None  # Image aspect ratio: "9:16", "16:9", "1:1"
-    duration: Optional[int] = None  # Video duration in seconds (V1: 5/10/15, V2: 5/8)
+    duration: Optional[int] = None  # Video duration in seconds (V1: 5/10/15, V2: 5)
+    audio_url: Optional[str] = None  # Optional audio URL for V2 (image-to-video-v2-audio)
 
 
 class GenerateResponse(BaseModel):
@@ -304,10 +304,9 @@ Example good prompts:
 The motion_types should include body actions, facial expressions, AND camera movements, e.g. ["hair flip", "lip bite", "hip sway", "wink", "zoom in", "dolly forward"]."""
 
     try:
-        response = await gemini.analyze_image(
+        response = await gemini.analyze_image_grok(
             image_url=image_url,
             prompt=analysis_prompt,
-            detail="high",
         )
 
         # Parse JSON response
@@ -532,27 +531,14 @@ async def generate_animation(
             )
 
             if request.video_model == "v2":
-                # V2: Veo3 via GMI - async API, needs fetchable URL or base64
-                gmi_image_url = image_url
-                if not image_url.startswith("https://"):
-                    import base64 as b64
-                    if request.image_url.startswith("/uploads/"):
-                        file_id = request.image_url.replace("/uploads/", "")
-                        blob = await storage.get_file_blob(file_id, db)
-                        if blob:
-                            mime = blob.content_type or "image/jpeg"
-                            gmi_image_url = f"data:{mime};base64,{b64.b64encode(blob.data).decode()}"
-                        else:
-                            raise ValueError("Image file not found in storage")
-                    else:
-                        async with httpx.AsyncClient(timeout=30.0) as _c:
-                            resp = await _c.get(image_url)
-                            resp.raise_for_status()
-                            mime = resp.headers.get("content-type", "image/jpeg")
-                            gmi_image_url = f"data:{mime};base64,{b64.b64encode(resp.content).decode()}"
-
-                # Veo3 via GMI is async - submit and poll in background task
-                video_job_id = None
+                # V2: Parrot image-to-video-v2-audio
+                video_job_id = await parrot.create_image_to_video_v2_audio(
+                    image_source=image_url,
+                    prompt_text=enhanced_prompt,
+                    duration=request.duration or 5,
+                    resolution="720p",
+                    audio_source=request.audio_url,
+                )
             else:
                 # V1: Parrot/Pika image-to-video
                 # Append duration flag if specified
@@ -570,7 +556,7 @@ async def generate_animation(
         logger.info("Video job created: %s", video_job_id)
 
         # Build metadata
-        video_resolution = v2_resolution if request.video_model == "v2" else v1_resolution
+        video_resolution = "720p" if request.video_model == "v2" else v1_resolution
         metadata = {
             "original_prompt": request.prompt,
             "enhanced_prompt": enhanced_prompt,
@@ -581,10 +567,6 @@ async def generate_animation(
             "resolution": video_resolution,
             "requested_duration": request.duration,
         }
-        # For V2 (Veo3 via GMI), store prepared image URL & resolution for background task
-        if request.video_model == "v2":
-            metadata["gmi_image_url"] = gmi_image_url
-            metadata["v2_resolution"] = v2_resolution
         if use_addition_api:
             metadata["api_type"] = "addition"
             metadata["reference_video_url"] = request.reference_video_url
@@ -598,8 +580,7 @@ async def generate_animation(
 
         # Create Video record immediately with PROCESSING status
         # For Addition API with pose matching, use the intermediate image as source
-        # Exclude gmi_image_url from DB (could be large base64)
-        db_metadata = {k: v for k, v in metadata.items() if k != "gmi_image_url"}
+        db_metadata = {k: v for k, v in metadata.items()}
         video = Video(
             character_id=request.character_id,
             type=DBVideoType.VLOG,
@@ -633,6 +614,7 @@ async def generate_animation(
                 add_subtitles=request.add_subtitles,
                 user_id=current_user.id,
                 video_model=request.video_model,
+                use_v2_audio_api=(request.video_model == "v2"),
             )
         )
         # Keep reference to prevent garbage collection
@@ -666,6 +648,7 @@ async def _poll_video_completion(
     add_subtitles: bool = False,
     user_id: str = None,
     video_model: str = "v1",
+    use_v2_audio_api: bool = False,
 ):
     """Background task to poll for video completion and update database."""
     parrot = get_parrot_client()
@@ -674,63 +657,9 @@ async def _poll_video_completion(
     try:
         result = None
 
-        if video_model == "v2":
-            # V2: Veo3 via GMI - async API, submit then poll
-            gmi_video = get_gmi_video_client()
-            gmi_image_url = metadata.get("gmi_image_url", "")
-            enhanced_prompt = metadata.get("enhanced_prompt", "")
-            v2_resolution = metadata.get("v2_resolution", "720P")
-
-            logger.info("Video %s: submitting to Veo3 via GMI (resolution=%s)...", video_id, v2_resolution)
-            request_id = await gmi_video.create_image_to_video(
-                image_url=gmi_image_url,
-                prompt=enhanced_prompt,
-                resolution=v2_resolution,
-            )
-
-            # Poll for completion
-            veo3_timeout = 600
-            veo3_interval = 10
-            veo3_elapsed = 0
-            while veo3_elapsed < veo3_timeout:
-                await asyncio.sleep(veo3_interval)
-                veo3_elapsed += veo3_interval
-                poll_result = await gmi_video.get_request_status(request_id)
-                veo3_status = poll_result.get("status", "")
-                logger.info("Video %s Veo3 poll: status=%s (elapsed=%ds)", video_id, veo3_status, veo3_elapsed)
-
-                # Persist interim status/progress for UI feedback
-                try:
-                    async with async_session() as progress_db:
-                        video_result = await progress_db.execute(
-                            select(Video).where(Video.id == video_id)
-                        )
-                        video = video_result.scalar_one_or_none()
-                        if video:
-                            metadata["gmi_status"] = veo3_status
-                            estimated = int((veo3_elapsed / veo3_timeout) * 100)
-                            estimated = min(90, max(1, estimated))
-                            prev = metadata.get("progress") or 0
-                            metadata["progress"] = max(prev, estimated)
-                            video.metadata_json = json.dumps(metadata)
-                            await progress_db.commit()
-                except Exception as e:
-                    logger.warning("Failed to update Veo3 progress metadata: %s", e)
-
-                if veo3_status == "finished":
-                    if poll_result.get("video_url"):
-                        result = poll_result
-                        break
-                    else:
-                        raise ValueError(f"Veo3 finished but no video URL: {poll_result}")
-                elif veo3_status == "failed":
-                    error_msg = poll_result.get("error") or poll_result.get("raw", {}).get("outcome", {}).get("error", "Unknown error")
-                    raise ValueError(f"Veo3 generation failed: {error_msg}")
-
-            if not result:
-                raise TimeoutError("Veo3 video generation timed out after 10 minutes")
-        else:
-            # V1: Poll for video completion with progress updates (up to 10 minutes)
+        # Both V1 and V2 use Parrot polling (V2 uses v2_audio_api_key)
+        if True:
+            # Poll for video completion with progress updates (up to 10 minutes)
             timeout = 600
             poll_interval = 5
             elapsed = 0
@@ -738,7 +667,22 @@ async def _poll_video_completion(
 
             finished_no_url_count = 0
             while elapsed < timeout:
-                poll_result = await parrot.get_video_status(parrot_job_id, use_addition_api=use_addition_api)
+                # Check if externally killed (gallery timeout cleanup)
+                try:
+                    async with async_session() as check_db:
+                        check_result = await check_db.execute(select(Video).where(Video.id == video_id))
+                        check_video = check_result.scalar_one_or_none()
+                        if check_video and check_video.status == DBVideoStatus.FAILED:
+                            logger.info("Video %s was externally killed, stopping poll", video_id)
+                            return
+                except Exception:
+                    pass
+
+                poll_result = await parrot.get_video_status(
+                    parrot_job_id,
+                    use_addition_api=use_addition_api,
+                    use_v2_audio_api=use_v2_audio_api,
+                )
                 status = poll_result.get("status", "").lower()
                 progress = poll_result.get("raw", {}).get("progress") or 0
 

@@ -300,6 +300,21 @@ export default function ImageGenPanel({
                   </button>
                 ))}
               </div>
+
+              {/* Tailor Changes */}
+              <div className="mt-2">
+                <p className="text-xs text-gray-400 font-mono uppercase tracking-wider mb-1">
+                  Tailor Changes <span className="normal-case text-gray-600">(optional)</span>
+                </p>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="e.g. change background to beach, add sunglasses, wear red dress..."
+                  rows={3}
+                  disabled={!characterId}
+                  className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 resize-none font-mono disabled:opacity-50"
+                />
+              </div>
             </div>
           )}
 

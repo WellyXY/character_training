@@ -101,7 +101,7 @@ class ImageGeneratorSkill(BaseSkill):
             # Generate image with Seedream
             negative_prompt = params.get(
                 "negative_prompt",
-                "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley",
+                "deformed face, blurry, low quality, bad anatomy, extra limbs, watermark, text, overexposed, plastic skin, uncanny valley, anime, cartoon, illustration, 3d render, drawing, painting, sketch, manga",
             )
             result = await self.seedream.generate(
                 prompt=prompt,

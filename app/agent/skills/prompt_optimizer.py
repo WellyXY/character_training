@@ -1,4 +1,5 @@
 """Prompt optimization skill using GPT-4o."""
+import logging
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.skills.base import BaseSkill
 from app.clients.gemini import get_gemini_client
 from app.services.storage import get_storage_service
+
+logger = logging.getLogger(__name__)
 
 
 # Seedream prompt optimization guide
@@ -133,16 +136,15 @@ class PromptOptimizerSkill(BaseSkill):
         prompt = IMAGE_ANALYSIS_PROMPT.format(user_intent=user_intent)
 
         try:
-            # Use DeepSeek Vision for stronger creative understanding of reference images
-            analysis = await self.gemini_client.analyze_image_deepseek(
+            logger.info(f"Analyzing reference image via Grok: {image_url[:100]}...")
+            analysis = await self.gemini_client.analyze_image_grok(
                 image_url=image_url,
                 prompt=prompt,
-                detail="high",
             )
+            logger.info(f"Grok reference analysis succeeded: {len(analysis)} chars")
             return analysis.strip()
         except Exception as e:
-            # If analysis fails, return empty string
-            print(f"Reference image analysis failed: {e}")
+            logger.error(f"Reference image analysis failed: {e}", exc_info=True)
             return ""
 
     async def execute(
@@ -224,8 +226,8 @@ class PromptOptimizerSkill(BaseSkill):
             if cloth_desc:
                 parts.append(cloth_desc)
 
-        # Scene from raw prompt
-        if raw_prompt:
+        # Scene from raw prompt (skip generic default messages)
+        if raw_prompt and raw_prompt.lower() not in ("generate using reference image", ""):
             parts.append(f"Scene: {raw_prompt}")
 
         # Quality tags
@@ -272,49 +274,7 @@ class PromptOptimizerSkill(BaseSkill):
         if scene:
             context_parts.append(f"Scene: {scene}")
 
-        # Analyze reference image if provided
-        reference_context = ""
-        reference_analysis = ""
-        if reference_image_path:
-            # Get mode-specific instructions
-            mode_instructions = self._get_mode_instructions(reference_image_mode)
-
-            # Use GPT-4 Vision to analyze the reference image
-            reference_analysis = await self.analyze_reference_image(
-                image_path=reference_image_path,
-                user_intent=reference_description or raw_prompt,
-                db=db,
-            )
-            if reference_analysis:
-                context_parts.append(f"Reference image analysis (pose/composition/atmosphere):\n{reference_analysis}")
-                context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
-                if reference_image_mode == "face_swap":
-                    reference_context = f"""
-6. {mode_instructions}
-   - Image order sent to Seedream: [image 1 = user reference, images 2-4 = base images]
-   - Your prompt MUST explicitly state this image order and what to extract from each"""
-                else:
-                    reference_context = f"""
-6. {mode_instructions}
-   - Image order sent to Seedream: [images 1-3 = base images, image 4 = user reference]
-   - Your prompt MUST explicitly state this image order and what to extract from each"""
-            else:
-                # GPT-4V analysis failed (likely NSFW content), but still need to tell GPT about reference image
-                context_parts.append("Reference image: A reference image was provided but its content could not be analyzed")
-                context_parts.append(f"Reference mode: {reference_image_mode or 'custom'}")
-                if reference_image_mode == "face_swap":
-                    reference_context = f"""
-6. {mode_instructions}
-   - Image order sent to Seedream: [image 1 = user reference, images 2-4 = base images]
-   - Generate prompt with explicit image order instructions based on the mode"""
-                else:
-                    reference_context = f"""
-6. {mode_instructions}
-   - Image order sent to Seedream: [images 1-3 = base images, image 4 = user reference]
-   - Generate prompt with explicit image order instructions based on the mode"""
-
-        user_context = "\n".join(context_parts) if context_parts else ""
-
+        # Build instruction blocks
         if reference_image_mode == "face_swap":
             instruction_header = "Generate a structured English prompt with EXPLICIT image order instructions:"
             instruction_body = (
@@ -326,7 +286,6 @@ class PromptOptimizerSkill(BaseSkill):
                 "6. Keep the prompt structured (80-150 words)"
             )
         else:
-            # For other modes: [images 1-3 = base images, image 4 = user reference]
             instruction_header = "Generate a detailed English prompt with EXPLICIT image order instructions:"
             instruction_body = (
                 "1. Image order: [images 1-3 = character base images, image 4 = user reference photo]\n"
@@ -340,71 +299,128 @@ class PromptOptimizerSkill(BaseSkill):
                 "9. Keep the prompt at a moderate length (100-200 words)"
             )
 
-        messages = [
-            {"role": "system", "content": SEEDREAM_PROMPT_GUIDE},
-            {
-                "role": "user",
-                "content": f"""Optimize the following generation request into a high-quality Seedream prompt:
+        user_context = "\n".join(context_parts) if context_parts else ""
+
+        # --- Reference image path: single combined Grok vision call (analyze + generate in one shot) ---
+        if reference_image_path:
+            mode_instructions = self._get_mode_instructions(reference_image_mode)
+            if reference_image_mode == "face_swap":
+                reference_context = f"""
+6. {mode_instructions}
+   - Image order sent to Seedream: [image 1 = user reference, images 2-4 = base images]
+   - Your prompt MUST explicitly state this image order and what to extract from each"""
+            else:
+                reference_context = f"""
+6. {mode_instructions}
+   - Image order sent to Seedream: [images 1-3 = base images, image 4 = user reference]
+   - Your prompt MUST explicitly state this image order and what to extract from each"""
+
+            image_url = self._get_image_url(reference_image_path)
+            combined_user_prompt = f"""Optimize the following generation request into a high-quality Seedream prompt.
+
+The attached image IS the user's reference image. Analyze what you see in it (pose, composition, clothing/nudity state, lighting, background, atmosphere) and directly incorporate those observations into the optimized prompt — no need to describe your analysis separately.
 
 User request: {raw_prompt}
 
 {user_context}
 
 {instruction_header}
-{instruction_body}{reference_context}""",
-            },
-        ]
+{instruction_body}{reference_context}
 
-        try:
-            # Use GPT-4o via GMI for reprompt generation — superior instruction following
-            optimized = await self.gemini_client.chat_gpt(
-                messages=messages,
-                temperature=0.7,
-                max_tokens=500,
-            )
+IMPORTANT: Output ONLY the optimized prompt. No preamble, no explanations."""
 
-            # Check if model refused (content policy)
-            # Use phrase-level checks only — avoid substring matches like "explicit" inside "explicitly"
-            optimized_lower = optimized.lower()
-            refusal_phrases = [
-                "i cannot", "i can't", "i'm unable", "cannot assist",
-                "can't help", "won't help", "unable to help", "not able to",
-                "i apologize", "i'm sorry", "this request",
-                "against my", "cannot create", "can't create",
-                "not allowed to", "i must decline", "i will not",
-            ]
-            starts_with_refusal = optimized_lower.startswith(("i can't", "i cannot", "i'm sorry", "sorry,"))
-            if any(phrase in optimized_lower for phrase in refusal_phrases) or starts_with_refusal:
-                # Use fallback prompt
-                print(f"GPT refused prompt optimization, using fallback")
+            try:
+                logger.info(f"Calling Grok with reference image (combined analyze+generate): {image_url[:80]}...")
+                optimized = await self.gemini_client.generate_prompt_with_reference_image(
+                    image_url=image_url,
+                    system_prompt=SEEDREAM_PROMPT_GUIDE,
+                    user_prompt=combined_user_prompt,
+                    max_tokens=500,
+                    temperature=0.7,
+                )
+                logger.info(f"Grok combined call succeeded: {len(optimized)} chars")
+            except Exception as e:
+                logger.error(f"Grok combined call failed: {e}, using fallback")
                 optimized = self._build_fallback_prompt(
                     raw_prompt, style, cloth, character_description,
-                    has_reference_image=bool(reference_image_path),
+                    has_reference_image=True,
                     reference_image_mode=reference_image_mode,
                 )
+                return {
+                    "success": True,
+                    "original_prompt": raw_prompt,
+                    "optimized_prompt": optimized,
+                    "style": style,
+                    "cloth": cloth,
+                }
 
-            return {
-                "success": True,
-                "original_prompt": raw_prompt,
-                "optimized_prompt": self._strip_preamble(optimized.strip()),
-                "style": style,
-                "cloth": cloth,
-            }
-        except Exception as e:
-            # Use fallback on error
-            print(f"Prompt optimization failed: {e}, using fallback")
-            fallback = self._build_fallback_prompt(
+        else:
+            # No reference image — text-only Grok call
+            messages = [
+                {"role": "system", "content": SEEDREAM_PROMPT_GUIDE},
+                {
+                    "role": "user",
+                    "content": f"""Optimize the following generation request into a high-quality Seedream prompt:
+
+User request: {raw_prompt}
+
+{user_context}
+
+{instruction_header}
+{instruction_body}""",
+                },
+            ]
+            try:
+                optimized = await self.gemini_client.chat_grok(
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=500,
+                )
+            except Exception as e:
+                logger.error(f"Prompt optimization failed: {e}", exc_info=True)
+                fallback = self._build_fallback_prompt(
+                    raw_prompt, style, cloth, character_description,
+                    has_reference_image=False,
+                    reference_image_mode=reference_image_mode,
+                )
+                return {
+                    "success": True,
+                    "original_prompt": raw_prompt,
+                    "optimized_prompt": fallback,
+                    "style": style,
+                    "cloth": cloth,
+                }
+
+        # Shared refusal check and return
+        optimized_lower = optimized.lower()
+        starts_with_refusal = optimized_lower.startswith((
+            "i can't", "i cannot", "i'm sorry", "sorry,",
+            "i apologize", "i'm unable", "i must decline",
+            "i will not", "i won't",
+        ))
+        refusal_phrases = [
+            "cannot assist with", "can't help with", "unable to help with",
+            "not able to generate", "against my guidelines",
+            "cannot create this", "can't create this",
+            "not allowed to generate", "violates my",
+            "content policy", "safety guidelines",
+        ]
+        has_refusal = any(phrase in optimized_lower for phrase in refusal_phrases)
+        if starts_with_refusal or has_refusal:
+            logger.warning(f"GPT refused prompt optimization: {optimized[:200]}")
+            optimized = self._build_fallback_prompt(
                 raw_prompt, style, cloth, character_description,
                 has_reference_image=bool(reference_image_path),
                 reference_image_mode=reference_image_mode,
             )
-            return {
-                "success": True,
-                "original_prompt": raw_prompt,
-                "optimized_prompt": fallback,
-                "style": style,
-                "cloth": cloth,
-            }
+
+        return {
+            "success": True,
+            "original_prompt": raw_prompt,
+            "optimized_prompt": self._strip_preamble(optimized.strip()),
+            "style": style,
+            "cloth": cloth,
+        }
 
     def _strip_preamble(self, text: str) -> str:
         """Remove common model preamble phrases before the actual prompt."""

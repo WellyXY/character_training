@@ -136,14 +136,13 @@ class EditPromptOptimizerSkill(BaseSkill):
         prompt = IMAGE_ANALYSIS_FOR_EDIT_PROMPT.format(edit_instruction=edit_instruction)
 
         try:
-            analysis = await self.gemini_client.analyze_image(
+            analysis = await self.gemini_client.analyze_image_grok(
                 image_url=image_url,
                 prompt=prompt,
-                detail="high",
             )
             return analysis.strip()
         except Exception as e:
-            # GPT may refuse NSFW content - this is expected, return empty
+            # Grok may refuse NSFW content - this is expected, return empty
             print(f"Source image analysis failed (may be content policy): {e}")
             return ""
 

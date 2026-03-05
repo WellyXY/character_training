@@ -1,5 +1,6 @@
 """Video management router."""
 import json
+from datetime import datetime, timezone
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -70,6 +71,27 @@ async def list_character_videos(
         .order_by(Video.created_at.desc())
     )
     videos = result.scalars().all()
+
+    # Auto-kill PROCESSING tasks that have been running over 120 seconds
+    STALE_TIMEOUT = 120
+    now = datetime.now(timezone.utc)
+    stale_found = False
+    for video in videos:
+        if video.status == DBVideoStatus.PROCESSING:
+            created = video.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if (now - created).total_seconds() > STALE_TIMEOUT:
+                video.status = DBVideoStatus.FAILED
+                try:
+                    meta = json.loads(video.metadata_json) if video.metadata_json else {}
+                except Exception:
+                    meta = {}
+                meta["error"] = f"Generation timed out after {STALE_TIMEOUT}s (auto-killed on refresh)"
+                video.metadata_json = json.dumps(meta)
+                stale_found = True
+    if stale_found:
+        await db.commit()
 
     return [_video_to_response(v) for v in videos]
 
