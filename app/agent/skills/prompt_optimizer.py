@@ -308,8 +308,12 @@ class PromptOptimizerSkill(BaseSkill):
                 "4. Include scene and lighting descriptions\n"
                 "5. Use professional photography terminology\n"
                 "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
-                "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
-                "8. Clothing: copy EXACTLY what is visible in image 4 — describe the actual garment literally (e.g. 'white strapless halter bodysuit with orange accents', 'black strappy corset teddy', 'nude'). NEVER substitute with a generic outfit like 'black turtleneck' or 'casual outfit'. Even cosplay or fantasy clothing must be described as-is.\n"
+                + (
+                    "7. Hair: the user explicitly requested to copy hair from image 4 — describe the hairstyle and hair color exactly as seen in image 4.\n"
+                    if re.search(r'\bhair\b', raw_prompt, re.IGNORECASE) else
+                    "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
+                )
+                + "8. Clothing: copy EXACTLY what is visible in image 4 — describe the actual garment literally (e.g. 'white strapless halter bodysuit with orange accents', 'black strappy corset teddy', 'nude'). NEVER substitute with a generic outfit like 'black turtleneck' or 'casual outfit'. Even cosplay or fantasy clothing must be described as-is.\n"
                 f"{'9' if reference_image_path else '8'}. Expression (REQUIRED): "
                 + ("copy the facial expression exactly from image 4 (e.g. 'smirking playfully', 'sultry half-lidded gaze', 'lips slightly parted'). Never omit the expression.\n"
                    if reference_image_path else
