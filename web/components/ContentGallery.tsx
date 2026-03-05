@@ -76,10 +76,6 @@ export default function ContentGallery({
         body: JSON.stringify({ recipient_email: shareEmail, content_url: shareItem.url, content_type: shareItem.type, message: shareMessage }),
       });
       if (res.ok) {
-        const data = await res.json();
-        const a = document.createElement("a");
-        a.href = data.mailto;
-        a.click();
         setShareResult("success");
       } else {
         setShareResult("error");
@@ -1437,8 +1433,8 @@ export default function ContentGallery({
 
             {shareResult === "success" ? (
               <div className="text-center py-6">
-                <p className="text-green-400 font-mono text-sm mb-1">✓ Opening email client...</p>
-                <p className="text-gray-400 text-xs">Your email app should open with the {shareItem.type} link pre-filled.</p>
+                <p className="text-green-400 font-mono text-sm mb-1">✓ Email sent!</p>
+                <p className="text-gray-400 text-xs">The {shareItem.type} was sent to {shareEmail}</p>
                 <button type="button" onClick={() => { setShareItem(null); setShareResult(null); }} className="mt-4 px-4 py-2 bg-white text-black text-xs font-mono font-bold uppercase rounded-lg">Done</button>
               </div>
             ) : (

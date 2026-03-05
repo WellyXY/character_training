@@ -74,9 +74,12 @@ class Settings(BaseSettings):
     twitter_client_id: str = ""
     twitter_client_secret: str = ""
 
-    # Email sharing (Gmail SMTP)
-    gmail_user: str = ""
-    gmail_app_password: str = ""
+    # Email sharing (SMTP)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
     # Storage
     public_base_url: str = "http://localhost:8000"
