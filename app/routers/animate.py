@@ -138,7 +138,7 @@ async def _enhance_video_prompt(prompt: str) -> str:
 ## Rules:
 1. Keep the CORE intent and action of the original prompt — do NOT change what happens
 2. Add vivid motion details: speed, direction, rhythm, force of movements
-3. Add atmosphere: lighting shifts, fabric movement, hair motion, environmental effects
+3. Add atmosphere: fabric movement, hair motion, environmental effects — do NOT add lighting shifts or light changes
 4. Specify camera work if not already mentioned: angle, movement (dolly, zoom, orbit, static)
 5. ALWAYS include: "Maintain exact facial features and identity unchanged"
 6. Use NATURAL pacing words — avoid "slowly" or "gently". Prefer "smoothly", "fluidly", "confidently", "briskly"
@@ -276,7 +276,7 @@ CRITICAL: The person's facial features, face structure, and identity MUST remain
 2. **Camera Movement (secondary)**: Complementary camera motion at matching pace:
    - Steady zoom in, smooth orbit, dolly forward, dynamic tilt, push-in close-up, subtle parallax shift
 
-3. **Atmosphere**: Wind blowing hair, fabric swaying, light shifting, lens flare, bokeh sparkles — all at natural speed, never slow-motion
+3. **Atmosphere**: Wind blowing hair, fabric swaying, bokeh sparkles — all at natural speed, never slow-motion. Do NOT add lighting changes or light shifts.
 
 Respond in JSON format:
 {
@@ -290,12 +290,12 @@ The suggested_prompt MUST:
 - ALWAYS include a specific FACIAL EXPRESSION (e.g. biting lip, winking, smirking, bright smile)
 - Use NATURAL or BRISK pacing words — NEVER "slowly", "gently", "gradually". Use "smoothly", "swiftly", "confidently", "briskly", "fluidly" instead
 - Include a complementary camera movement
-- Add atmospheric details (hair flowing, fabric moving, light shifting)
+- Add atmospheric details (hair flowing, fabric moving) — do NOT add lighting changes
 - Maintain the person's exact facial features and identity
 - Be 2-3 sentences, vivid and specific
 
 Example good prompts:
-- "The woman flips her long hair back confidently, biting her lower lip with a smoldering gaze into the camera, her silk dress catching the breeze. Smooth dolly forward with golden light shifting across her skin. Maintain exact facial features."
+- "The woman flips her long hair back confidently, biting her lower lip with a smoldering gaze into the camera, her silk dress catching the breeze. Smooth dolly forward. Maintain exact facial features."
 - "She turns her head swiftly toward the camera with a bright smile showing teeth, brushing hair behind her ear as she shifts her weight playfully. Steady zoom in capturing the moment. Maintain exact facial features."
 - "The woman arches her back and snaps a look over her shoulder with half-lidded bedroom eyes and a knowing smirk, her lingerie strap sliding down naturally. Smooth orbit camera revealing the scene. Maintain exact facial features."
 - "She throws her head back laughing with pure joy, one hand resting on her chest, then looks back at the camera with sparkling eyes and a wide grin. Dynamic push-in close-up with warm bokeh. Maintain exact facial features."
