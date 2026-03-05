@@ -266,7 +266,14 @@ class PromptOptimizerSkill(BaseSkill):
                     if len(parts) > 1 and len(parts[0]) < 30:  # Name is usually short
                         clean_description = parts[1]
                         break
-            context_parts.append(f"Character appearance: {clean_description}")
+            if reference_image_path:
+                # When a reference image is provided, clothing comes from image 4 — not character description
+                context_parts.append(
+                    f"Character appearance (use for face/body/hair features ONLY — "
+                    f"IGNORE any clothing mentioned here, clothing comes from image 4): {clean_description}"
+                )
+            else:
+                context_parts.append(f"Character appearance: {clean_description}")
         if style:
             context_parts.append(f"Style: {style}")
         if cloth:
