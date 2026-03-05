@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # xAI Grok (vision model for reference image analysis)
     xai_api_key: str = ""
     xai_base_url: str = "https://api.x.ai/v1"
-    xai_vision_model: str = "grok-4-latest"
+    xai_vision_model: str = "grok-4-fast-non-reasoning"
 
     # Seedream (Image Generation)
     seedream_api_key: str = ""
@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # Twitter OAuth 2.0
     twitter_client_id: str = ""
     twitter_client_secret: str = ""
+
+    # Email sharing (Gmail SMTP)
+    gmail_user: str = ""
+    gmail_app_password: str = ""
 
     # Storage
     public_base_url: str = "http://localhost:8000"

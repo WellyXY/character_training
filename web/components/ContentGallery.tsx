@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { Image, Video, GenerationTask } from "@/lib/types";
-import { resolveApiUrl, retryImage, retryVideo, setImageAsBase } from "@/lib/api";
+import { API_BASE, resolveApiUrl, retryImage, retryVideo, setImageAsBase } from "@/lib/api";
 import AnimateModal from "./AnimateModal";
 import ImageEditPanel from "./ImageEditPanel";
 import NavTabs from "./NavTabs";
@@ -59,6 +59,37 @@ export default function ContentGallery({
   const [videoRefForAnimate, setVideoRefForAnimate] = useState<{ url: string; duration: number } | null>(null);
   const [videoRefLoading, setVideoRefLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [shareItem, setShareItem] = useState<{ url: string; type: "image" | "video" } | null>(null);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  const [shareSending, setShareSending] = useState(false);
+  const [shareResult, setShareResult] = useState<"success" | "error" | null>(null);
+
+  const handleShare = async () => {
+    if (!shareItem || !shareEmail) return;
+    setShareSending(true);
+    setShareResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/share/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` },
+        body: JSON.stringify({ recipient_email: shareEmail, content_url: shareItem.url, content_type: shareItem.type, message: shareMessage }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const a = document.createElement("a");
+        a.href = data.mailto;
+        a.click();
+        setShareResult("success");
+      } else {
+        setShareResult("error");
+      }
+    } catch {
+      setShareResult("error");
+    } finally {
+      setShareSending(false);
+    }
+  };
 
   // Handle initial video reference from URL
   useEffect(() => {
@@ -512,6 +543,13 @@ export default function ContentGallery({
                         </button>
                         <button
                           type="button"
+                          onClick={(e) => { e.stopPropagation(); setShareItem({ url: resolveApiUrl(item.data.image_url!), type: "image" }); setShareEmail(""); setShareMessage(""); setShareResult(null); }}
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] pointer-events-auto"
+                        >
+                          Share
+                        </button>
+                        <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteImage(item.data.id); }}
                           disabled={loading}
                           className="flex-1 rounded-md bg-red-500/80 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
@@ -564,6 +602,13 @@ export default function ContentGallery({
                           className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                         >
                           {retryingId === `video:${item.data.id}` ? "Retrying..." : "Retry"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShareItem({ url: resolveApiUrl((item.data as Video).video_url!), type: "video" }); setShareEmail(""); setShareMessage(""); setShareResult(null); }}
+                          className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] pointer-events-auto"
+                        >
+                          Share
                         </button>
                         <button
                           type="button"
@@ -688,6 +733,13 @@ export default function ContentGallery({
                       </button>
                       <button
                         type="button"
+                        onClick={(e) => { e.stopPropagation(); setShareItem({ url: resolveApiUrl(img.image_url!), type: "image" }); setShareEmail(""); setShareMessage(""); setShareResult(null); }}
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] pointer-events-auto"
+                      >
+                        Share
+                      </button>
+                      <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           onDeleteImage(img.id);
@@ -809,6 +861,13 @@ export default function ContentGallery({
                         className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `image:${img.id}` ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShareItem({ url: resolveApiUrl(img.image_url!), type: "image" }); setShareEmail(""); setShareMessage(""); setShareResult(null); }}
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] pointer-events-auto"
+                      >
+                        Share
                       </button>
                       <button
                         type="button"
@@ -950,6 +1009,13 @@ export default function ContentGallery({
                         className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                       >
                         {retryingId === `video:${video.id}` ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShareItem({ url: resolveApiUrl(video.video_url!), type: "video" }); setShareEmail(""); setShareMessage(""); setShareResult(null); }}
+                        className="flex-1 rounded-md bg-[#1a1a1a]/90 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-white border border-[#333] hover:bg-[#1a1a1a] pointer-events-auto"
+                      >
+                        Share
                       </button>
                       <button
                         type="button"
@@ -1357,6 +1423,62 @@ export default function ContentGallery({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Share by Email Modal */}
+      {shareItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111] p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-white">Share by Email</h3>
+              <button type="button" onClick={() => { setShareItem(null); setShareResult(null); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            {shareResult === "success" ? (
+              <div className="text-center py-6">
+                <p className="text-green-400 font-mono text-sm mb-1">✓ Opening email client...</p>
+                <p className="text-gray-400 text-xs">Your email app should open with the {shareItem.type} link pre-filled.</p>
+                <button type="button" onClick={() => { setShareItem(null); setShareResult(null); }} className="mt-4 px-4 py-2 bg-white text-black text-xs font-mono font-bold uppercase rounded-lg">Done</button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-400 mb-1.5">Recipient Email</label>
+                    <input
+                      type="email"
+                      value={shareEmail}
+                      onChange={(e) => setShareEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="w-full rounded-lg bg-black border border-white/10 px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/30 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase tracking-widest text-gray-400 mb-1.5">Message (optional)</label>
+                    <textarea
+                      value={shareMessage}
+                      onChange={(e) => setShareMessage(e.target.value)}
+                      placeholder="Check this out..."
+                      rows={2}
+                      className="w-full rounded-lg bg-black border border-white/10 px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/30 font-mono resize-none"
+                    />
+                  </div>
+                </div>
+                {shareResult === "error" && (
+                  <p className="text-red-400 text-xs font-mono mb-3">Failed to send. Please try again.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={shareSending || !shareEmail}
+                  className="w-full rounded-lg bg-white py-2.5 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {shareSending ? "Sending..." : `Send ${shareItem.type === "video" ? "Video" : "Image"}`}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

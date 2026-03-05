@@ -351,7 +351,9 @@ class ParrotClient:
             files["audio"] = (audio_filename, audio_data, self._infer_audio_content_type(audio_filename))
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/image-to-video-v2-audio"
+            # V2 endpoint is at /api/v1/generate/image-to-video-v2-audio (strip /v0 from base)
+            v2_base = self.base_url.rsplit("/v0", 1)[0]
+            url = f"{v2_base}/image-to-video-v2-audio"
             logger.info("Parrot v2-audio -> url=%s prompt=%s", url, prompt_text[:100])
             response = await self._post_with_auth_fallback(
                 client,

@@ -305,6 +305,43 @@ class GeminiClient:
         )
         return response.choices[0].message.content
 
+    async def generate_prompt_with_reference_image(
+        self,
+        image_url: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 0.7,
+    ) -> str:
+        """Single Grok vision call: analyze reference image AND generate optimized prompt in one shot.
+
+        Combines what was previously two sequential calls (analyze_image_grok + chat_grok)
+        into one call, cutting latency roughly in half.
+        """
+        data_url = await self._load_image_as_data_url(image_url)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
+                ],
+            },
+        ]
+
+        response = await self.grok_client.chat.completions.create(
+            model=self.grok_vision_model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content
+
     async def compare_images(
         self,
         image_urls: list[str],
