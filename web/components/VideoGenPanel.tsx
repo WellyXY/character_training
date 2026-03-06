@@ -224,6 +224,7 @@ export default function VideoGenPanel({
     try {
       const result = await importVideoFromUrl(trimmed);
       setReferenceVideo({ file: null, url: result.url, duration: result.duration });
+      setRefVideoPreviewUrl(resolveApiUrl(result.url));
       setUrlInput("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to import video");
