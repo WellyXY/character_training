@@ -291,6 +291,13 @@ export async function importVideoFromUrl(url: string): Promise<{ url: string; du
   });
 }
 
+export async function importImageFromUrl(url: string): Promise<{ url: string; full_url: string }> {
+  return apiFetch<{ url: string; full_url: string }>("/animate/import-image", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function analyzeImageForAnimation(request: {
   image_id: string;
   image_url: string;

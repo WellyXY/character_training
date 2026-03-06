@@ -229,6 +229,11 @@ class ImportVideoResponse(BaseModel):
     duration: float
 
 
+class ImportImageResponse(BaseModel):
+    url: str
+    full_url: str
+
+
 @router.post("/animate/import-video", response_model=ImportVideoResponse)
 async def import_video_from_url(
     request: ImportVideoRequest,
@@ -291,6 +296,78 @@ async def import_video_from_url(
 
     logger.info(f"Imported ref video from {request.url} → {saved['url']} ({duration}s)")
     return ImportVideoResponse(url=saved["url"], duration=duration)
+
+
+@router.post("/animate/import-image", response_model=ImportImageResponse)
+async def import_image_from_url(
+    request: ImportVideoRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download the first image from a public URL (Instagram, etc.) using yt-dlp."""
+    import uuid
+    import httpx
+    import yt_dlp
+
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(request.url, download=False)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {e}")
+
+    # For carousel/playlist, use first entry
+    entry = info
+    if info.get("_type") == "playlist" and info.get("entries"):
+        first = info["entries"][0]
+        webpage_url = first.get("webpage_url") or first.get("url")
+        if webpage_url:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    entry = ydl.extract_info(webpage_url, download=False)
+            except Exception:
+                entry = first
+
+    # Get best image URL: prefer direct media URL over thumbnail
+    image_url = None
+    for fmt in entry.get("formats") or []:
+        if fmt.get("vcodec") == "none" or fmt.get("ext") in ("jpg", "jpeg", "png", "webp"):
+            image_url = fmt.get("url")
+            break
+    if not image_url:
+        image_url = entry.get("url") or entry.get("thumbnail")
+    if not image_url:
+        thumbnails = entry.get("thumbnails") or []
+        if thumbnails:
+            best = sorted(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0), reverse=True)
+            image_url = best[0]["url"]
+
+    if not image_url:
+        raise HTTPException(status_code=400, detail="No image found at URL")
+
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(image_url, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            image_data = resp.content
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to download image: {e}")
+
+    content_type = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+    ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}.get(content_type, ".jpg")
+
+    image_id = str(uuid.uuid4())[:8]
+    storage = get_storage_service()
+    try:
+        saved = await storage.save_bytes(image_data, f"ref_image_{image_id}{ext}", content_type=content_type, db=db)
+        await db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {e}")
+
+    full_url = storage.get_full_url(saved["url"])
+    logger.info(f"Imported ref image from {request.url} → {saved['url']}")
+    return ImportImageResponse(url=saved["url"], full_url=full_url)
 
 
 @router.post("/animate/analyze", response_model=AnalyzeResponse)

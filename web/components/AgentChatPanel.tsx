@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { ConversationState, PendingGeneration, Image, GenerationTask, ReferenceImageMode } from "@/lib/types";
-import { resolveApiUrl, uploadFile } from "@/lib/api";
+import { resolveApiUrl, uploadFile, importImageFromUrl } from "@/lib/api";
 import { REFERENCE_MODES } from "@/lib/constants";
 import GenerationProgressCard from "./GenerationProgressCard";
 
@@ -255,6 +255,8 @@ export default function AgentChatPanel({
   const [selectedReferenceImage, setSelectedReferenceImage] = useState<Image | null>(null);
   const [uploadedReferenceImage, setUploadedReferenceImage] = useState<{ url: string; fullUrl: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [importingImageUrl, setImportingImageUrl] = useState(false);
   const [referenceMode, setReferenceMode] = useState<ReferenceImageMode>("pose_background");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -341,6 +343,23 @@ export default function AgentChatPanel({
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  };
+
+  const handleImportImageUrl = async () => {
+    const trimmed = imageUrlInput.trim();
+    if (!trimmed) return;
+    setImportingImageUrl(true);
+    try {
+      const result = await importImageFromUrl(trimmed);
+      setUploadedReferenceImage({ url: result.url, fullUrl: result.full_url });
+      setSelectedReferenceImage(null);
+      setImageUrlInput("");
+      setShowImagePicker(false);
+    } catch (err) {
+      console.error("Import failed:", err);
+    } finally {
+      setImportingImageUrl(false);
     }
   };
 
@@ -530,7 +549,7 @@ export default function AgentChatPanel({
 
         {/* Image Picker Dropdown */}
         {showImagePicker && (
-          <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 max-h-48 overflow-y-auto">
+          <div className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 max-h-64 overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Select or upload a reference image</p>
               <button
@@ -540,6 +559,25 @@ export default function AgentChatPanel({
                 className="text-xs text-gray-300 hover:text-white disabled:opacity-50 font-mono uppercase tracking-wide"
               >
                 {uploading ? "Uploading..." : "+ Upload Image"}
+              </button>
+            </div>
+            <div className="flex gap-1 mb-2">
+              <input
+                type="text"
+                placeholder="Instagram / TikTok URL..."
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleImportImageUrl(); }}
+                disabled={importingImageUrl}
+                className="flex-1 px-2 py-1.5 rounded-lg border border-[#333] bg-[#0b0b0b] text-xs text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleImportImageUrl}
+                disabled={!imageUrlInput.trim() || importingImageUrl}
+                className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-gray-300 hover:bg-white/20 disabled:opacity-50 font-mono uppercase tracking-wide whitespace-nowrap"
+              >
+                {importingImageUrl ? "Importing…" : "Import"}
               </button>
             </div>
             {availableImages.length > 0 ? (
