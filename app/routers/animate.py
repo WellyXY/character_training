@@ -43,7 +43,12 @@ def build_addition_prompt(base_prompt: str, video_duration: float) -> str:
     Returns:
         Formatted prompt with /pika2p5_animate prefix and duration suffix
     """
-    secs = max(5, round(video_duration))
+    if video_duration > 10:
+        secs = 15
+    elif video_duration > 5:
+        secs = 10
+    else:
+        secs = 5
     stripped = base_prompt.strip()
     prompt = f"{stripped} --{secs}sec" if stripped else f"--{secs}sec"
     return prompt
