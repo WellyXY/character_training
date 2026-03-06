@@ -329,19 +329,20 @@ async def import_image_from_url(
             except Exception:
                 entry = first
 
-    # Get best image URL: prefer direct media URL over thumbnail
+    # Get best image URL: prefer highest-res thumbnail (works for both image posts and reels)
     image_url = None
-    for fmt in entry.get("formats") or []:
-        if fmt.get("vcodec") == "none" or fmt.get("ext") in ("jpg", "jpeg", "png", "webp"):
-            image_url = fmt.get("url")
-            break
+    thumbnails = entry.get("thumbnails") or []
+    if thumbnails:
+        best = sorted(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0), reverse=True)
+        image_url = best[0]["url"]
+    # For image-only posts, formats may contain the actual image
     if not image_url:
-        image_url = entry.get("url") or entry.get("thumbnail")
+        for fmt in entry.get("formats") or []:
+            if fmt.get("ext") in ("jpg", "jpeg", "png", "webp"):
+                image_url = fmt.get("url")
+                break
     if not image_url:
-        thumbnails = entry.get("thumbnails") or []
-        if thumbnails:
-            best = sorted(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0), reverse=True)
-            image_url = best[0]["url"]
+        image_url = entry.get("thumbnail")
 
     if not image_url:
         raise HTTPException(status_code=400, detail="No image found at URL")
