@@ -581,6 +581,7 @@ function PlaygroundContent() {
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                autoComplete="new-password"
                 className="w-full bg-[#161616] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] font-mono transition-colors"
               />
             </div>
@@ -857,6 +858,7 @@ function PlaygroundContent() {
                           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
                           placeholder="Type a message…"
                           disabled={sendingText}
+                          autoComplete="off"
                           className="flex-1 bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] transition-colors disabled:opacity-50"
                         />
                         <button

@@ -70,7 +70,7 @@ export default function ContentGallery({
     setShareSending(true);
     setShareResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/share/email`, {
+      const res = await fetch(`/api/share/email`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` },
         body: JSON.stringify({ recipient_email: shareEmail, content_url: shareItem.url, content_type: shareItem.type, message: shareMessage }),
@@ -78,9 +78,12 @@ export default function ContentGallery({
       if (res.ok) {
         setShareResult("success");
       } else {
+        const errText = await res.text().catch(() => "");
+        console.error(`[share] POST failed ${res.status}:`, errText);
         setShareResult("error");
       }
-    } catch {
+    } catch (err) {
+      console.error("[share] fetch error:", err);
       setShareResult("error");
     } finally {
       setShareSending(false);
