@@ -43,11 +43,9 @@ def build_addition_prompt(base_prompt: str, video_duration: float) -> str:
     Returns:
         Formatted prompt with /pika2p5_animate prefix and duration suffix
     """
-    prompt = f"/pika2p5_animate {base_prompt.strip()}"
-    if video_duration > 10:
-        prompt += " --15sec"
-    elif video_duration >= 5:
-        prompt += " --10sec"
+    secs = max(5, round(video_duration))
+    stripped = base_prompt.strip()
+    prompt = f"{stripped} --{secs}sec" if stripped else f"--{secs}sec"
     return prompt
 
 
@@ -671,11 +669,12 @@ async def generate_animation(
                 enhanced_prompt[:150],
             )
 
-            # Create video generation job using Addition API
-            video_job_id = await parrot.create_addition_video(
-                video_source=reference_video_url,
+            # Create video generation job using Wan /animate endpoint
+            video_job_id = await parrot.create_animate_video(
                 image_source=image_url_for_addition,
+                video_source=reference_video_url,
                 prompt_text=enhanced_prompt,
+                resolution="720p",
             )
         else:
             # AI-enhance the video prompt
@@ -767,7 +766,7 @@ async def generate_animation(
             _poll_video_completion(
                 video_id=video.id,
                 parrot_job_id=video_job_id,
-                use_addition_api=use_addition_api,
+                use_addition_api=False,  # New /animate endpoint uses parrot_api_url
                 metadata=metadata,
                 add_subtitles=request.add_subtitles,
                 user_id=current_user.id,

@@ -284,6 +284,94 @@ class ParrotClient:
             logger.info("Pika Addition job created: %s", video_id)
             return video_id
 
+    async def create_animate_video(
+        self,
+        image_source: str,
+        video_source: str,
+        prompt_text: str,
+        resolution: str = "720p",
+    ) -> str:
+        """Create video using the new Wan /animate endpoint (image + ref video)."""
+        import base64
+
+        # Prepare video data
+        video_content_type = "video/mp4"
+        if video_source.startswith("http://") or video_source.startswith("https://"):
+            video_data = await self._download_binary(video_source)
+            video_filename = "video.mp4"
+        else:
+            path = Path(video_source)
+            video_data = path.read_bytes()
+            video_filename = path.name
+            ext = path.suffix.lower()
+            if ext == ".webm":
+                video_content_type = "video/webm"
+            elif ext == ".mov":
+                video_content_type = "video/quicktime"
+
+        # Prepare image data
+        image_content_type = "image/jpeg"
+        if image_source.startswith("http://") or image_source.startswith("https://"):
+            image_data = await self._download_binary(image_source)
+            image_filename = "image.jpg"
+        elif image_source.startswith("data:"):
+            header, encoded = image_source.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            image_content_type = header.split(";")[0].split(":")[1]
+            ext = image_content_type.split("/")[1]
+            image_filename = f"image.{ext}"
+        else:
+            path = Path(image_source)
+            image_data = path.read_bytes()
+            image_filename = path.name
+            ext = path.suffix.lower()
+            if ext == ".png":
+                image_content_type = "image/png"
+            elif ext in (".jpg", ".jpeg"):
+                image_content_type = "image/jpeg"
+            elif ext == ".webp":
+                image_content_type = "image/webp"
+
+        files = {
+            "image": (image_filename, image_data, image_content_type),
+            "video": (video_filename, video_data, video_content_type),
+        }
+        data: dict[str, str] = {"promptText": prompt_text, "resolution": resolution}
+
+        animate_url = f"{self.base_url}/animate"
+
+        logger.info("=== Wan Animate API Request ===")
+        logger.info("URL: %s", animate_url)
+        logger.info("Files: image=(%s, %d bytes, %s), video=(%s, %d bytes, %s)",
+                    image_filename, len(image_data), image_content_type,
+                    video_filename, len(video_data), video_content_type)
+        logger.info("promptText: %s, resolution: %s", prompt_text, resolution)
+        logger.info("============================")
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            logger.info(
+                "create_animate_video -> url=%s prompt=%s",
+                animate_url,
+                prompt_text[:100],
+            )
+            response = await self._post_with_auth_fallback(
+                client,
+                animate_url,
+                files=files,
+                data=data,
+                log_prefix="Wan Animate",
+                api_key=self.api_key,
+            )
+
+            result = response.json()
+            video_id = result.get("video_id") or result.get("id") or result.get("jobId")
+            if not video_id:
+                logger.error("Wan Animate response missing video ID: %s", result)
+                raise ValueError("Wan Animate did not return a video ID")
+
+            logger.info("Wan Animate job created: %s", video_id)
+            return video_id
+
     async def create_image_to_video_v2_audio(
         self,
         image_source: str,
