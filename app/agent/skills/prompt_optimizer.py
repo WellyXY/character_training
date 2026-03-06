@@ -47,6 +47,16 @@ Default: gaze NOT at camera unless it is intentionally a selfie
 BAD: "window light + warm lamp" together → AI resolves conflict by smoothing skin to perfection
 GOOD: pick ONE source only — "single bedside lamp, dim amber" OR "soft morning window light" — never both
 
+### 5. Cinematic color tone
+BAD: "dim bedside lamp, warm amber glow" → AI enters boudoir photoshoot mode → whole image gets golden-moody-editorial aesthetic
+GOOD: "weak overhead room light, slightly harsh" / "phone screen cold glow only" / "bathroom vanity light, slightly overexposed"
+Real rooms don't look cinematic. Flat, slightly harsh, or cold light = more authentic.
+
+### 6. Describing expression directly
+BAD: "sultry gaze", "bedroom eyes", "confident smirk" → AI generates perfect model face
+GOOD: describe mental state: "absorbed in adjusting, not camera-aware", "glancing down, jaw slightly relaxed", "mind elsewhere, eyes unfocused"
+Expression is a byproduct of what she's thinking/doing — never a direct instruction.
+
 ---
 
 ## Layer 1 — Shot Type (leads everything, most weight)
@@ -113,7 +123,7 @@ Single lighting source only. Name a real place.
 | Cinematic       | anamorphic lens flare, filmic grade, 2.35:1              |
 
 ## Negative Prompt (always append)
-no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing, no distorted ears, no multiple pupils, no exaggerated bokeh, no stiff posing, no symmetrical standing pose, no studio lighting, no glamour lighting
+no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing, no distorted ears, no multiple pupils, no exaggerated bokeh, no stiff posing, no symmetrical standing pose, no studio lighting, no glamour lighting, no warm amber glow, no cinematic lighting, no moody atmosphere, no golden hour tone, no sultry gaze, no posed expression, no bedroom eyes, no heavy makeup, no lipstick
 
 ---
 
@@ -237,6 +247,9 @@ generate [subject description], maintaining the character's exact hairstyle from
 3. Character appearance info is only for understanding visual features, do not copy names into the prompt
 4. Do not mention any person's age or birth year in the prompt
 5. **Lighting and color tone**: Do NOT default to warm/golden lighting or beige tones. Only use warm tones if the user explicitly requests it. Default to neutral/natural lighting unless otherwise specified.
+
+## Negative Prompt (always append to generated prompt):
+no warm amber glow, no cinematic lighting, no moody atmosphere, no golden hour tone, no sultry gaze, no posed expression, no bedroom eyes, no heavy makeup, no studio lighting, no glamour lighting, no stiff posing, no symmetrical standing pose, no over-sharpened pores, no waxy skin
 
 ## Output Format:
 Output the optimized English prompt directly, no other explanations needed.
