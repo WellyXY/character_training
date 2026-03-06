@@ -168,13 +168,11 @@ async def approve_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Approve an image (character must belong to current user)."""
-    result = await db.execute(
-        select(Image)
-        .join(Character)
-        .where(Image.id == image_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Approve an image (character must belong to current user, or any if admin)."""
+    query = select(Image).join(Character).where(Image.id == image_id)
+    if not current_user.is_admin:
+        query = query.where(Character.user_id == current_user.id)
+    result = await db.execute(query)
     image = result.scalar_one_or_none()
 
     if not image:
@@ -208,13 +206,11 @@ async def set_as_base(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Set an image as base (character must belong to current user)."""
-    result = await db.execute(
-        select(Image)
-        .join(Character)
-        .where(Image.id == image_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Set an image as base (character must belong to current user, or any if admin)."""
+    query = select(Image).join(Character).where(Image.id == image_id)
+    if not current_user.is_admin:
+        query = query.where(Character.user_id == current_user.id)
+    result = await db.execute(query)
     image = result.scalar_one_or_none()
 
     if not image:
