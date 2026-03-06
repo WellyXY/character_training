@@ -284,6 +284,13 @@ export interface AnalyzeImageResponse {
   suggested_motion_types: string[];
 }
 
+export async function importVideoFromUrl(url: string): Promise<{ url: string; duration: number }> {
+  return apiFetch<{ url: string; duration: number }>("/animate/import-video", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function analyzeImageForAnimation(request: {
   image_id: string;
   image_url: string;

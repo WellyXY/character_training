@@ -220,6 +220,79 @@ class GenerateResponse(BaseModel):
     message: str
 
 
+class ImportVideoRequest(BaseModel):
+    url: str
+
+
+class ImportVideoResponse(BaseModel):
+    url: str
+    duration: float
+
+
+@router.post("/animate/import-video", response_model=ImportVideoResponse)
+async def import_video_from_url(
+    request: ImportVideoRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download a video from a public URL (Instagram, TikTok, etc.) using yt-dlp and store it."""
+    import tempfile
+    import uuid
+    import shutil
+    import yt_dlp
+
+    temp_dir = tempfile.mkdtemp()
+    video_id = str(uuid.uuid4())[:8]
+    output_template = os.path.join(temp_dir, f"{video_id}.%(ext)s")
+
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "outtmpl": output_template,
+        "format": "best[ext=mp4]/best",
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(request.url, download=True)
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"Failed to fetch video: {e}")
+
+    # Find downloaded file
+    downloaded_file = None
+    for f in os.listdir(temp_dir):
+        if f.startswith(video_id):
+            downloaded_file = os.path.join(temp_dir, f)
+            break
+
+    if not downloaded_file:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="Downloaded file not found")
+
+    duration = float(info.get("duration") or 0)
+    ext = os.path.splitext(downloaded_file)[1] or ".mp4"
+
+    storage = get_storage_service()
+    try:
+        with open(downloaded_file, "rb") as f:
+            file_content = f.read()
+        saved = await storage.save_bytes(
+            file_content,
+            f"ref_video_{video_id}{ext}",
+            content_type="video/mp4",
+            db=db,
+        )
+        await db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save video: {e}")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    logger.info(f"Imported ref video from {request.url} → {saved['url']} ({duration}s)")
+    return ImportVideoResponse(url=saved["url"], duration=duration)
+
+
 @router.post("/animate/analyze", response_model=AnalyzeResponse)
 async def analyze_image_for_animation(
     request: AnalyzeRequest,

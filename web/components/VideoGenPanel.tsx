@@ -6,6 +6,7 @@ import {
   analyzeImageForAnimation,
   animateImage,
   uploadFile,
+  importVideoFromUrl,
   resolveApiUrl,
   ApiError,
 } from "@/lib/api";
@@ -121,6 +122,8 @@ export default function VideoGenPanel({
   const [referenceVideo, setReferenceVideo] = useState<ReferenceVideo | null>(null);
   const [refVideoPreviewUrl, setRefVideoPreviewUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [importingUrl, setImportingUrl] = useState(false);
   const [videoModel, setVideoModel] = useState<"v1" | "v2">("v1");
   const [addSubtitles, setAddSubtitles] = useState(false);
   const [matchReferencePose, setMatchReferencePose] = useState(false);
@@ -210,6 +213,22 @@ export default function VideoGenPanel({
     } finally {
       setUploadingVideo(false);
       if (videoInputRef.current) videoInputRef.current.value = "";
+    }
+  };
+
+  const handleImportUrl = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setImportingUrl(true);
+    setError(null);
+    try {
+      const result = await importVideoFromUrl(trimmed);
+      setReferenceVideo({ file: null, url: result.url, duration: result.duration });
+      setUrlInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import video");
+    } finally {
+      setImportingUrl(false);
     }
   };
 
@@ -416,14 +435,38 @@ export default function VideoGenPanel({
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              disabled={uploadingVideo}
-              className="w-full py-2 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
-            >
-              {uploadingVideo ? "Uploading..." : "+ Upload Reference Video"}
-            </button>
+            <div className="space-y-2">
+              {/* URL import */}
+              <div className="flex gap-1.5">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleImportUrl(); }}
+                  placeholder="Paste Instagram / TikTok URL…"
+                  disabled={importingUrl || uploadingVideo}
+                  autoComplete="off"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder:text-gray-600 focus:outline-none focus:border-white/25 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={handleImportUrl}
+                  disabled={!urlInput.trim() || importingUrl || uploadingVideo}
+                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-mono text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                >
+                  {importingUrl ? "Importing…" : "Import"}
+                </button>
+              </div>
+              {/* File upload */}
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                disabled={uploadingVideo || importingUrl}
+                className="w-full py-2 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
+              >
+                {uploadingVideo ? "Uploading..." : "+ Upload Reference Video"}
+              </button>
+            </div>
           )}
           <input
             ref={videoInputRef}
