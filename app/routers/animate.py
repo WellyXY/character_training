@@ -257,12 +257,27 @@ async def import_video_from_url(
         "format": "best[ext=mp4]/best",
     }
 
+    # Optional Instagram cookies (Netscape format) stored as env var INSTAGRAM_COOKIES
+    cookie_file = None
+    instagram_cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+    if instagram_cookies:
+        import tempfile as _tf
+        cookie_fd, cookie_file = _tf.mkstemp(suffix=".txt")
+        with os.fdopen(cookie_fd, "w") as f:
+            f.write(instagram_cookies)
+        ydl_opts["cookiefile"] = cookie_file
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=True)
     except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
+        if cookie_file:
+            os.unlink(cookie_file)
         raise HTTPException(status_code=400, detail=f"Failed to fetch video: {e}")
+    finally:
+        if cookie_file and os.path.exists(cookie_file):
+            os.unlink(cookie_file)
 
     # Find downloaded file
     downloaded_file = None
@@ -304,48 +319,40 @@ async def import_image_from_url(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Download the first image from a public URL (Instagram, etc.) using yt-dlp."""
+    """Download the first image from a public URL via og:image scraping (no auth needed)."""
     import uuid
+    import re
     import httpx
-    import yt_dlp
 
-    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(request.url, download=False)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {e}")
-
-    # For carousel/playlist, use first entry
-    entry = info
-    if info.get("_type") == "playlist" and info.get("entries"):
-        first = info["entries"][0]
-        webpage_url = first.get("webpage_url") or first.get("url")
-        if webpage_url:
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    entry = ydl.extract_info(webpage_url, download=False)
-            except Exception:
-                entry = first
-
-    # Get best image URL: prefer highest-res thumbnail (works for both image posts and reels)
     image_url = None
-    thumbnails = entry.get("thumbnails") or []
-    if thumbnails:
-        best = sorted(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0), reverse=True)
-        image_url = best[0]["url"]
-    # For image-only posts, formats may contain the actual image
-    if not image_url:
-        for fmt in entry.get("formats") or []:
-            if fmt.get("ext") in ("jpg", "jpeg", "png", "webp"):
-                image_url = fmt.get("url")
+
+    # Step 1: scrape og:image from the page (works for public Instagram/TikTok without login)
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            page_resp = await client.get(request.url, headers=HEADERS)
+        html = page_resp.text
+        # Try both attribute orderings of <meta property="og:image" content="...">
+        for pattern in [
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+        ]:
+            m = re.search(pattern, html)
+            if m:
+                image_url = m.group(1).replace("&amp;", "&")
                 break
-    if not image_url:
-        image_url = entry.get("thumbnail")
+    except Exception:
+        pass
 
     if not image_url:
-        raise HTTPException(status_code=400, detail="No image found at URL")
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract image from URL. The post may be private or require login.",
+        )
 
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
