@@ -70,7 +70,7 @@ export default function ContentGallery({
     setShareSending(true);
     setShareResult(null);
     try {
-      const res = await fetch(`/api/share/email`, {
+      const res = await fetch(`/api-share/share/email`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth_token")}` },
         body: JSON.stringify({ recipient_email: shareEmail, content_url: shareItem.url, content_type: shareItem.type, message: shareMessage }),

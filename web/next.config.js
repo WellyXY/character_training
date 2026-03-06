@@ -22,6 +22,10 @@ const nextConfig = {
         source: "/api-proxy/:path*",
         destination: `${realApi}/:path*`,
       },
+      {
+        source: "/api-share/:path*",
+        destination: `${realApi}/api/v1/:path*`,
+      },
     ];
   },
 };
