@@ -538,18 +538,22 @@ class ParrotClient:
             logger.info("Parrot job created: %s", video_id)
             return video_id
 
-    async def get_video_status(self, video_id: str, use_addition_api: bool = False, use_v2_audio_api: bool = False) -> dict[str, Any]:
+    async def get_video_status(self, video_id: str, use_addition_api: bool = False, use_v2_audio_api: bool = False, use_animate_api: bool = False) -> dict[str, Any]:
         """
         Get the status of a video generation job.
 
         Args:
             video_id: The video generation ID
             use_addition_api: If True, poll from Addition API instead of Parrot API
+            use_animate_api: If True, poll from parrot-test (Wan /animate endpoint)
 
         Returns:
             Dictionary with status and video_url (when complete)
         """
-        if use_addition_api:
+        if use_animate_api:
+            base_url = "https://parrot-test.pika.art/api/v1/generate/v0"
+            api_key = self.api_key
+        elif use_addition_api:
             base_url = self.addition_api_url
             api_key = self.addition_api_key
         elif use_v2_audio_api:

@@ -766,12 +766,13 @@ async def generate_animation(
             _poll_video_completion(
                 video_id=video.id,
                 parrot_job_id=video_job_id,
-                use_addition_api=False,  # New /animate endpoint uses parrot_api_url
+                use_addition_api=False,
                 metadata=metadata,
                 add_subtitles=request.add_subtitles,
                 user_id=current_user.id,
                 video_model=request.video_model,
                 use_v2_audio_api=(request.video_model == "v2"),
+                use_animate_api=use_addition_api,  # True when ref video → poll parrot-test
             )
         )
         # Keep reference to prevent garbage collection
@@ -806,6 +807,7 @@ async def _poll_video_completion(
     user_id: str = None,
     video_model: str = "v1",
     use_v2_audio_api: bool = False,
+    use_animate_api: bool = False,
 ):
     """Background task to poll for video completion and update database."""
     parrot = get_parrot_client()
@@ -839,6 +841,7 @@ async def _poll_video_completion(
                     parrot_job_id,
                     use_addition_api=use_addition_api,
                     use_v2_audio_api=use_v2_audio_api,
+                    use_animate_api=use_animate_api,
                 )
                 status = poll_result.get("status", "").lower()
                 progress = poll_result.get("raw", {}).get("progress") or 0
