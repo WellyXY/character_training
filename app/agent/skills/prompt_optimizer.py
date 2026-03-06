@@ -1,5 +1,6 @@
 """Prompt optimization skill using GPT-4o."""
 import logging
+import re
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -272,7 +273,6 @@ class PromptOptimizerSkill(BaseSkill):
             if reference_image_path:
                 # When a reference image is provided, strip clothing sentences so Grok
                 # cannot accidentally use character description clothing instead of image 4.
-                import re
                 clothing_keywords = r"\b(wear(ing|s)?|dress(ed)?|outfit|cloth(es|ing)?|shirt|turtleneck|sweater|blouse|top|dress|skirt|pants|jeans|coat|jacket|lingerie|bra|underwear|bikini|swimsuit|nude|naked)\b"
                 # Remove sentences containing clothing keywords
                 sentences = re.split(r'(?<=[.!?])\s+|(?<=\.)\s*', clean_description)
@@ -448,7 +448,6 @@ User request: {raw_prompt}
 
     def _strip_preamble(self, text: str) -> str:
         """Remove common model preamble phrases before the actual prompt."""
-        import re
         # Match lines like "Here's the optimized Seedream prompt:" or "Here is the prompt:"
         text = re.sub(
             r"^(?:here(?:'s| is)(?: the)?(?: optimized)?(?: seedream)?(?: prompt)?[:\s]*\n?)",

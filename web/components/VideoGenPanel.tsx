@@ -125,6 +125,7 @@ export default function VideoGenPanel({
   const [addSubtitles, setAddSubtitles] = useState(false);
   const [matchReferencePose, setMatchReferencePose] = useState(false);
   const [duration, setDuration] = useState<number>(5);
+  const [refVideoPrompt, setRefVideoPrompt] = useState("");
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Sync pre-selected image from parent
@@ -213,14 +214,16 @@ export default function VideoGenPanel({
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !selectedImage?.image_url || !characterId) return;
+    if (!selectedImage?.image_url || !characterId) return;
+    const effectivePrompt = referenceVideo ? (refVideoPrompt.trim() || "dancing") : prompt.trim();
+    if (!effectivePrompt) return;
 
     // Notify parent of the task and start generating
     if (onTaskStarted) {
       const taskId = `animate-${Date.now()}`;
       onTaskStarted({
         task_id: taskId,
-        prompt: prompt.trim(),
+        prompt: effectivePrompt,
         reference_image_url: selectedImage.image_url,
       });
     }
@@ -244,7 +247,7 @@ export default function VideoGenPanel({
         image_id: selectedImage.id,
         image_url: selectedImage.image_url,
         character_id: characterId,
-        prompt: prompt.trim(),
+        prompt: effectivePrompt,
         reference_video_url: referenceVideo?.url ?? undefined,
         reference_video_duration: referenceVideo?.duration ?? undefined,
         match_reference_pose: referenceVideo ? matchReferencePose : false,
@@ -259,6 +262,7 @@ export default function VideoGenPanel({
         refreshUser();
         // Reset form
         setPrompt("");
+        setRefVideoPrompt("");
         setReferenceVideo(null);
         setRefVideoPreviewUrl(null);
       } else {
@@ -351,6 +355,87 @@ export default function VideoGenPanel({
           </div>
         </div>
 
+        {/* Reference Video — always visible */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Reference Video</p>
+            {referenceVideo && (
+              <button
+                type="button"
+                onClick={() => { setReferenceVideo(null); setRefVideoPreviewUrl(null); setRefVideoPrompt(""); }}
+                className="text-[10px] text-gray-500 hover:text-red-400 font-mono uppercase"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          {referenceVideo ? (
+            <div className="rounded-lg overflow-hidden border border-white/10 bg-white/5">
+              {refVideoPreviewUrl && (
+                <div className="relative bg-black w-full">
+                  <video
+                    src={refVideoPreviewUrl}
+                    className="w-full max-h-[55vh] object-contain"
+                    controls
+                    playsInline
+                    loop
+                    autoPlay
+                    muted
+                  />
+                  {referenceVideo.duration && (
+                    <span className="absolute bottom-2 right-2 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-white font-mono">
+                      {referenceVideo.duration.toFixed(1)}s
+                    </span>
+                  )}
+                  <span className="absolute top-2 left-2 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-green-400 font-mono uppercase">
+                    {referenceVideo.file ? "Uploaded" : "Community"}
+                  </span>
+                </div>
+              )}
+              {/* Match Pose — on/off toggle */}
+              <div className="flex items-center justify-between px-3 py-2.5 border-t border-white/10">
+                <span className="text-[11px] text-gray-300 font-mono">Match reference pose</span>
+                <button
+                  type="button"
+                  onClick={() => setMatchReferencePose((v) => !v)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${matchReferencePose ? "bg-white" : "bg-white/20"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-black transition-transform ${matchReferencePose ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              {/* Prompt input for reprompting */}
+              <div className="px-3 pb-3 pt-1 border-t border-white/10">
+                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider mb-1.5">Prompt <span className="normal-case text-gray-600">(optional — leave blank to use default)</span></p>
+                <textarea
+                  value={refVideoPrompt}
+                  onChange={(e) => setRefVideoPrompt(e.target.value)}
+                  placeholder="e.g. Keep the hair style & color, wearing the same outfit..."
+                  rows={2}
+                  className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 resize-none font-mono"
+                />
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              disabled={uploadingVideo}
+              className="w-full py-2 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
+            >
+              {uploadingVideo ? "Uploading..." : "+ Upload Reference Video"}
+            </button>
+          )}
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            onChange={(e) => handleVideoUpload(e.target.files)}
+            className="hidden"
+          />
+        </div>
+
+        {/* Sections hidden when ref video is active */}
+        {!referenceVideo && (<>
         {/* Prompt */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -382,8 +467,6 @@ export default function VideoGenPanel({
             rows={3}
             className="w-full bg-[#0b0b0b] border border-white/10 rounded-lg p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 resize-none font-mono"
           />
-
-          {/* Prompt Preset Tags */}
           <div className="flex flex-wrap gap-1.5 mt-2">
             {VIDEO_PROMPT_PRESETS.map((preset) => (
               <button
@@ -402,43 +485,16 @@ export default function VideoGenPanel({
           </div>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg">
-            <p className="text-xs text-red-300 font-mono">{error}</p>
-          </div>
-        )}
-
         {/* Video Model */}
         <div className="p-3 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Video Model</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setVideoModel("v1")}
-              disabled={!!referenceVideo}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
-                (referenceVideo ? "v1" : videoModel) === "v1"
-                  ? "bg-white text-black"
-                  : "bg-white/10 text-gray-400 hover:text-white"
-              } ${referenceVideo ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              V1
-            </button>
-            <button
-              onClick={() => setVideoModel("v2")}
-              disabled={!!referenceVideo}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
-                (referenceVideo ? "v1" : videoModel) === "v2"
-                  ? "bg-white text-black"
-                  : "bg-white/10 text-gray-400 hover:text-white"
-              } ${referenceVideo ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              V2
-            </button>
+            {(["v1", "v2"] as const).map((m) => (
+              <button key={m} onClick={() => setVideoModel(m)}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${videoModel === m ? "bg-white text-black" : "bg-white/10 text-gray-400 hover:text-white"}`}
+              >{m.toUpperCase()}</button>
+            ))}
           </div>
-          {referenceVideo && (
-            <p className="text-[10px] text-gray-500 font-mono mt-1">V2 unavailable with reference video</p>
-          )}
         </div>
 
         {/* Duration */}
@@ -446,102 +502,30 @@ export default function VideoGenPanel({
           <p className="text-xs text-gray-400 mb-2 font-mono uppercase tracking-wider">Duration</p>
           <div className="flex gap-2">
             {[{ value: 5, label: "5s" }, { value: 10, label: "10s" }].map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setDuration(opt.value)}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${
-                  duration === opt.value
-                    ? "bg-white text-black"
-                    : "bg-white/10 text-gray-400 hover:text-white"
-                }`}
-              >
-                {opt.label}
-              </button>
+              <button key={opt.value} type="button" onClick={() => setDuration(opt.value)}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-mono font-bold uppercase tracking-wide transition-colors ${duration === opt.value ? "bg-white text-black" : "bg-white/10 text-gray-400 hover:text-white"}`}
+              >{opt.label}</button>
             ))}
           </div>
         </div>
 
         {/* Subtitle Toggle */}
         <label className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
-          <input
-            type="checkbox"
-            checked={addSubtitles}
-            onChange={(e) => setAddSubtitles(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
-          />
+          <input type="checkbox" checked={addSubtitles} onChange={(e) => setAddSubtitles(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0" />
           <div className="flex-1">
             <span className="text-xs text-white font-mono">Add Subtitles</span>
             <p className="text-[10px] text-gray-500 font-mono">Auto-generate captions using AI</p>
           </div>
         </label>
+        </>)}
 
-        {/* Reference Video */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs text-gray-400 font-mono uppercase tracking-wider">Reference Video</p>
-            {referenceVideo && (
-              <button
-                type="button"
-                onClick={() => { setReferenceVideo(null); setRefVideoPreviewUrl(null); }}
-                className="text-[10px] text-gray-500 hover:text-red-400 font-mono uppercase"
-              >
-                Remove
-              </button>
-            )}
+        {/* Error */}
+        {error && (
+          <div className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg">
+            <p className="text-xs text-red-300 font-mono">{error}</p>
           </div>
-          {referenceVideo ? (
-            <div className="rounded-lg overflow-hidden border border-white/10 bg-white/5">
-              {/* Video preview */}
-              {refVideoPreviewUrl && (
-                <div className="relative aspect-video bg-black">
-                  <video
-                    src={refVideoPreviewUrl}
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    loop
-                    autoPlay
-                  />
-                  {referenceVideo.duration && (
-                    <span className="absolute bottom-1 right-1 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-white font-mono">
-                      {referenceVideo.duration.toFixed(1)}s
-                    </span>
-                  )}
-                  <span className="absolute top-1 left-1 bg-black/70 rounded px-1.5 py-0.5 text-[10px] text-green-400 font-mono uppercase">
-                    {referenceVideo.file ? "Uploaded" : "Community"}
-                  </span>
-                </div>
-              )}
-              {/* Match Pose Toggle */}
-              <label className="flex items-center gap-2 p-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={matchReferencePose}
-                  onChange={(e) => setMatchReferencePose(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-gray-600 bg-transparent text-white focus:ring-white focus:ring-offset-0"
-                />
-                <span className="text-[10px] text-gray-400 font-mono">Match reference pose</span>
-              </label>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              disabled={uploadingVideo}
-              className="w-full py-2 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs font-mono text-gray-400 hover:text-white hover:border-white/20 transition-colors disabled:opacity-50"
-            >
-              {uploadingVideo ? "Uploading..." : "+ Upload Reference Video"}
-            </button>
-          )}
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/*"
-            onChange={(e) => handleVideoUpload(e.target.files)}
-            className="hidden"
-          />
-        </div>
+        )}
       </div>
 
       {/* Generate Button */}
@@ -549,7 +533,7 @@ export default function VideoGenPanel({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={generating || !prompt.trim() || !characterId || initialReferenceVideoLoading}
+          disabled={generating || (!referenceVideo && !prompt.trim()) || !characterId || initialReferenceVideoLoading}
           className="w-full py-3 rounded-xl bg-white hover:bg-gray-200 disabled:bg-gray-600 disabled:cursor-not-allowed text-black text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

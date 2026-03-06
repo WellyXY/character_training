@@ -26,14 +26,23 @@ type Step = "upload" | "loading-base" | "review" | "create" | "loading-create" |
 
 const STEP_LABELS = ["Upload Photos", "Review Character", "First Creation"];
 
+const SAMPLE_PHOTOS = [
+  "/samples/2.jpg",
+  "/samples/22.jpg",
+  "/samples/3.jpg",
+  "/samples/51.jpg",
+  "/samples/851f140f-7ee4-4ac1-b7d1-04a03060531f.jpeg",
+  "/samples/White-Photo-Studio-Near-me-09-scaled.jpg",
+];
+
 // Fake samples for when library is empty
 const FAKE_SAMPLES: SamplePost[] = [
-  { id: "fake-1", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "Rooftop golden hour portrait, warm sunset glow, soft bokeh city skyline background", tags: ["golden-hour"], created_at: "", updated_at: "" },
-  { id: "fake-2", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "Beach sunset silhouette, ocean waves, golden light, relaxed summer vibe", tags: ["beach"], created_at: "", updated_at: "" },
-  { id: "fake-3", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "Professional studio portrait, clean white background, soft ring light, fashion pose", tags: ["studio"], created_at: "", updated_at: "" },
-  { id: "fake-4", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "City night portrait, neon lights reflection, cinematic urban mood, rain-slicked streets", tags: ["night"], created_at: "", updated_at: "" },
-  { id: "fake-5", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "Garden morning light, flowers and greenery, natural fresh look, dappled sunlight", tags: ["garden"], created_at: "", updated_at: "" },
-  { id: "fake-6", creator_name: "", source_url: "", media_type: "image", media_url: "", thumbnail_url: "", caption: "Cozy indoor scene, warm lamp light, soft sweater, reading by the window, autumn mood", tags: ["indoor"], created_at: "", updated_at: "" },
+  { id: "fake-1", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/2.jpg", thumbnail_url: "/samples/2.jpg", caption: "Rooftop golden hour portrait, warm sunset glow, soft bokeh city skyline background", tags: ["golden-hour"], created_at: "", updated_at: "" },
+  { id: "fake-2", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/22.jpg", thumbnail_url: "/samples/22.jpg", caption: "Beach sunset silhouette, ocean waves, golden light, relaxed summer vibe", tags: ["beach"], created_at: "", updated_at: "" },
+  { id: "fake-3", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/3.jpg", thumbnail_url: "/samples/3.jpg", caption: "Professional studio portrait, clean white background, soft ring light, fashion pose", tags: ["studio"], created_at: "", updated_at: "" },
+  { id: "fake-4", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/51.jpg", thumbnail_url: "/samples/51.jpg", caption: "City night portrait, neon lights reflection, cinematic urban mood, rain-slicked streets", tags: ["night"], created_at: "", updated_at: "" },
+  { id: "fake-5", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/851f140f-7ee4-4ac1-b7d1-04a03060531f.jpeg", thumbnail_url: "/samples/851f140f-7ee4-4ac1-b7d1-04a03060531f.jpeg", caption: "Garden morning light, flowers and greenery, natural fresh look, dappled sunlight", tags: ["garden"], created_at: "", updated_at: "" },
+  { id: "fake-6", creator_name: "", source_url: "", media_type: "image", media_url: "/samples/White-Photo-Studio-Near-me-09-scaled.jpg", thumbnail_url: "/samples/White-Photo-Studio-Near-me-09-scaled.jpg", caption: "Cozy indoor scene, warm lamp light, soft sweater, reading by the window, autumn mood", tags: ["indoor"], created_at: "", updated_at: "" },
 ];
 
 const FAKE_GRADIENTS = [
@@ -158,6 +167,27 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
   // ── Upload handlers ──
+  const handleSelectSample = async (url: string) => {
+    // Toggle: if already selected, remove it
+    setReferenceFiles((prev) => {
+      if (prev.some((rf) => rf.previewUrl === url)) {
+        return prev.filter((rf) => rf.previewUrl !== url);
+      }
+      return prev;
+    });
+    // Check if already selected
+    if (referenceFiles.some((rf) => rf.previewUrl === url)) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const filename = url.split("/").pop() || "sample.jpg";
+      const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      setReferenceFiles((prev) => [...prev, { file, previewUrl: url }]);
+    } catch {
+      // ignore fetch error
+    }
+  };
+
   const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
@@ -330,11 +360,31 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     setStep("loading-create");
 
     try {
-      const finalPrompt = prompt.trim() || (selectedSample?.caption || "beautiful portrait photo, professional lighting");
+      // For fake samples, don't use caption as prompt — let Grok analyze the ref image itself
+      const isFakeSample = selectedSample?.id.startsWith("fake-");
+      const finalPrompt = prompt.trim() || (isFakeSample ? "" : (selectedSample?.caption || "beautiful portrait photo, professional lighting"));
 
-      // Only use real samples as reference images (not fake gradient placeholders)
-      const hasRealSample = selectedSample && !selectedSample.id.startsWith("fake-") && selectedSample.media_url;
-      const refPath = hasRealSample ? selectedSample.media_url : undefined;
+      // Upload sample image to backend so Grok can analyze it as reference image
+      let refPath: string | undefined;
+      if (selectedSample?.media_url) {
+        if (!selectedSample.id.startsWith("fake-")) {
+          // Real library sample: already has a server path
+          refPath = selectedSample.media_url;
+        } else {
+          // Fake sample: fetch from public URL and upload to backend
+          try {
+            const frontendOrigin = typeof window !== "undefined" ? window.location.origin : "";
+            const res = await fetch(`${frontendOrigin}${selectedSample.media_url}`);
+            const blob = await res.blob();
+            const filename = selectedSample.media_url.split("/").pop() || "sample.jpg";
+            const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+            const uploaded = await uploadFile(file);
+            refPath = uploaded.url;
+          } catch {
+            // If upload fails, proceed without reference image
+          }
+        }
+      }
 
       // Snapshot existing image IDs so we can detect the new one later
       const existingImages = await listCharacterImages(characterId);
@@ -767,9 +817,13 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                     onClick={() => {
                       setSelectedSample(selectedSample?.id === sample.id ? null : sample);
                       if (selectedSample?.id !== sample.id) {
-                        // Use caption first, fallback to tags, fallback to empty
-                        const samplePrompt = sample.caption || (sample.tags?.length ? sample.tags.join(", ") : "");
-                        setPrompt(samplePrompt);
+                        // Fake samples: let Grok analyze the ref image — don't prefill caption
+                        if (!sample.id.startsWith("fake-")) {
+                          const samplePrompt = sample.caption || (sample.tags?.length ? sample.tags.join(", ") : "");
+                          setPrompt(samplePrompt);
+                        } else {
+                          setPrompt("");
+                        }
                       } else if (selectedSample?.id === sample.id) {
                         setPrompt("");
                       }
@@ -781,23 +835,12 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                     }`}
                   >
                     <div className="aspect-[4/3] bg-[#0b0b0b] overflow-hidden">
-                      {isFakeSamples ? (
-                        <div
-                          className="w-full h-full flex items-center justify-center"
-                          style={{ background: FAKE_GRADIENTS[idx] || FAKE_GRADIENTS[0] }}
-                        >
-                          <span className="text-white/80 text-xs font-mono font-bold drop-shadow">
-                            {FAKE_LABELS[idx]}
-                          </span>
-                        </div>
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={resolveApiUrl(sample.thumbnail_url || sample.media_url)}
-                          alt={sample.caption || "Sample"}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={isFakeSamples ? SAMPLE_PHOTOS[idx] : resolveApiUrl(sample.thumbnail_url || sample.media_url)}
+                        alt={sample.caption || "Sample"}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="bg-[#111] p-2">
                       <p className="text-xs text-gray-400 font-mono truncate">

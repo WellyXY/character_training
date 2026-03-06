@@ -308,6 +308,8 @@ export interface AnimateImageRequest {
   prompt: string;
   reference_video_url?: string;
   reference_video_duration?: number;
+  match_reference_pose?: boolean;
+  pose_image_aspect_ratio?: string;
   video_model?: string;
   add_subtitles?: boolean;
   aspect_ratio?: string;
