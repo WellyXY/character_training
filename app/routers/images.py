@@ -16,6 +16,7 @@ from app.models.character import Character
 from app.models.user import User
 from app.schemas.image import ImageResponse, ImageMetadata, ImageType, ImageStatus
 from app.agent.skills.image_generator import ImageGeneratorSkill
+from app.agent.skills.prompt_optimizer import PromptOptimizerSkill
 from app.auth import get_current_user
 from app.services.tokens import deduct_tokens, refund_tokens
 
@@ -450,8 +451,20 @@ async def _generate_direct_background(
     skill = ImageGeneratorSkill()
     async with async_session() as db:
         try:
+            # Optimize prompt with the vlog/selfie guide before sending to Seedream
+            optimizer = PromptOptimizerSkill()
+            opt_result = await optimizer._optimize_prompt(
+                {
+                    "scene_description": prompt,
+                    "reference_image_path": reference_image_url,
+                },
+                db=db,
+            )
+            final_prompt = opt_result.get("optimized_prompt") or prompt
+            logger.info(f"Direct gen optimized prompt: {final_prompt[:120]}...")
+
             params = {
-                "prompt": prompt,
+                "prompt": final_prompt,
                 "aspect_ratio": aspect_ratio,
                 "existing_image_id": image_id,
             }
