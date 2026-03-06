@@ -338,7 +338,7 @@ class ParrotClient:
         }
         data: dict[str, str] = {"promptText": prompt_text, "resolution": resolution}
 
-        animate_url = f"{self.base_url}/animate"
+        animate_url = "https://parrot-test.pika.art/api/v1/generate/v0/animate"
 
         logger.info("=== Wan Animate API Request ===")
         logger.info("URL: %s", animate_url)
