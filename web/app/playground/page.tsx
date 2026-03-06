@@ -578,10 +578,13 @@ function PlaygroundContent() {
             <div>
               <Label>X-API-Key</Label>
               <input
-                type="password"
+                type="text"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="new-password"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
+                style={{ WebkitTextSecurity: "disc" } as React.CSSProperties}
                 className="w-full bg-[#161616] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] font-mono transition-colors"
               />
             </div>
@@ -859,6 +862,8 @@ function PlaygroundContent() {
                           placeholder="Type a message…"
                           disabled={sendingText}
                           autoComplete="off"
+                          data-lpignore="true"
+                          data-form-type="other"
                           className="flex-1 bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] transition-colors disabled:opacity-50"
                         />
                         <button
