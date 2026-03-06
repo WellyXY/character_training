@@ -365,8 +365,15 @@ function PlaygroundContent() {
         body: JSON.stringify({ messages: newHistory }),
       });
       const aiData = await aiRes.json();
-      const aiText = aiData.text || "...";
 
+      if (!aiRes.ok || aiData.error) {
+        const errMsg = aiData.error || `Chat API error ${aiRes.status}`;
+        setSessionLog((prev) => [...prev, { role: "system", text: `Chat error: ${errMsg}` }]);
+        setSendingText(false);
+        return;
+      }
+
+      const aiText = aiData.text || "...";
       setSessionLog((prev) => [...prev, { role: "ai", text: aiText }]);
       setChatHistory((prev) => [...prev, { role: "model", text: aiText }]);
 
@@ -377,7 +384,7 @@ function PlaygroundContent() {
         body: JSON.stringify({ text: aiText }),
       });
     } catch (err) {
-      setSessionLog((prev) => [...prev, { role: "ai", text: `Error: ${err}` }]);
+      setSessionLog((prev) => [...prev, { role: "system", text: `Chat error: ${err}` }]);
     }
     setSendingText(false);
   };
@@ -428,7 +435,7 @@ function PlaygroundContent() {
               const el = track.attach();
               if (track.kind === Track.Kind.Video) {
                 el.style.width = "100%";
-                el.style.height = "auto";
+                el.style.height = "100%";
                 el.style.display = "block";
                 (el as HTMLVideoElement).style.objectFit = "contain";
                 videoContainerRef.current?.appendChild(el);
@@ -766,25 +773,26 @@ function PlaygroundContent() {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 ${activeApi === "lipsync" && sessionPhase === "ready" ? "flex flex-col min-h-0" : "overflow-y-auto"}`}>
 
             {/* Output section */}
-            <div className="p-5 border-b border-[#222]">
-              <p className="text-[15px] font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <div className={activeApi === "lipsync" && sessionPhase === "ready" ? "flex-1 flex flex-col min-h-0 p-5" : "p-5 border-b border-[#222]"}>
+              <p className="text-[15px] font-semibold text-gray-400 uppercase tracking-wider mb-3 flex-shrink-0">
                 {activeApi === "lipsync" ? "Session" : "Output"}
               </p>
 
               {/* ── Lipsync session UI ── */}
               {activeApi === "lipsync" ? (
-                <div className="flex flex-col gap-4">
+                <div className={`flex-1 min-h-0 ${sessionPhase === "ready" ? "flex gap-4" : "flex flex-col gap-3"}`}>
 
                   {/* Video container: React overlays + isolated LiveKit div */}
                   <div
                     id="lipsyncVideoContainer"
-                    className="w-full rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative"
-                    style={{ maxWidth: "80rem", maxHeight: 620, minHeight: 200 }}
+                    className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative ${
+                      sessionPhase === "ready" ? "flex-1 min-w-0 self-stretch" : "w-full flex-shrink-0"
+                    }`}
+                    style={sessionPhase === "ready" ? {} : { minHeight: 180 }}
                   >
-                    {/* React-managed overlays */}
                     {sessionPhase === "none" && (
                       <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-500">
                         <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -811,7 +819,6 @@ function PlaygroundContent() {
                         <p className="text-[15px]">Session creation failed</p>
                       </div>
                     )}
-                    {/* LiveKit-only div — React renders nothing inside, safe for imperative DOM ops */}
                     <div
                       ref={videoContainerRef}
                       className="w-full h-full"
@@ -819,70 +826,75 @@ function PlaygroundContent() {
                     />
                   </div>
 
-                  {/* Chat log */}
-                  {sessionLog.length > 0 && (
-                    <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl max-h-60 overflow-y-auto">
-                      {sessionLog.map((msg, i) => (
-                        <div key={i} className={`px-4 py-2.5 text-[14px] flex items-start gap-2.5 ${i < sessionLog.length - 1 ? "border-b border-[#222]" : ""}`}>
-                          <span className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider mt-0.5 w-12 ${
-                            msg.role === "system" ? "text-gray-500" :
-                            msg.role === "user" ? "text-blue-400" :
-                            msg.role === "ai" ? "text-pink-400" : "text-green-400"
-                          }`}>{msg.role === "ai" ? "Mia" : msg.role}</span>
-                          <span className={`${msg.role === "user" ? "text-white" : "text-gray-300"}`}>{msg.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Text input for sending messages */}
-                  {sessionPhase === "ready" && (
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
-                        placeholder="Type a message for the character to speak…"
-                        disabled={sendingText}
-                        className="flex-1 bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] transition-colors disabled:opacity-50"
-                      />
-                      <button
-                        onClick={handleSendText}
-                        disabled={!chatInput.trim() || sendingText}
-                        className="px-5 py-2.5 rounded-xl text-[15px] font-semibold bg-white text-black hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                      >
-                        {sendingText ? (
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
-                        )}
-                        Send
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Response JSON */}
-                  {responseData && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`text-[14px] font-mono font-semibold px-2 py-0.5 rounded border ${
-                          status === "success"
-                            ? "text-green-400 bg-green-400/10 border-green-400/20"
-                            : "text-red-400 bg-red-400/10 border-red-400/20"
-                        }`}>
-                          {httpStatus} {status === "success" ? "OK" : "Error"}
-                        </span>
-                        {elapsed !== null && <span className="text-[14px] text-gray-400">{elapsed}s</span>}
+                  {/* Chat panel — right side when ready, below when not */}
+                  <div className={sessionPhase === "ready"
+                    ? "w-[360px] flex-shrink-0 flex flex-col min-h-0"
+                    : "flex flex-col gap-3"
+                  }>
+                    {/* Chat log */}
+                    {sessionLog.length > 0 && (
+                      <div className="flex-1 min-h-0 bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-y-auto">
+                        {sessionLog.map((msg, i) => (
+                          <div key={i} className={`px-4 py-2.5 text-[14px] flex items-start gap-2.5 ${i < sessionLog.length - 1 ? "border-b border-[#222]" : ""}`}>
+                            <span className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider mt-0.5 w-12 ${
+                              msg.role === "system" ? "text-gray-500" :
+                              msg.role === "user" ? "text-blue-400" :
+                              msg.role === "ai" ? "text-pink-400" : "text-green-400"
+                            }`}>{msg.role === "ai" ? "Mia" : msg.role}</span>
+                            <span className={`${msg.role === "user" ? "text-white" : "text-gray-300"}`}>{msg.text}</span>
+                          </div>
+                        ))}
                       </div>
-                      <pre className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 text-[14px] font-mono text-gray-300 overflow-auto max-h-40 leading-relaxed">
-                        {JSON.stringify(responseData, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                    )}
+
+                    {/* Text input */}
+                    {sessionPhase === "ready" && (
+                      <div className="flex gap-2 flex-shrink-0 pt-3">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText(); } }}
+                          placeholder="Type a message…"
+                          disabled={sendingText}
+                          className="flex-1 bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder:text-gray-500 focus:outline-none focus:border-[#555] transition-colors disabled:opacity-50"
+                        />
+                        <button
+                          onClick={handleSendText}
+                          disabled={!chatInput.trim() || sendingText}
+                          className="px-4 py-2.5 rounded-xl text-[15px] font-semibold bg-white text-black hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                        >
+                          {sendingText ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Response JSON */}
+                    {responseData && (
+                      <div className="flex-shrink-0 pt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-[14px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                            status === "success"
+                              ? "text-green-400 bg-green-400/10 border-green-400/20"
+                              : "text-red-400 bg-red-400/10 border-red-400/20"
+                          }`}>
+                            {httpStatus} {status === "success" ? "OK" : "Error"}
+                          </span>
+                          {elapsed !== null && <span className="text-[14px] text-gray-400">{elapsed}s</span>}
+                        </div>
+                        <pre className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-4 py-3 text-[14px] font-mono text-gray-300 overflow-auto max-h-40 leading-relaxed">
+                          {JSON.stringify(responseData, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* ── img2vid / img2vid-audio output ── */
@@ -1003,7 +1015,7 @@ function PlaygroundContent() {
             </div>
 
             {/* API Docs section */}
-            <div className="p-5 flex flex-col gap-5">
+            <div className={`p-5 flex flex-col gap-5 ${activeApi === "lipsync" && sessionPhase === "ready" ? "hidden" : ""}`}>
               <p className="text-[15px] font-semibold text-gray-400 uppercase tracking-wider">API Reference</p>
 
               {activeApi === "lipsync" ? (
