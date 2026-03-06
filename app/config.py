@@ -76,11 +76,8 @@ class Settings(BaseSettings):
     twitter_client_id: str = ""
     twitter_client_secret: str = ""
 
-    # Email sharing (SMTP)
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
+    # Email sharing
+    brevo_api_key: str = ""
     smtp_from: str = ""
 
     # Storage

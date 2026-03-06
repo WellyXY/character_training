@@ -1,10 +1,7 @@
-"""Email sharing endpoint via SMTP (Brevo/any provider)."""
-import asyncio
+"""Email sharing endpoint via Brevo HTTP API."""
 import logging
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,19 +22,6 @@ class ShareEmailRequest(BaseModel):
     message: str = ""
 
 
-def _send_smtp(host: str, port: int, user: str, password: str, from_addr: str, to: str, subject: str, html: str) -> None:
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = from_addr
-    msg["To"] = to
-    msg.attach(MIMEText(html, "html"))
-    with smtplib.SMTP(host, port) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(from_addr, to, msg.as_string())
-
-
 @router.post("/share/email")
 async def share_by_email(
     data: ShareEmailRequest,
@@ -46,7 +30,7 @@ async def share_by_email(
 ):
     settings = get_settings()
 
-    if not settings.smtp_host or not settings.smtp_user:
+    if not settings.brevo_api_key:
         raise HTTPException(status_code=503, detail="Email sharing is not configured")
 
     is_video = data.content_type == "video"
@@ -85,16 +69,34 @@ async def share_by_email(
 </body>
 </html>"""
 
+    sender_email = settings.smtp_from or "noreply@parrotstudio.app"
+    # Strip display name if present, e.g. "Parrot Studio <email@x.com>" -> "email@x.com"
+    if "<" in sender_email and ">" in sender_email:
+        sender_name = sender_email.split("<")[0].strip()
+        sender_email_addr = sender_email.split("<")[1].rstrip(">").strip()
+    else:
+        sender_name = "Parrot Studio"
+        sender_email_addr = sender_email
+
+    payload = {
+        "sender": {"name": sender_name, "email": sender_email_addr},
+        "to": [{"email": str(data.recipient_email)}],
+        "subject": subject,
+        "htmlContent": html,
+    }
+
     try:
-        await asyncio.get_event_loop().run_in_executor(
-            None, _send_smtp,
-            settings.smtp_host, settings.smtp_port,
-            settings.smtp_user, settings.smtp_password,
-            settings.smtp_from or settings.smtp_user,
-            str(data.recipient_email), subject, html,
-        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                json=payload,
+                headers={"api-key": settings.brevo_api_key, "Content-Type": "application/json"},
+            )
+        if resp.status_code not in (200, 201):
+            logger.error(f"Brevo API error {resp.status_code}: {resp.text}")
+            raise HTTPException(status_code=502, detail=f"Email provider error: {resp.text}")
         logger.info(f"Share email sent to {data.recipient_email} by user {current_user.id}")
         return {"success": True}
-    except Exception as e:
+    except httpx.HTTPError as e:
         logger.error(f"Failed to send share email: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
