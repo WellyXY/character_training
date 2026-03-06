@@ -12,75 +12,76 @@ from app.services.storage import get_storage_service
 logger = logging.getLogger(__name__)
 
 
-# Seedream prompt optimization guide
+# Seedream Vlog & Selfie Prompt Writer
 SEEDREAM_PROMPT_GUIDE = """
-You are a professional AI image generation prompt optimization expert, specializing in optimizing prompts for the Seedream 4.5 model.
+You are a Seedream prompt writer specializing in realistic selfie, vlog, and portrait-style content.
 
-## Seedream Prompt Best Practices:
+## Core Framework (always follow this order)
+[Shot type] → [Subject anchor] → [Authenticity markers] → [Background/scene] → [Vibe sentence] → [Technical layer]
 
-1. **Subject Description**:
-   - Clearly describe the subject's appearance features
-   - Include basic info such as gender, skin tone, etc.
-   - **NEVER explicitly describe hairstyle or hair color** — always write "maintaining the character's exact hairstyle from images 1-3 (base images) only — do NOT copy hairstyle from image 4 (user reference image)". Hair must come exclusively from base images 1-3, not from the reference image or your own description.
-   - **Expression (REQUIRED — never omit)**:
-     - If a reference image is provided: copy the expression exactly as seen (e.g. "smirking playfully", "lips slightly parted in a sensual gaze", "confident slight smile")
-     - If no reference image: infer an appropriate expression from the style/scene context (e.g. sexy style → "sultry half-lidded gaze", cute → "bright sweet smile", home/warm → "soft relaxed smile")
-     - Always write the expression explicitly in the prompt — never leave it implied or omitted
+---
 
-2. **Clothing Details**:
-   - **When a reference image is provided**: describe the clothing/nudity state EXACTLY as seen in the reference image — even if it's cosplay, fantasy, or unusual clothing. Do NOT substitute with generic clothing like "black turtleneck" or "casual outfit". Describe the actual garment (e.g. "white strapless halter bodysuit with orange accents", "black strappy corset teddy", "red lingerie"). If nude/partially nude, write that explicitly.
-   - **When NO reference image is provided**: describe clothing explicitly based on the style/cloth parameters
-   - NEVER invent clothing not shown in the reference. NEVER substitute with a "safe" default.
+## Layer 1 — Shot Type (first, highest weight)
+Pick the most fitting one:
+- "Ultra-realistic iPhone 16 front camera selfie"
+- "Mirror selfie, full-body"
+- "Handheld vlog shot, slight camera shake"
+- "Soft portrait photo, natural light"
+- "POV phone selfie, slightly overhead angle"
+- "Candid street photo"
 
-3. **Scene Setting**:
-   - Describe the environment and background
-   - Include lighting, time of day, atmosphere
+## Layer 2 — Subject Anchor (exactly 3–5 features)
+Choose from: Eyes / Hair / Skin detail / Expression / Outfit (max 2 outfit items)
+Never stack more than 5 — adjective overload degrades output quality.
 
-4. **Photography Style**:
-   - Camera angle (close-up, medium shot, full body)
-   - Lighting type (natural light, studio lighting, golden hour)
-   - Quality descriptors (high quality, 4K, photorealistic)
+## Layer 3 — Authenticity Markers (1–2 items, pick one)
+slight motion blur / slightly overexposed / awkward crop / tilted angle / lens smudge / specific phone model
+These make the image feel real and unstaged.
 
-5. **Style Keywords**:
-   - sexy: Sensual, alluring, confident poses
-   - cute: Adorable, sweet, youthful energy
-   - warm: Cozy, comfortable, natural lighting
-   - home: Homey, relaxed, intimate feel
+## Layer 4 — Background/Scene (specific, never vague)
+Bad: "nice background"
+Good: "messy bedroom at night, warm dim lighting, string lights blurred in background"
+Always name a real place with a real, single lighting condition.
 
-## Multiple Reference Images Guide:
-When both Base Images and user reference images are present, Seedream receives multiple reference images:
-- Base images (first few) → Used to maintain consistent facial features and body proportions
-- User reference image (last one) → Used to reference pose/composition/atmosphere/lighting
+## Layer 5 — Vibe Sentence (one closing line)
+Defines the emotional register:
+- "Vibe: unbothered main character energy. Feels real, like a random late-night moment."
+- "Vibe: casual confidence, effortless."
+- "Vibe: soft and intimate, natural morning light."
 
-The prompt must use a special format to clearly distinguish reference targets:
+## Technical Layer (append based on goal)
+| Goal      | Append                                            |
+|-----------|---------------------------------------------------|
+| Selfie    | wide-angle distortion, front camera compression  |
+| Vlog      | 16mm, handheld, slight camera shake               |
+| Cinematic | anamorphic lens flare, filmic grade, 2.35:1       |
+| Portrait  | 85mm f/1.8, shallow depth of field, soft bokeh    |
 
-**Format**:
-[Reference Character] Based on the character's face and body shape from the base reference images (images 1-3),
-[Reference Pose/Composition/Style] following the [specific pose/composition/atmosphere description] from the additional reference image (image 4),
-generate [subject description], maintaining the character's exact hairstyle from images 1-3 only (do NOT copy hairstyle from image 4), wearing [clothing/nudity state from image 4], in [scene description]...
+## Negative Prompt (always append at the end)
+no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing, no distorted ears, no multiple pupils, no exaggerated bokeh
 
-**Key Points**:
-1. Use [Reference Character] to point to the face and body from base images (images 1-3)
-2. Use [Reference Pose/Composition/Style] to point to the pose/composition/atmosphere from image 4
-3. Hair MUST come from images 1-3 only — explicitly state "do NOT copy hairstyle from image 4"
-4. Clothing/nudity state MUST match what is shown in image 4 (the reference image)
-5. Place the vision-analyzed pose, composition, and atmosphere descriptions in the [Reference Pose...] block
+---
 
-## Face Consistency (CRITICAL):
-- **The character's face MUST remain identical to the base reference images** — same facial features, face shape, eyes, nose, mouth, and skin texture
-- **Always include face clarity instructions**: sharp focus on face, clear facial details, well-defined facial features
-- Reinforce face identity every time: "maintaining exact facial features from base reference images, sharp and clear face"
-- Never let background, clothing, or pose changes blur or alter the face
+## Key Rules
+1. **30–100 words** — stacking adjectives hurts quality; up to 150 words only for complex reference-guided prompts
+2. **One lighting source only** — pick one: natural / neon / overhead / backlit / ring light
+3. **Specific over vague**: "85mm f/1.8" beats "ultra beautiful professional camera"
+4. **Expression is REQUIRED** — always name it explicitly; never omit or imply
+5. **Never use character names** in the prompt — causes text to render on image; use "the character" instead
+6. **No age mentions** in the prompt
+7. **No default warm/golden tones** — use neutral/natural lighting unless user explicitly requests warmth
 
-## Important Notes:
-1. **Never use character names in the prompt**: Never put character names (e.g. "Sake II", "Luna", etc.) in the prompt, as this will cause text to be rendered onto the image
-2. Only use "the character" or "the person from base reference images" to refer to the character
-3. Character appearance info is only for understanding visual features, do not copy names into the prompt
-4. Do not mention any person's age or birth year in the prompt
-5. **Lighting and color tone**: Do NOT default to warm/golden lighting or beige tones. Only use warm tones if the user explicitly requests it. Default to neutral/natural lighting unless otherwise specified.
+---
 
-## Output Format:
-Output the optimized English prompt directly, no other explanations needed.
+## Reference Image Rules (when multiple reference images provided)
+- **Base images (1–3)**: maintain character's face, body proportions, hairstyle
+- **User reference (last image)**: extract pose, composition, clothing, lighting atmosphere
+- **Hair MUST come from base images** — write "do NOT copy hairstyle from reference image"
+- **Clothing/nudity state MUST match user reference image** — describe the actual garment literally (e.g. "black strappy corset teddy", "nude"), never substitute with a safe default
+- **Face consistency**: "maintaining exact facial features from base reference images, sharp and clear face, well-defined facial features"
+
+## Output Format
+Output ONLY the optimized prompt. No preamble, no explanation, no markdown headers.
 """
 
 
@@ -234,8 +235,9 @@ class PromptOptimizerSkill(BaseSkill):
         if raw_prompt and raw_prompt.lower() not in ("generate using reference image", ""):
             parts.append(f"Scene: {raw_prompt}")
 
-        # Quality tags
-        parts.append("high quality, 4K, professional photography, soft studio lighting, sharp focus on face, clear and well-defined facial features, face identity consistent with reference images")
+        # Technical layer + negative prompt
+        parts.append("85mm f/1.8, shallow depth of field, sharp focus on face, clear and well-defined facial features, face identity consistent with reference images")
+        parts.append("no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing, no distorted ears, no multiple pupils")
 
         return ", ".join(parts)
 
@@ -290,35 +292,41 @@ class PromptOptimizerSkill(BaseSkill):
 
         # Build instruction blocks
         if reference_image_mode == "face_swap":
-            instruction_header = "Generate a structured English prompt with EXPLICIT image order instructions:"
+            instruction_header = "Generate a Seedream prompt using the Vlog & Selfie framework with EXPLICIT image order:"
             instruction_body = (
-                "1. Image order: [image 1 = user reference photo, images 2-4 = character base images]\n"
-                "2. State that image 1 is the MAIN composition - keep its pose, body, clothing, background, lighting unchanged\n"
-                "3. State that images 2-4 are ONLY for extracting facial features (face shape, eyes, nose, mouth, skin texture)\n"
-                "4. Specify face blending: seamless blend at jawline, hairline, neck, match skin tone and lighting\n"
-                "5. Add quality tags and negative prompts (no text, no watermark, no extra limbs)\n"
-                "6. Keep the prompt structured (80-150 words)"
+                "Image order: [image 1 = user reference photo, images 2-4 = character base images]\n"
+                "1. Shot type: infer from image 1's composition (selfie / portrait / vlog)\n"
+                "2. Image 1 is the MAIN composition — keep its exact pose, body, clothing, background, lighting unchanged\n"
+                "3. Images 2-4 are ONLY for extracting facial features (face shape, eyes, nose, mouth, skin texture)\n"
+                "4. Face blending: seamless blend at jawline, hairline, neck; match skin tone and lighting direction\n"
+                "5. Authenticity marker: add 1 item matching image 1's feel (motion blur / overexposed / camera model)\n"
+                "6. Vibe sentence: one line capturing the mood from image 1\n"
+                "7. Technical layer: use specific camera specs (e.g. '85mm f/1.8') not vague adjectives\n"
+                "8. Negative prompt: no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing\n"
+                "9. Keep 80–150 words total"
             )
         else:
-            instruction_header = "Generate a detailed English prompt with EXPLICIT image order instructions:"
+            instruction_header = "Generate a Seedream prompt using the Vlog & Selfie framework with EXPLICIT image order:"
             instruction_body = (
-                "1. Image order: [images 1-3 = character base images, image 4 = user reference photo]\n"
-                "2. State that images 1-3 are for character's face and body features (identity consistency)\n"
-                "3. State what to take from image 4 based on the reference mode\n"
-                "4. Include scene and lighting descriptions\n"
-                "5. Use professional photography terminology\n"
-                "6. MUST include face emphasis: 'maintaining exact facial features from base reference images, face unchanged, sharp and clear face, well-defined facial features'\n"
+                "Image order: [images 1-3 = character base images, image 4 = user reference photo]\n"
+                "1. Shot type: infer from the scene/style (selfie / portrait / vlog / cinematic)\n"
+                "2. Subject anchor: 3–5 features from base images (face, eyes, skin detail, expression — max 2 outfit items)\n"
+                "3. Authenticity marker: 1 item (motion blur / overexposed / phone model)\n"
+                "4. Background: specific place + single lighting source (e.g. 'bedroom at night, neon sign glow')\n"
+                "5. Face: 'maintaining exact facial features from base reference images, sharp and clear face'\n"
                 + (
-                    "7. Hair: the user explicitly requested to copy hair from image 4 — describe the hairstyle and hair color exactly as seen in image 4.\n"
+                    "6. Hair: copy hairstyle and color exactly as seen in image 4 (user explicitly requested hair from ref)\n"
                     if re.search(r'\bhair\b', raw_prompt, re.IGNORECASE) else
-                    "7. Hair: write 'maintaining the character's exact hairstyle from images 1-3 (base images) only, do NOT copy or reference hairstyle from image 4' — never describe specific hair color or style\n"
+                    "6. Hair: 'maintaining the character's exact hairstyle from images 1-3 only — do NOT copy hairstyle from image 4'\n"
                 )
-                + "8. Clothing: copy EXACTLY what is visible in image 4 — describe the actual garment literally (e.g. 'white strapless halter bodysuit with orange accents', 'black strappy corset teddy', 'nude'). NEVER substitute with a generic outfit like 'black turtleneck' or 'casual outfit'. Even cosplay or fantasy clothing must be described as-is.\n"
-                f"{'9' if reference_image_path else '8'}. Expression (REQUIRED): "
-                + ("copy the facial expression exactly from image 4 (e.g. 'smirking playfully', 'sultry half-lidded gaze', 'lips slightly parted'). Never omit the expression.\n"
+                + "7. Clothing: describe EXACTLY as visible in image 4 — literal garment description (e.g. 'black strappy corset teddy', 'nude'). Never substitute with a generic outfit.\n"
+                + ("8. Expression: copy exactly from image 4 (e.g. 'smirking playfully', 'sultry half-lidded gaze'). REQUIRED — never omit.\n"
                    if reference_image_path else
-                   "infer an appropriate expression from the style/scene (e.g. sexy→'sultry half-lidded gaze', cute→'bright sweet smile', warm/home→'soft relaxed smile'). Never omit the expression.\n")
-                + "10. Keep the prompt at a moderate length (100-200 words)"
+                   "8. Expression: infer from style/scene (sexy→'sultry half-lidded gaze', cute→'bright sweet smile', home→'soft relaxed smile'). REQUIRED — never omit.\n")
+                + "9. Vibe sentence: one closing line defining the emotional register\n"
+                + "10. Technical layer: specific camera spec (85mm f/1.8 / 16mm handheld / wide-angle distortion)\n"
+                + "11. Negative prompt: no extra limbs, no waxy skin, no over-sharpened pores, no cartoon style, no heavy smoothing\n"
+                + "12. Keep 50–150 words total; one lighting source only"
             )
 
         user_context = "\n".join(context_parts) if context_parts else ""
