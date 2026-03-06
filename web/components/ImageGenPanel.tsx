@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Image, GenerationTask, ReferenceImageMode, SamplePost } from "@/lib/types";
-import { resolveApiUrl, uploadFile, listSamples } from "@/lib/api";
+import { resolveApiUrl, uploadFile, listSamples, importImageFromUrl } from "@/lib/api";
 import { REFERENCE_MODES } from "@/lib/constants";
 import GenerationProgressCard from "./GenerationProgressCard";
 
@@ -83,6 +83,8 @@ export default function ImageGenPanel({
   const [uploadedRef, setUploadedRef] = useState<{ url: string; fullUrl: string } | null>(null);
   const [referenceMode, setReferenceMode] = useState<ReferenceImageMode>("pose_background");
   const [uploading, setUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [importingUrl, setImportingUrl] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasRef = selectedRefImage || uploadedRef;
@@ -107,6 +109,22 @@ export default function ImageGenPanel({
     setCloth(null);
     setSelectedRefImage(null);
     setUploadedRef(null);
+  };
+
+  const handleImportUrl = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setImportingUrl(true);
+    try {
+      const result = await importImageFromUrl(trimmed);
+      setUploadedRef({ url: result.url, fullUrl: result.full_url });
+      setSelectedRefImage(null);
+      setUrlInput("");
+    } catch (err) {
+      console.error("Import failed:", err);
+    } finally {
+      setImportingUrl(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +197,25 @@ export default function ImageGenPanel({
             >
               {uploading ? "Uploading..." : "Upload Image"}
             </button>
+            <div className="flex gap-1 mt-1.5">
+              <input
+                type="text"
+                placeholder="Instagram / TikTok URL..."
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleImportUrl(); }}
+                disabled={importingUrl || !characterId}
+                className="flex-1 px-2 py-1.5 rounded-lg border border-[#333] bg-[#0b0b0b] text-xs text-white placeholder-gray-500 focus:border-white/30 focus:outline-none disabled:opacity-50 font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleImportUrl}
+                disabled={!urlInput.trim() || importingUrl || !characterId}
+                className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-gray-300 hover:bg-white/20 disabled:opacity-50 font-mono uppercase tracking-wide whitespace-nowrap"
+              >
+                {importingUrl ? "Importing…" : "Import"}
+              </button>
+            </div>
           </div>
         )}
 
