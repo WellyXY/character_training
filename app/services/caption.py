@@ -23,7 +23,14 @@ async def generate_ins_caption(
     """
     from app.clients.gemini import GeminiClient
 
-    lang = random.choice(_LANGS)
+    # Mostly English, occasionally mix in some Korean words/phrases
+    mix_korean = random.random() < 0.3  # 30% chance to sprinkle Korean
+    lang_instruction = (
+        "Write in English, but naturally mix in a few Korean words or a short Korean phrase"
+        if mix_korean
+        else "Write in English"
+    )
+
     client = GeminiClient()
     persona = (character_description or "").strip()[:200]
 
@@ -32,8 +39,9 @@ async def generate_ins_caption(
         vision_prompt = (
             f"Character name: {character_name}\n"
             f"Persona: {persona}\n\n"
-            f"Look at this {content_type} and write a short Instagram caption in {lang} "
+            f"Look at this {content_type} and write a short Instagram caption "
             f"as this character posting it to their Instagram. "
+            f"{lang_instruction}. "
             f"1-2 sentences only (under 120 characters). "
             f"Add 2-3 relevant hashtags at the end. "
             f"Sound authentic and natural, not marketing-speak. "
@@ -51,7 +59,8 @@ async def generate_ins_caption(
             f"Persona: {persona}\n"
             f"Content description: {prompt_snippet}\n"
             f"Content type: {content_type}\n\n"
-            f"Write a short Instagram caption in {lang} as this character. "
+            f"Write a short Instagram caption as this character. "
+            f"{lang_instruction}. "
             f"1-2 sentences only (under 120 characters). "
             f"Add 2-3 relevant hashtags at the end. "
             f"Sound authentic and natural, not marketing-speak. "
