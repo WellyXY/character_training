@@ -139,7 +139,7 @@ class ImageGeneratorSkill(BaseSkill):
                         character_description=char.canonical_prompt_block or char.description or "",
                         prompt=prompt,
                         content_type="image",
-                        image_url=saved["full_url"],
+                        image_url=image_url,  # use original Seedream URL (accessible before DB commit)
                     )
                     metadata["caption"] = caption
             except Exception as _cap_err:
@@ -319,7 +319,7 @@ class ImageGeneratorSkill(BaseSkill):
                         character_description=char.canonical_prompt_block or char.description or "",
                         prompt=prompt,
                         content_type="image",
-                        image_url=saved["full_url"],
+                        image_url=image_url,  # use original Seedream URL (accessible before DB commit)
                     )
                     metadata["caption"] = caption
             except Exception as _cap_err:
