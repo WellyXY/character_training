@@ -1300,6 +1300,23 @@ export default function ContentGallery({
                           <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.prompt}</p>
                         </div>
                       )}
+
+                      {/* Instagram Caption */}
+                      {selectedItem.image?.metadata?.caption && (
+                        <div className="pt-3 border-t border-white/10">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500">INS Caption</p>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard.writeText(selectedItem.image!.metadata!.caption!)}
+                              className="text-[10px] text-gray-500 hover:text-white transition-colors font-mono"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.image.metadata.caption}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1406,6 +1423,23 @@ export default function ContentGallery({
                         <div className="pt-3 border-t border-white/10">
                           <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Video Prompt</p>
                           <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedItem.video.metadata.enhanced_prompt}</p>
+                        </div>
+                      )}
+
+                      {/* Instagram Caption */}
+                      {selectedItem.video.metadata?.caption && (
+                        <div className="pt-3 border-t border-white/10">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] uppercase tracking-wider text-gray-500">INS Caption</p>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard.writeText(selectedItem.video!.metadata!.caption!)}
+                              className="text-[10px] text-gray-500 hover:text-white transition-colors font-mono"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{selectedItem.video.metadata.caption}</p>
                         </div>
                       )}
                     </div>

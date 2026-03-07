@@ -46,6 +46,7 @@ export interface ImageMetadata {
   user_reference_path?: string;
   style?: string;
   cloth?: string;
+  caption?: string;
 }
 
 export interface Image {
@@ -91,6 +92,7 @@ export interface VideoMetadata {
   width?: number;
   height?: number;
   progress?: number;  // Video generation progress 0-100
+  caption?: string;
 }
 
 export type VideoStatus = "pending" | "processing" | "completed" | "failed";

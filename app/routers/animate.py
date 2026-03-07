@@ -990,6 +990,26 @@ async def _poll_video_completion(
                 if video_duration:
                     metadata["duration"] = video_duration
                 metadata["progress"] = 100
+
+                # Generate Instagram caption
+                try:
+                    from app.models.character import Character as CharacterModel
+                    char_result = await db.execute(
+                        select(CharacterModel).where(CharacterModel.id == video.character_id)
+                    )
+                    char = char_result.scalar_one_or_none()
+                    if char:
+                        from app.services.caption import generate_ins_caption
+                        caption = await generate_ins_caption(
+                            character_name=char.name,
+                            character_description=char.canonical_prompt_block or char.description or "",
+                            prompt=metadata.get("original_prompt") or metadata.get("prompt") or "",
+                            content_type="video",
+                        )
+                        metadata["caption"] = caption
+                except Exception as _cap_err:
+                    pass  # caption is optional
+
                 video.metadata_json = json.dumps(metadata)
 
                 await db.commit()

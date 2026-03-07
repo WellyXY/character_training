@@ -67,6 +67,7 @@ class ImageMetadata(BaseModel):
     total_reference_count: Optional[int] = None
     user_reference_path: Optional[str] = None
     user_reference_passed_to_seedream: Optional[bool] = None
+    caption: Optional[str] = None
 
 
 class ImageResponse(BaseModel):

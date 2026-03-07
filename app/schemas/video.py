@@ -38,6 +38,7 @@ class VideoMetadata(BaseModel):
     width: Optional[int] = None
     height: Optional[int] = None
     progress: Optional[int] = None  # Video generation progress 0-100
+    caption: Optional[str] = None
 
 
 class VideoResponse(BaseModel):

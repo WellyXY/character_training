@@ -128,6 +128,22 @@ class ImageGeneratorSkill(BaseSkill):
             if user_reference_paths:
                 metadata["reference_image_paths"] = user_reference_paths
 
+            # Generate Instagram caption
+            try:
+                char_result = await db.execute(select(Character).where(Character.id == character_id))
+                char = char_result.scalar_one_or_none()
+                if char:
+                    from app.services.caption import generate_ins_caption
+                    caption = await generate_ins_caption(
+                        character_name=char.name,
+                        character_description=char.canonical_prompt_block or char.description or "",
+                        prompt=prompt,
+                        content_type="image",
+                    )
+                    metadata["caption"] = caption
+            except Exception as _cap_err:
+                pass  # caption is optional, never block generation
+
             # Check if we should update an existing record or create new
             existing_image_id = params.get("existing_image_id")
             if existing_image_id:
@@ -290,6 +306,22 @@ class ImageGeneratorSkill(BaseSkill):
             if user_reference_path:
                 metadata["user_reference_path"] = user_reference_path
                 metadata["user_reference_passed_to_seedream"] = True
+
+            # Generate Instagram caption
+            try:
+                char_result = await db.execute(select(Character).where(Character.id == character_id))
+                char = char_result.scalar_one_or_none()
+                if char:
+                    from app.services.caption import generate_ins_caption
+                    caption = await generate_ins_caption(
+                        character_name=char.name,
+                        character_description=char.canonical_prompt_block or char.description or "",
+                        prompt=prompt,
+                        content_type="image",
+                    )
+                    metadata["caption"] = caption
+            except Exception as _cap_err:
+                pass  # caption is optional, never block generation
 
             # Check if we should update an existing record or create new
             existing_image_id = params.get("existing_image_id")
