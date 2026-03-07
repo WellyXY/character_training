@@ -991,7 +991,7 @@ async def _poll_video_completion(
                     metadata["duration"] = video_duration
                 metadata["progress"] = 100
 
-                # Generate Instagram caption
+                # Generate Instagram caption (vision via thumbnail if available)
                 try:
                     from app.models.character import Character as CharacterModel
                     char_result = await db.execute(
@@ -1000,11 +1000,13 @@ async def _poll_video_completion(
                     char = char_result.scalar_one_or_none()
                     if char:
                         from app.services.caption import generate_ins_caption
+                        thumb_full_url = storage.get_full_url(thumbnail_url) if thumbnail_url else None
                         caption = await generate_ins_caption(
                             character_name=char.name,
                             character_description=char.canonical_prompt_block or char.description or "",
                             prompt=metadata.get("original_prompt") or metadata.get("prompt") or "",
                             content_type="video",
+                            image_url=thumb_full_url,
                         )
                         metadata["caption"] = caption
                 except Exception as _cap_err:
