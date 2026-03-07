@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.setting import AppSetting
 from app.config import get_settings
 from app.auth import (
     verify_password,
@@ -412,3 +413,48 @@ async def delete_user(
     logger.info(f"Admin {admin_user.username} deleted user {username}")
 
     return {"status": "deleted", "username": username}
+
+
+# ── Instagram Cookies ──────────────────────────────────────────────────────────
+
+INSTAGRAM_COOKIES_KEY = "instagram_cookies"
+
+
+@router.get("/admin/settings/instagram-cookies")
+async def get_instagram_cookies_status(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Return whether Instagram cookies are set (admin only)."""
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == INSTAGRAM_COOKIES_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    if not setting or not setting.value.strip():
+        return {"set": False, "updated_at": None}
+    return {"set": True, "updated_at": setting.updated_at}
+
+
+class InstagramCookiesRequest(BaseModel):
+    cookies: str
+
+
+@router.post("/admin/settings/instagram-cookies")
+async def set_instagram_cookies(
+    request: InstagramCookiesRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Save Instagram cookies for yt-dlp (admin only)."""
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == INSTAGRAM_COOKIES_KEY)
+    )
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.value = request.cookies
+    else:
+        setting = AppSetting(key=INSTAGRAM_COOKIES_KEY, value=request.cookies)
+        db.add(setting)
+    await db.commit()
+    logger.info(f"Admin {admin_user.username} updated Instagram cookies")
+    return {"status": "saved"}

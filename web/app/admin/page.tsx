@@ -10,11 +10,13 @@ import {
   adminUpdateRole,
   adminDeleteUser,
   adminListCharacters,
+  adminGetInstagramCookiesStatus,
+  adminSetInstagramCookies,
   type AdminUser,
   type AdminCharacter,
 } from "@/lib/api";
 
-type Tab = "users" | "characters";
+type Tab = "users" | "characters" | "settings";
 
 export default function AdminPage() {
   const { user, isAuthenticated } = useAuth();
@@ -44,6 +46,13 @@ export default function AdminPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Instagram cookies
+  const [igCookiesSet, setIgCookiesSet] = useState(false);
+  const [igCookiesUpdatedAt, setIgCookiesUpdatedAt] = useState<string | null>(null);
+  const [igCookiesText, setIgCookiesText] = useState("");
+  const [igCookiesSaving, setIgCookiesSaving] = useState(false);
+  const [igCookiesMsg, setIgCookiesMsg] = useState("");
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login");
@@ -54,7 +63,33 @@ export default function AdminPage() {
       return;
     }
     loadData();
+    loadIgCookiesStatus();
   }, [isAuthenticated, user, router]);
+
+  const loadIgCookiesStatus = async () => {
+    try {
+      const status = await adminGetInstagramCookiesStatus();
+      setIgCookiesSet(status.set);
+      setIgCookiesUpdatedAt(status.updated_at);
+    } catch {}
+  };
+
+  const saveIgCookies = async () => {
+    if (!igCookiesText.trim()) return;
+    setIgCookiesSaving(true);
+    setIgCookiesMsg("");
+    try {
+      await adminSetInstagramCookies(igCookiesText.trim());
+      setIgCookiesMsg("Saved!");
+      setIgCookiesSet(true);
+      setIgCookiesUpdatedAt(new Date().toISOString());
+      setIgCookiesText("");
+    } catch (e) {
+      setIgCookiesMsg(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setIgCookiesSaving(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -188,6 +223,16 @@ export default function AdminPage() {
             }`}
           >
             Characters ({characters.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`px-6 py-3 text-sm font-mono font-bold uppercase tracking-wide border-b-2 transition-colors ${
+              activeTab === "settings"
+                ? "border-white text-white"
+                : "border-transparent text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Settings
           </button>
         </div>
       </div>
@@ -493,7 +538,55 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
-        )}
+        ) : activeTab === "settings" ? (
+          <div className="max-w-xl space-y-6 py-4">
+            {/* Instagram Cookies */}
+            <div className="border border-[#333] rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-mono font-bold uppercase tracking-widest text-white">
+                  Instagram Cookies
+                </h2>
+                <span
+                  className={`text-xs font-mono px-2 py-1 rounded ${
+                    igCookiesSet
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                  }`}
+                >
+                  {igCookiesSet ? "Active" : "Not set"}
+                </span>
+              </div>
+              {igCookiesSet && igCookiesUpdatedAt && (
+                <p className="text-xs text-gray-500 font-mono">
+                  Last updated: {new Date(igCookiesUpdatedAt).toLocaleString()}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 font-mono leading-relaxed">
+                Paste Netscape-format cookies from instagram.com to fix rate-limit errors.
+                Export with the &quot;Get cookies.txt LOCALLY&quot; Chrome extension.
+              </p>
+              <textarea
+                value={igCookiesText}
+                onChange={(e) => setIgCookiesText(e.target.value)}
+                placeholder={"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t..."}
+                rows={6}
+                className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-xs text-white font-mono focus:border-white/30 focus:outline-none resize-none"
+              />
+              {igCookiesMsg && (
+                <p className={`text-xs font-mono ${igCookiesMsg === "Saved!" ? "text-green-400" : "text-red-400"}`}>
+                  {igCookiesMsg}
+                </p>
+              )}
+              <button
+                onClick={saveIgCookies}
+                disabled={igCookiesSaving || !igCookiesText.trim()}
+                className="w-full rounded-lg bg-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
+              >
+                {igCookiesSaving ? "Saving..." : "Update Cookies"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

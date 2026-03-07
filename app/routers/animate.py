@@ -260,9 +260,22 @@ async def import_video_from_url(
         "format": "best[ext=mp4]/best",
     }
 
-    # Optional Instagram cookies (Netscape format) stored as env var INSTAGRAM_COOKIES
+    # Instagram cookies: DB takes priority, fallback to env var INSTAGRAM_COOKIES
     cookie_file = None
-    instagram_cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+    instagram_cookies = ""
+    try:
+        from app.models.setting import AppSetting
+        from sqlalchemy import select as _select
+        cookie_result = await db.execute(
+            _select(AppSetting).where(AppSetting.key == "instagram_cookies")
+        )
+        cookie_setting = cookie_result.scalar_one_or_none()
+        if cookie_setting and cookie_setting.value.strip():
+            instagram_cookies = cookie_setting.value.strip()
+    except Exception:
+        pass
+    if not instagram_cookies:
+        instagram_cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if instagram_cookies:
         import tempfile as _tf
         cookie_fd, cookie_file = _tf.mkstemp(suffix=".txt")

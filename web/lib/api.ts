@@ -572,3 +572,14 @@ export async function adminDeleteUser(userId: string): Promise<void> {
   await apiFetch<void>(`/admin/users/${userId}`, { method: "DELETE" });
 }
 
+
+export async function adminGetInstagramCookiesStatus(): Promise<{ set: boolean; updated_at: string | null }> {
+  return apiFetch("/admin/settings/instagram-cookies");
+}
+
+export async function adminSetInstagramCookies(cookies: string): Promise<{ status: string }> {
+  return apiFetch("/admin/settings/instagram-cookies", {
+    method: "POST",
+    body: JSON.stringify({ cookies }),
+  });
+}

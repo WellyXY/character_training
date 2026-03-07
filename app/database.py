@@ -26,6 +26,7 @@ class Base(DeclarativeBase):
 # Ensure all models are imported so metadata is complete
 from app.models.file_blob import FileBlob  # noqa: F401
 from app.models.user import User, TokenTransaction  # noqa: F401
+from app.models.setting import AppSetting  # noqa: F401
 
 
 async def get_db() -> AsyncSession:
