@@ -577,9 +577,9 @@ export async function adminGetInstagramCookiesStatus(): Promise<{ set: boolean; 
   return apiFetch("/admin/settings/instagram-cookies");
 }
 
-export async function adminSetInstagramCookies(cookies: string): Promise<{ status: string }> {
+export async function adminSetInstagramCookies(sessionId: string): Promise<{ status: string }> {
   return apiFetch("/admin/settings/instagram-cookies", {
     method: "POST",
-    body: JSON.stringify({ cookies }),
+    body: JSON.stringify({ session_id: sessionId }),
   });
 }

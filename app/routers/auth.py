@@ -436,7 +436,16 @@ async def get_instagram_cookies_status(
 
 
 class InstagramCookiesRequest(BaseModel):
-    cookies: str
+    session_id: str  # Just the sessionid cookie value
+
+
+def _build_netscape_cookies(session_id: str) -> str:
+    """Build a minimal Netscape cookie file from just the sessionid value."""
+    return (
+        "# Netscape HTTP Cookie File\n"
+        f".instagram.com\tTRUE\t/\tTRUE\t9999999999\tsessionid\t{session_id}\n"
+        f".instagram.com\tTRUE\t/\tFALSE\t9999999999\tds_user_id\t0\n"
+    )
 
 
 @router.post("/admin/settings/instagram-cookies")
@@ -445,16 +454,17 @@ async def set_instagram_cookies(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
 ):
-    """Save Instagram cookies for yt-dlp (admin only)."""
+    """Save Instagram sessionid cookie for yt-dlp (admin only)."""
+    netscape_cookies = _build_netscape_cookies(request.session_id.strip())
     result = await db.execute(
         select(AppSetting).where(AppSetting.key == INSTAGRAM_COOKIES_KEY)
     )
     setting = result.scalar_one_or_none()
     if setting:
-        setting.value = request.cookies
+        setting.value = netscape_cookies
     else:
-        setting = AppSetting(key=INSTAGRAM_COOKIES_KEY, value=request.cookies)
+        setting = AppSetting(key=INSTAGRAM_COOKIES_KEY, value=netscape_cookies)
         db.add(setting)
     await db.commit()
-    logger.info(f"Admin {admin_user.username} updated Instagram cookies")
+    logger.info(f"Admin {admin_user.username} updated Instagram sessionid")
     return {"status": "saved"}

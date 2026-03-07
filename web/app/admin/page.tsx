@@ -562,15 +562,15 @@ export default function AdminPage() {
                 </p>
               )}
               <p className="text-xs text-gray-400 font-mono leading-relaxed">
-                Paste Netscape-format cookies from instagram.com to fix rate-limit errors.
-                Export with the &quot;Get cookies.txt LOCALLY&quot; Chrome extension.
+                只需貼上 Instagram 的 <span className="text-white">sessionid</span> 值。
+                開啟 instagram.com → F12 → Application → Cookies → instagram.com → 找 sessionid → 複製值
               </p>
-              <textarea
+              <input
+                type="text"
                 value={igCookiesText}
                 onChange={(e) => setIgCookiesText(e.target.value)}
-                placeholder={"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t..."}
-                rows={6}
-                className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-xs text-white font-mono focus:border-white/30 focus:outline-none resize-none"
+                placeholder="貼上 sessionid 值..."
+                className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
               />
               {igCookiesMsg && (
                 <p className={`text-xs font-mono ${igCookiesMsg === "Saved!" ? "text-green-400" : "text-red-400"}`}>
