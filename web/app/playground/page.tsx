@@ -450,7 +450,7 @@ function PlaygroundContent() {
                 el.style.width = "100%";
                 el.style.height = "100%";
                 el.style.display = "block";
-                (el as HTMLVideoElement).style.objectFit = "cover";
+                (el as HTMLVideoElement).style.objectFit = "contain";
                 videoContainerRef.current?.appendChild(el);
               } else if (track.kind === Track.Kind.Audio) {
                 document.body.appendChild(el);
@@ -801,22 +801,23 @@ function PlaygroundContent() {
 
               {/* ── Lipsync session UI ── */}
               {activeApi === "lipsync" ? (
-                <div className={`flex-1 min-h-0 ${sessionPhase === "ready" ? "flex gap-4" : "flex flex-col gap-3"}`}>
+                <div className={`flex-1 min-h-0 ${sessionPhase === "ready" ? "flex gap-4 h-full" : "flex flex-col gap-3"}`}>
 
                   {/* Video container: React overlays + isolated LiveKit div */}
                   <div
                     id="lipsyncVideoContainer"
-                    className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative flex-shrink-0 ${
-                      sessionPhase === "ready" ? "self-center" : "w-full"
+                    className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative ${
+                      sessionPhase === "ready" ? "flex-shrink-0" : "w-full"
                     }`}
                     style={
                       sessionPhase === "ready" && lsImageAspect
                         ? {
-                            height: "calc(100vh - 220px)",
-                            width: `calc((100vh - 220px) * ${lsImageAspect})`,
+                            height: "100%",
+                            aspectRatio: `${lsImageAspect}`,
+                            maxWidth: "100%",
                           }
                         : sessionPhase === "ready"
-                        ? { flex: 1, minWidth: 0 }
+                        ? { flex: 1, minWidth: 0, height: "100%" }
                         : { minHeight: 180 }
                     }
                   >
