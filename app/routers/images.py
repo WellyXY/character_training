@@ -132,21 +132,10 @@ async def get_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get an image by ID (character must belong to current user, or any if admin)."""
-    if current_user.is_admin:
-        result = await db.execute(
-            select(Image).where(Image.id == image_id)
-        )
-    else:
-        result = await db.execute(
-            select(Image)
-            .join(Character)
-            .where(Image.id == image_id)
-            .where(Character.user_id == current_user.id)
-        )
+    """Get an image by ID (character must be accessible to current user)."""
+    result = await db.execute(select(Image).where(Image.id == image_id))
     image = result.scalar_one_or_none()
-
-    if not image:
+    if not image or not await get_character_if_accessible(image.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Image not found")
 
     return _image_to_response(image)
@@ -158,14 +147,10 @@ async def approve_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Approve an image (character must belong to current user, or any if admin)."""
-    query = select(Image).join(Character).where(Image.id == image_id)
-    if not current_user.is_admin:
-        query = query.where(Character.user_id == current_user.id)
-    result = await db.execute(query)
+    """Approve an image (character must be accessible to current user)."""
+    result = await db.execute(select(Image).where(Image.id == image_id))
     image = result.scalar_one_or_none()
-
-    if not image:
+    if not image or not await get_character_if_accessible(image.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Image not found")
 
     # Check base image limit (max 3)
@@ -196,14 +181,10 @@ async def set_as_base(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Set an image as base (character must belong to current user, or any if admin)."""
-    query = select(Image).join(Character).where(Image.id == image_id)
-    if not current_user.is_admin:
-        query = query.where(Character.user_id == current_user.id)
-    result = await db.execute(query)
+    """Set an image as base (character must be accessible to current user)."""
+    result = await db.execute(select(Image).where(Image.id == image_id))
     image = result.scalar_one_or_none()
-
-    if not image:
+    if not image or not await get_character_if_accessible(image.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Image not found")
 
     if image.type == DBImageType.BASE:
@@ -243,19 +224,10 @@ async def delete_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete an image (character must belong to current user, or admin)."""
-    if current_user.is_admin:
-        result = await db.execute(select(Image).where(Image.id == image_id))
-    else:
-        result = await db.execute(
-            select(Image)
-            .join(Character)
-            .where(Image.id == image_id)
-            .where(Character.user_id == current_user.id)
-        )
+    """Delete an image (character must be accessible to current user)."""
+    result = await db.execute(select(Image).where(Image.id == image_id))
     image = result.scalar_one_or_none()
-
-    if not image:
+    if not image or not await get_character_if_accessible(image.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Image not found")
 
     await db.delete(image)
@@ -330,21 +302,10 @@ async def retry_image(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retry image generation (character must belong to current user or admin, costs 1 token)."""
-    if current_user.is_admin:
-        result = await db.execute(
-            select(Image).where(Image.id == image_id)
-        )
-    else:
-        result = await db.execute(
-            select(Image)
-            .join(Character)
-            .where(Image.id == image_id)
-            .where(Character.user_id == current_user.id)
-        )
+    """Retry image generation (character must be accessible to current user, costs 1 token)."""
+    result = await db.execute(select(Image).where(Image.id == image_id))
     image = result.scalar_one_or_none()
-
-    if not image:
+    if not image or not await get_character_if_accessible(image.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Image not found")
 
     metadata: dict[str, Any] = {}

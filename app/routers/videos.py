@@ -92,16 +92,10 @@ async def get_video(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a video by ID (character must belong to current user)."""
-    result = await db.execute(
-        select(Video)
-        .join(Character)
-        .where(Video.id == video_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Get a video by ID (character must be accessible to current user)."""
+    result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
-
-    if not video:
+    if not video or not await get_character_if_accessible(video.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Video not found")
 
     return _video_to_response(video)
@@ -113,19 +107,10 @@ async def delete_video(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a video (character must belong to current user, or admin)."""
-    if current_user.is_admin:
-        result = await db.execute(select(Video).where(Video.id == video_id))
-    else:
-        result = await db.execute(
-            select(Video)
-            .join(Character)
-            .where(Video.id == video_id)
-            .where(Character.user_id == current_user.id)
-        )
+    """Delete a video (character must be accessible to current user)."""
+    result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
-
-    if not video:
+    if not video or not await get_character_if_accessible(video.character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Video not found")
 
     await db.delete(video)
@@ -140,14 +125,11 @@ async def retry_video(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retry video generation (character must belong to current user, costs 2 tokens)."""
-    result = await db.execute(
-        select(Video)
-        .join(Character)
-        .where(Video.id == video_id)
-        .where(Character.user_id == current_user.id)
-    )
+    """Retry video generation (character must be accessible to current user, costs 2 tokens)."""
+    result = await db.execute(select(Video).where(Video.id == video_id))
     video = result.scalar_one_or_none()
+    if not video or not await get_character_if_accessible(video.character_id, current_user, db):
+        video = None
 
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
