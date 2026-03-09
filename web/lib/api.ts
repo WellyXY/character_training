@@ -594,3 +594,43 @@ export async function adminSetUserCharacterAccess(userId: string, characterIds: 
     body: JSON.stringify({ character_ids: characterIds }),
   });
 }
+
+// Lipsync preset endpoints
+export type LipsyncPreset = { id: string; url: string; name: string };
+
+export async function getLipsyncPresets(): Promise<LipsyncPreset[]> {
+  return apiFetch<LipsyncPreset[]>("/lipsync-presets");
+}
+
+export async function adminUploadLipsyncPreset(file: File, name: string): Promise<LipsyncPreset> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("name", name);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_ROOT}/admin/lipsync-presets`, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const data = await res.json();
+      detail = data?.detail ? String(data.detail) : JSON.stringify(data);
+    } catch {
+      detail = await res.text();
+    }
+    throw new ApiError(detail || `Upload failed (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as LipsyncPreset;
+}
+
+export async function adminDeleteLipsyncPreset(presetId: string): Promise<void> {
+  await apiFetch<void>(`/admin/lipsync-presets/${presetId}`, { method: "DELETE" });
+}

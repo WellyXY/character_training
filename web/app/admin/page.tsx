@@ -14,8 +14,12 @@ import {
   adminSetInstagramCookies,
   adminGetUserCharacterAccess,
   adminSetUserCharacterAccess,
+  getLipsyncPresets,
+  adminUploadLipsyncPreset,
+  adminDeleteLipsyncPreset,
   type AdminUser,
   type AdminCharacter,
+  type LipsyncPreset,
 } from "@/lib/api";
 
 type Tab = "users" | "characters" | "settings";
@@ -61,6 +65,13 @@ export default function AdminPage() {
   const [igCookiesSaving, setIgCookiesSaving] = useState(false);
   const [igCookiesMsg, setIgCookiesMsg] = useState("");
 
+  // Lipsync presets
+  const [lipsyncPresets, setLipsyncPresets] = useState<LipsyncPreset[]>([]);
+  const [lipsyncUploadFile, setLipsyncUploadFile] = useState<File | null>(null);
+  const [lipsyncUploadName, setLipsyncUploadName] = useState("");
+  const [lipsyncUploading, setLipsyncUploading] = useState(false);
+  const [lipsyncMsg, setLipsyncMsg] = useState("");
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login");
@@ -72,6 +83,7 @@ export default function AdminPage() {
     }
     loadData();
     loadIgCookiesStatus();
+    loadLipsyncPresets();
   }, [isAuthenticated, user, router]);
 
   const openAccessModal = async (u: AdminUser) => {
@@ -123,6 +135,39 @@ export default function AdminPage() {
       setIgCookiesMsg(e instanceof Error ? e.message : "Save failed");
     } finally {
       setIgCookiesSaving(false);
+    }
+  };
+
+  const loadLipsyncPresets = async () => {
+    try {
+      const presets = await getLipsyncPresets();
+      setLipsyncPresets(presets);
+    } catch {}
+  };
+
+  const uploadLipsyncPreset = async () => {
+    if (!lipsyncUploadFile || !lipsyncUploadName.trim()) return;
+    setLipsyncUploading(true);
+    setLipsyncMsg("");
+    try {
+      const preset = await adminUploadLipsyncPreset(lipsyncUploadFile, lipsyncUploadName.trim());
+      setLipsyncPresets(prev => [...prev, preset]);
+      setLipsyncUploadFile(null);
+      setLipsyncUploadName("");
+      setLipsyncMsg("Uploaded!");
+    } catch (e) {
+      setLipsyncMsg(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setLipsyncUploading(false);
+    }
+  };
+
+  const deleteLipsyncPreset = async (id: string) => {
+    try {
+      await adminDeleteLipsyncPreset(id);
+      setLipsyncPresets(prev => prev.filter(p => p.id !== id));
+    } catch (e) {
+      setLipsyncMsg(e instanceof Error ? e.message : "Delete failed");
     }
   };
 
@@ -625,6 +670,65 @@ export default function AdminPage() {
               >
                 {igCookiesSaving ? "Saving..." : "Update Cookies"}
               </button>
+            </div>
+
+            {/* Lipsync Presets */}
+            <div className="border border-[#333] rounded-xl p-5 space-y-4">
+              <h2 className="text-sm font-mono font-bold uppercase tracking-widest text-white">
+                Lipsync Sample Images
+              </h2>
+
+              {/* Current presets grid */}
+              {lipsyncPresets.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {lipsyncPresets.map((preset) => (
+                    <div key={preset.id} className="relative group rounded-lg overflow-hidden aspect-[3/4] border border-[#333]">
+                      <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+                        <p className="text-white text-[10px] font-mono text-center truncate w-full px-1">{preset.name}</p>
+                        <button
+                          onClick={() => deleteLipsyncPreset(preset.id)}
+                          className="text-[10px] font-mono text-red-400 hover:text-red-300 border border-red-400/50 rounded px-2 py-0.5"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 font-mono">No presets yet.</p>
+              )}
+
+              {/* Upload form */}
+              <div className="space-y-2 pt-2 border-t border-[#222]">
+                <p className="text-xs text-gray-400 font-mono">Add new preset</p>
+                <input
+                  type="text"
+                  value={lipsyncUploadName}
+                  onChange={(e) => setLipsyncUploadName(e.target.value)}
+                  placeholder="Name (e.g. Character 5)"
+                  className="w-full rounded-lg border border-[#333] bg-[#0b0b0b] px-3 py-2 text-xs text-white font-mono focus:border-white/30 focus:outline-none"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLipsyncUploadFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-xs text-gray-400 font-mono file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-mono file:bg-white/10 file:text-white hover:file:bg-white/20"
+                />
+                {lipsyncMsg && (
+                  <p className={`text-xs font-mono ${lipsyncMsg === "Uploaded!" ? "text-green-400" : "text-red-400"}`}>
+                    {lipsyncMsg}
+                  </p>
+                )}
+                <button
+                  onClick={uploadLipsyncPreset}
+                  disabled={lipsyncUploading || !lipsyncUploadFile || !lipsyncUploadName.trim()}
+                  className="w-full rounded-lg bg-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {lipsyncUploading ? "Uploading..." : "Upload Preset"}
+                </button>
+              </div>
             </div>
           </div>
         ) : null}

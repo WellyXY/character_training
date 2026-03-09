@@ -1,9 +1,11 @@
 """Authentication router for login, logout, and user management."""
+import json
 import logging
+import uuid
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -526,3 +528,77 @@ async def set_user_character_access(
         raise HTTPException(status_code=500, detail="Failed to save character access")
     logger.info(f"Admin {admin_user.username} updated character access for user {user_id}: {request.character_ids}")
     return {"status": "saved", "character_ids": request.character_ids}
+
+
+# ── Lipsync Presets ────────────────────────────────────────────────────────────
+
+LIPSYNC_PRESETS_KEY = "lipsync_presets"
+
+
+async def _get_presets(db: AsyncSession) -> list[dict]:
+    result = await db.execute(select(AppSetting).where(AppSetting.key == LIPSYNC_PRESETS_KEY))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return []
+    try:
+        return json.loads(setting.value)
+    except Exception:
+        return []
+
+
+async def _save_presets(db: AsyncSession, presets: list[dict]) -> None:
+    result = await db.execute(select(AppSetting).where(AppSetting.key == LIPSYNC_PRESETS_KEY))
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.value = json.dumps(presets)
+    else:
+        db.add(AppSetting(key=LIPSYNC_PRESETS_KEY, value=json.dumps(presets)))
+    await db.commit()
+
+
+@router.get("/lipsync-presets")
+async def list_lipsync_presets(db: AsyncSession = Depends(get_db)):
+    """Public endpoint: list lipsync preset images for the playground."""
+    return await _get_presets(db)
+
+
+@router.post("/admin/lipsync-presets")
+async def upload_lipsync_preset(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Upload a new lipsync preset image (admin only)."""
+    from app.services.storage import get_storage_service
+    storage = get_storage_service()
+
+    content = await file.read()
+    content_type = file.content_type or "image/jpeg"
+    filename = file.filename or "preset.jpg"
+
+    saved = await storage.save_bytes(content, filename, content_type, db)
+
+    full_url = storage.get_full_url(saved["url"])
+    new_preset = {"id": str(uuid.uuid4()), "url": full_url, "name": name.strip()}
+    presets = await _get_presets(db)
+    presets.append(new_preset)
+    await _save_presets(db, presets)
+
+    logger.info("Admin %s uploaded lipsync preset: %s", admin_user.username, name)
+    return new_preset
+
+
+@router.delete("/admin/lipsync-presets/{preset_id}")
+async def delete_lipsync_preset(
+    preset_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Remove a lipsync preset (admin only)."""
+    presets = await _get_presets(db)
+    presets = [p for p in presets if p["id"] != preset_id]
+    await _save_presets(db, presets)
+
+    logger.info("Admin %s deleted lipsync preset %s", admin_user.username, preset_id)
+    return {"status": "deleted"}

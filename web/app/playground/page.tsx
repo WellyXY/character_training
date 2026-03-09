@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
+import { getLipsyncPresets, type LipsyncPreset } from "@/lib/api";
 import AppNavbar from "@/components/AppNavbar";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Room, RoomEvent, Track } from "livekit-client";
@@ -221,6 +222,17 @@ function SegmentControl({ value, options, onChange }: {
 function PlaygroundContent() {
   const [activeApi, setActiveApi] = useState<ApiId>("lipsync");
   const [apiKey, setApiKey] = useState(DEFAULT_API_KEY);
+
+  // Dynamic lipsync presets (loaded from API, falls back to LIPSYNC_PRESETS if empty)
+  const [dynamicPresets, setDynamicPresets] = useState<LipsyncPreset[] | null>(null);
+
+  useEffect(() => {
+    getLipsyncPresets()
+      .then((presets) => setDynamicPresets(presets.length > 0 ? presets : null))
+      .catch(() => setDynamicPresets(null));
+  }, []);
+
+  const activePresets = dynamicPresets ?? LIPSYNC_PRESETS.map(p => ({ id: p.id, url: p.src, name: p.name }));
 
   // Lipsync
   const [lsImage, setLsImage] = useState<File | null>(null);
@@ -626,26 +638,26 @@ function PlaygroundContent() {
                 <div>
                   <p className="text-[13px] text-gray-500 uppercase tracking-wider mb-2">Or pick a character</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {LIPSYNC_PRESETS.map((preset) => (
+                    {activePresets.map((preset) => (
                       <button
                         key={preset.id}
                         onClick={async () => {
-                          const res = await fetch(preset.src);
+                          const res = await fetch(preset.url);
                           const blob = await res.blob();
                           const file = new File([blob], `${preset.id}.jpg`, { type: blob.type });
                           setLsImage(file);
-                          setLsImageUrl(preset.src);
-                          readImageAspect(preset.src);
+                          setLsImageUrl(preset.url);
+                          readImageAspect(preset.url);
                         }}
                         className={`relative rounded-xl overflow-hidden aspect-[3/4] border-2 transition-all hover:scale-[1.03] ${
-                          lsImageUrl === preset.src
+                          lsImageUrl === preset.url
                             ? "border-white ring-2 ring-white/30"
                             : "border-[#333] hover:border-[#555]"
                         }`}
                         title={preset.name}
                       >
-                        <img src={preset.src} alt={preset.name} className="w-full h-full object-cover" />
-                        {lsImageUrl === preset.src && (
+                        <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                        {lsImageUrl === preset.url && (
                           <div className="absolute inset-0 bg-white/10 flex items-center justify-center">
                             <svg className="w-5 h-5 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
