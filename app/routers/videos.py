@@ -17,6 +17,7 @@ from app.agent.skills.video_generator import VideoGeneratorSkill
 from app.services.storage import get_storage_service
 from app.auth import get_current_user
 from app.services.tokens import deduct_tokens
+from app.utils.access import get_character_if_accessible
 
 router = APIRouter()
 
@@ -50,19 +51,8 @@ async def list_character_videos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List videos for a character (must belong to current user, or any if admin)."""
-    # Verify character exists and belongs to user (or admin)
-    if current_user.is_admin:
-        char_result = await db.execute(
-            select(Character).where(Character.id == character_id)
-        )
-    else:
-        char_result = await db.execute(
-            select(Character)
-            .where(Character.id == character_id)
-            .where(Character.user_id == current_user.id)
-        )
-    if not char_result.scalar_one_or_none():
+    """List videos for a character (must belong to current user, granted, or any if admin)."""
+    if not await get_character_if_accessible(character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Character not found")
 
     result = await db.execute(

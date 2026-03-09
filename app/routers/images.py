@@ -18,6 +18,7 @@ from app.schemas.image import ImageResponse, ImageMetadata, ImageType, ImageStat
 from app.agent.skills.image_generator import ImageGeneratorSkill
 from app.agent.skills.prompt_optimizer import PromptOptimizerSkill
 from app.auth import get_current_user
+from app.utils.access import get_character_if_accessible
 from app.services.tokens import deduct_tokens, refund_tokens
 
 logger = logging.getLogger(__name__)
@@ -69,19 +70,8 @@ async def list_character_images(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List images for a character (must belong to current user, or any if admin)."""
-    # Verify character exists and belongs to user (or admin)
-    if current_user.is_admin:
-        char_result = await db.execute(
-            select(Character).where(Character.id == character_id)
-        )
-    else:
-        char_result = await db.execute(
-            select(Character)
-            .where(Character.id == character_id)
-            .where(Character.user_id == current_user.id)
-        )
-    if not char_result.scalar_one_or_none():
+    """List images for a character (must belong to current user, granted, or any if admin)."""
+    if not await get_character_if_accessible(character_id, current_user, db):
         raise HTTPException(status_code=404, detail="Character not found")
 
     query = select(Image).where(Image.character_id == character_id)
@@ -510,19 +500,8 @@ async def generate_direct(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate an image directly (costs 1 token, character must belong to current user or admin)."""
-    # Verify character exists and belongs to user (or admin)
-    if current_user.is_admin:
-        char_result = await db.execute(
-            select(Character).where(Character.id == request.character_id)
-        )
-    else:
-        char_result = await db.execute(
-            select(Character)
-            .where(Character.id == request.character_id)
-            .where(Character.user_id == current_user.id)
-        )
-    character = char_result.scalar_one_or_none()
+    """Generate an image directly (costs 1 token, character must belong to current user, granted, or admin)."""
+    character = await get_character_if_accessible(request.character_id, current_user, db)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 

@@ -25,6 +25,7 @@ from app.schemas.character import (
 from app.services.storage import get_storage_service, StorageService
 from app.auth import get_current_user, get_current_admin_user
 from app.services.tokens import deduct_tokens, refund_tokens
+from app.utils.access import get_character_if_accessible
 
 logger = logging.getLogger(__name__)
 
@@ -176,19 +177,8 @@ async def get_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a character by ID (must belong to current user, or any if admin)."""
-    if current_user.is_admin:
-        result = await db.execute(
-            select(Character).where(Character.id == character_id)
-        )
-    else:
-        result = await db.execute(
-            select(Character)
-            .where(Character.id == character_id)
-            .where(Character.user_id == current_user.id)
-        )
-    character = result.scalar_one_or_none()
-
+    """Get a character by ID (must belong to current user, granted, or any if admin)."""
+    character = await get_character_if_accessible(character_id, current_user, db)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
