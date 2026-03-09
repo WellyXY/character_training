@@ -697,7 +697,24 @@ export default function AdminPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 font-mono">No presets yet.</p>
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 font-mono">Using built-in defaults (upload to override):</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { id: "char1", url: "/lipsync-presets/char1.png", name: "Character 1" },
+                      { id: "char2", url: "/lipsync-presets/char2.png", name: "Character 2" },
+                      { id: "char3", url: "/lipsync-presets/char3.jpg", name: "Character 3" },
+                      { id: "char4", url: "/lipsync-presets/char4.jpg", name: "Character 4" },
+                    ].map((p) => (
+                      <div key={p.id} className="relative rounded-lg overflow-hidden aspect-[3/4] border border-[#444] opacity-60">
+                        <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
+                          <p className="text-[9px] font-mono text-gray-400 text-center truncate">Default</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Upload form */}
