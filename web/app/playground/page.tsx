@@ -445,6 +445,8 @@ function PlaygroundContent() {
             room.on(RoomEvent.TrackSubscribed, (track) => {
               const el = track.attach();
               if (track.kind === Track.Kind.Video) {
+                el.style.position = "absolute";
+                el.style.inset = "0";
                 el.style.width = "100%";
                 el.style.height = "100%";
                 el.style.display = "block";
@@ -809,7 +811,10 @@ function PlaygroundContent() {
                     }`}
                     style={
                       sessionPhase === "ready" && lsImageAspect
-                        ? { aspectRatio: String(lsImageAspect), maxHeight: "calc(100vh - 220px)", width: "auto" }
+                        ? {
+                            height: "calc(100vh - 220px)",
+                            width: `calc((100vh - 220px) * ${lsImageAspect})`,
+                          }
                         : sessionPhase === "ready"
                         ? { flex: 1, minWidth: 0 }
                         : { minHeight: 180 }
