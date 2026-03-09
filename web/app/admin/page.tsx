@@ -75,9 +75,13 @@ export default function AdminPage() {
   }, [isAuthenticated, user, router]);
 
   const openAccessModal = async (u: AdminUser) => {
-    const { character_ids } = await adminGetUserCharacterAccess(u.id);
-    setAccessSelected(character_ids);
-    setAccessModal({ userId: u.id, username: u.username });
+    try {
+      const { character_ids } = await adminGetUserCharacterAccess(u.id);
+      setAccessSelected(character_ids);
+      setAccessModal({ userId: u.id, username: u.username });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load character access");
+    }
   };
 
   const saveAccess = async () => {
@@ -523,7 +527,7 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
-        ) : (
+        ) : activeTab === "characters" ? (
           <div>
             {/* Characters Table */}
             <div className="overflow-x-auto">
