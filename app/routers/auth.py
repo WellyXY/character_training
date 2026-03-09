@@ -516,6 +516,7 @@ async def set_user_character_access(
     )
     for row in existing.scalars().all():
         await db.delete(row)
+    await db.flush()
     for char_id in request.character_ids:
         db.add(UserCharacterAccess(user_id=user_id, character_id=char_id))
     try:
