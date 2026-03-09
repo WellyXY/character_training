@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 
 type Tab = "users" | "characters" | "settings";
+type AccessModalState = { userId: string; username: string };
 
 export default function AdminPage() {
   const { user, isAuthenticated } = useAuth();
@@ -49,7 +50,7 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Character access modal
-  const [accessModal, setAccessModal] = useState<{ userId: string; username: string } | null>(null);
+  const [accessModal, setAccessModal] = useState<AccessModalState | null>(null);
   const [accessSelected, setAccessSelected] = useState<string[]>([]);
   const [accessSaving, setAccessSaving] = useState(false);
 
