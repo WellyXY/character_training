@@ -9,7 +9,6 @@ import {
   listCharacterImages,
   approveImage,
   updateCharacter,
-  listSamples,
   agentChat,
   agentConfirm,
   resolveApiUrl,
@@ -336,17 +335,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
       }
     }
 
-    // Fetch sample images: 3 from INS tag + 3 from NSFW tag
-    try {
-      const [insSamples, nsfwSamples] = await Promise.all([
-        listSamples({ tag: "INS", limit: 3, media_type: "image" }),
-        listSamples({ tag: "NSFW", limit: 3, media_type: "image" }),
-      ]);
-      const combined = [...insSamples, ...nsfwSamples];
-      setSamples(combined.length > 0 ? combined : FAKE_SAMPLES);
-    } catch {
-      setSamples(FAKE_SAMPLES);
-    }
+    setSamples(FAKE_SAMPLES);
 
     setStep("create");
   };
