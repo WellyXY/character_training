@@ -89,8 +89,8 @@ const API_DOCS: Record<ApiId, {
 };
 
 const LIPSYNC_PRESETS = [
-  { id: "char1", src: "/lipsync-presets/char1.jpg", name: "Character 1" },
-  { id: "char2", src: "/lipsync-presets/char2.jpg", name: "Character 2" },
+  { id: "char1", src: "/lipsync-presets/char1.png", name: "Character 1" },
+  { id: "char2", src: "/lipsync-presets/char2.png", name: "Character 2" },
   { id: "char3", src: "/lipsync-presets/char3.jpg", name: "Character 3" },
   { id: "char4", src: "/lipsync-presets/char4.jpg", name: "Character 4" },
 ];

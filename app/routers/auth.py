@@ -502,15 +502,26 @@ async def set_user_character_access(
     admin_user: User = Depends(get_current_admin_user),
 ):
     """Replace a user's character access list (admin only)."""
-    # Delete existing
+    if request.character_ids:
+        valid = await db.execute(
+            select(CharacterModel.id).where(CharacterModel.id.in_(request.character_ids))
+        )
+        valid_ids = {row[0] for row in valid.all()}
+        invalid = set(request.character_ids) - valid_ids
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"Invalid character IDs: {list(invalid)}")
+
     existing = await db.execute(
         select(UserCharacterAccess).where(UserCharacterAccess.user_id == user_id)
     )
     for row in existing.scalars().all():
         await db.delete(row)
-    # Insert new
     for char_id in request.character_ids:
         db.add(UserCharacterAccess(user_id=user_id, character_id=char_id))
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save character access")
     logger.info(f"Admin {admin_user.username} updated character access for user {user_id}: {request.character_ids}")
     return {"status": "saved", "character_ids": request.character_ids}
