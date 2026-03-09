@@ -225,6 +225,7 @@ function PlaygroundContent() {
   // Lipsync
   const [lsImage, setLsImage] = useState<File | null>(null);
   const [lsImageUrl, setLsImageUrl] = useState<string | null>(null);
+  const [lsImageAspect, setLsImageAspect] = useState<number | null>(null);
 
   // img2vid
   const [v2Image, setV2Image] = useState<File | null>(null);
@@ -266,6 +267,16 @@ function PlaygroundContent() {
   const stopPolling = () => {
     if (pollRef.current) clearTimeout(pollRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const readImageAspect = (src: string) => {
+    const img = new window.Image();
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setLsImageAspect(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.src = src;
   };
 
   useEffect(() => {
@@ -437,7 +448,7 @@ function PlaygroundContent() {
                 el.style.width = "100%";
                 el.style.height = "100%";
                 el.style.display = "block";
-                (el as HTMLVideoElement).style.objectFit = "contain";
+                (el as HTMLVideoElement).style.objectFit = "cover";
                 videoContainerRef.current?.appendChild(el);
               } else if (track.kind === Track.Kind.Audio) {
                 document.body.appendChild(el);
@@ -596,7 +607,7 @@ function PlaygroundContent() {
                   <FileDropZone
                     file={lsImage} previewUrl={lsImageUrl} accept="image/*" hint="portrait image"
                     icon={<ImageIcon />}
-                    onChange={(f) => { setLsImage(f); setLsImageUrl(URL.createObjectURL(f)); }}
+                    onChange={(f) => { setLsImage(f); const url = URL.createObjectURL(f); setLsImageUrl(url); readImageAspect(url); }}
                   />
                 </div>
                 <div>
@@ -611,6 +622,7 @@ function PlaygroundContent() {
                           const file = new File([blob], `${preset.id}.jpg`, { type: blob.type });
                           setLsImage(file);
                           setLsImageUrl(preset.src);
+                          readImageAspect(preset.src);
                         }}
                         className={`relative rounded-xl overflow-hidden aspect-[3/4] border-2 transition-all hover:scale-[1.03] ${
                           lsImageUrl === preset.src
@@ -792,10 +804,16 @@ function PlaygroundContent() {
                   {/* Video container: React overlays + isolated LiveKit div */}
                   <div
                     id="lipsyncVideoContainer"
-                    className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative ${
-                      sessionPhase === "ready" ? "flex-1 min-w-0 self-stretch" : "w-full flex-shrink-0"
+                    className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative flex-shrink-0 ${
+                      sessionPhase === "ready" ? "self-center" : "w-full"
                     }`}
-                    style={sessionPhase === "ready" ? {} : { minHeight: 180 }}
+                    style={
+                      sessionPhase === "ready" && lsImageAspect
+                        ? { aspectRatio: String(lsImageAspect), maxHeight: "calc(100vh - 220px)", width: "auto" }
+                        : sessionPhase === "ready"
+                        ? { flex: 1, minWidth: 0 }
+                        : { minHeight: 180 }
+                    }
                   >
                     {sessionPhase === "none" && (
                       <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-500">
