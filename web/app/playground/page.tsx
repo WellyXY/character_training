@@ -812,23 +812,17 @@ function PlaygroundContent() {
 
               {/* ── Lipsync session UI ── */}
               {activeApi === "lipsync" ? (
-                <div className={`flex-1 min-h-0 ${sessionPhase === "ready" ? "flex gap-4 h-full" : "flex flex-col gap-3"}`}>
+                <div className={`flex-1 min-h-0 ${sessionPhase === "ready" ? "flex gap-0 h-full" : "flex flex-col gap-3"}`}>
 
-                  {/* Video container: React overlays + isolated LiveKit div */}
+                  {/* Video container: fills remaining space, video is contained (no crop) */}
                   <div
                     id="lipsyncVideoContainer"
                     className={`rounded-xl bg-black border border-[#2a2a2a] overflow-hidden relative ${
-                      sessionPhase === "ready" ? "flex-shrink-0" : "w-full"
+                      sessionPhase === "ready" ? "flex-1 min-w-0" : "w-full"
                     }`}
                     style={
-                      sessionPhase === "ready" && (liveVideoAspect || lsImageAspect)
-                        ? {
-                            height: "100%",
-                            aspectRatio: `${liveVideoAspect || lsImageAspect}`,
-                            maxWidth: "100%",
-                          }
-                        : sessionPhase === "ready"
-                        ? { flex: 1, minWidth: 0, height: "100%" }
+                      sessionPhase === "ready"
+                        ? { height: "100%" }
                         : { minHeight: 180 }
                     }
                   >
@@ -865,9 +859,9 @@ function PlaygroundContent() {
                     />
                   </div>
 
-                  {/* Chat panel — right side when ready, below when not */}
+                  {/* Chat panel — fixed right side when ready, below when not */}
                   <div className={sessionPhase === "ready"
-                    ? "w-[360px] flex-shrink-0 flex flex-col min-h-0"
+                    ? "w-[340px] flex-shrink-0 flex flex-col min-h-0 border-l border-[#222] pl-4 ml-4"
                     : "flex flex-col gap-3"
                   }>
                     {/* Chat log */}
