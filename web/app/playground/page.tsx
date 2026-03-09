@@ -226,6 +226,7 @@ function PlaygroundContent() {
   const [lsImage, setLsImage] = useState<File | null>(null);
   const [lsImageUrl, setLsImageUrl] = useState<string | null>(null);
   const [lsImageAspect, setLsImageAspect] = useState<number | null>(null);
+  const [liveVideoAspect, setLiveVideoAspect] = useState<number | null>(null);
 
   // img2vid
   const [v2Image, setV2Image] = useState<File | null>(null);
@@ -343,6 +344,7 @@ function PlaygroundContent() {
     setChatHistory([]);
     setChatInput("");
     setSendingText(false);
+    setLiveVideoAspect(null);
   };
 
   const handleCloseSession = async () => {
@@ -450,7 +452,16 @@ function PlaygroundContent() {
                 el.style.width = "100%";
                 el.style.height = "100%";
                 el.style.display = "block";
-                (el as HTMLVideoElement).style.objectFit = "contain";
+                const vid = el as HTMLVideoElement;
+                vid.style.objectFit = "contain";
+                vid.addEventListener("loadedmetadata", () => {
+                  if (vid.videoWidth && vid.videoHeight) {
+                    setLiveVideoAspect(vid.videoWidth / vid.videoHeight);
+                  }
+                });
+                if (vid.videoWidth && vid.videoHeight) {
+                  setLiveVideoAspect(vid.videoWidth / vid.videoHeight);
+                }
                 videoContainerRef.current?.appendChild(el);
               } else if (track.kind === Track.Kind.Audio) {
                 document.body.appendChild(el);
@@ -810,10 +821,10 @@ function PlaygroundContent() {
                       sessionPhase === "ready" ? "flex-shrink-0" : "w-full"
                     }`}
                     style={
-                      sessionPhase === "ready" && lsImageAspect
+                      sessionPhase === "ready" && (liveVideoAspect || lsImageAspect)
                         ? {
                             height: "100%",
-                            aspectRatio: `${lsImageAspect}`,
+                            aspectRatio: `${liveVideoAspect || lsImageAspect}`,
                             maxWidth: "100%",
                           }
                         : sessionPhase === "ready"
