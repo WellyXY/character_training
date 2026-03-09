@@ -50,8 +50,8 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Character access modal
-  const [accessModal, setAccessModal] = useState<AccessModalState | null>(null);
-  const [accessSelected, setAccessSelected] = useState<string[]>([]);
+  const [accessModal, setAccessModal] = useState(null as AccessModalState | null);
+  const [accessSelected, setAccessSelected] = useState([] as string[]);
   const [accessSaving, setAccessSaving] = useState(false);
 
   // Instagram cookies
