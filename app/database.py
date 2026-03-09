@@ -27,6 +27,7 @@ class Base(DeclarativeBase):
 from app.models.file_blob import FileBlob  # noqa: F401
 from app.models.user import User, TokenTransaction  # noqa: F401
 from app.models.setting import AppSetting  # noqa: F401
+from app.models.user_character_access import UserCharacterAccess  # noqa: F401
 
 
 async def get_db() -> AsyncSession:

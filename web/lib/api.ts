@@ -583,3 +583,14 @@ export async function adminSetInstagramCookies(sessionId: string): Promise<{ sta
     body: JSON.stringify({ session_id: sessionId }),
   });
 }
+
+export async function adminGetUserCharacterAccess(userId: string): Promise<{ character_ids: string[] }> {
+  return apiFetch(`/admin/users/${userId}/character-access`);
+}
+
+export async function adminSetUserCharacterAccess(userId: string, characterIds: string[]): Promise<{ status: string }> {
+  return apiFetch(`/admin/users/${userId}/character-access`, {
+    method: "PUT",
+    body: JSON.stringify({ character_ids: characterIds }),
+  });
+}

@@ -12,6 +12,8 @@ import {
   adminListCharacters,
   adminGetInstagramCookiesStatus,
   adminSetInstagramCookies,
+  adminGetUserCharacterAccess,
+  adminSetUserCharacterAccess,
   type AdminUser,
   type AdminCharacter,
 } from "@/lib/api";
@@ -46,6 +48,11 @@ export default function AdminPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Character access modal
+  const [accessModal, setAccessModal] = useState<{ userId: string; username: string } | null>(null);
+  const [accessSelected, setAccessSelected] = useState<string[]>([]);
+  const [accessSaving, setAccessSaving] = useState(false);
+
   // Instagram cookies
   const [igCookiesSet, setIgCookiesSet] = useState(false);
   const [igCookiesUpdatedAt, setIgCookiesUpdatedAt] = useState<string | null>(null);
@@ -65,6 +72,29 @@ export default function AdminPage() {
     loadData();
     loadIgCookiesStatus();
   }, [isAuthenticated, user, router]);
+
+  const openAccessModal = async (u: AdminUser) => {
+    const { character_ids } = await adminGetUserCharacterAccess(u.id);
+    setAccessSelected(character_ids);
+    setAccessModal({ userId: u.id, username: u.username });
+  };
+
+  const saveAccess = async () => {
+    if (!accessModal) return;
+    setAccessSaving(true);
+    try {
+      await adminSetUserCharacterAccess(accessModal.userId, accessSelected);
+      setAccessModal(null);
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+
+  const toggleCharacter = (id: string) => {
+    setAccessSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const loadIgCookiesStatus = async () => {
     try {
@@ -450,6 +480,12 @@ export default function AdminPage() {
                           >
                             Tokens
                           </button>
+                          <button
+                            onClick={() => openAccessModal(u)}
+                            className="text-xs text-purple-400 hover:text-purple-300 font-mono"
+                          >
+                            Access
+                          </button>
                           {u.id !== user?.id && (
                             <>
                               {deleteConfirm === u.id ? (
@@ -588,6 +624,56 @@ export default function AdminPage() {
           </div>
         ) : null}
       </div>
+
+      {/* Character Access Modal */}
+      {accessModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setAccessModal(null)}>
+          <div className="bg-[#111] border border-[#333] rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div>
+                <h2 className="text-sm font-mono font-bold uppercase tracking-widest text-white">Character Access</h2>
+                <p className="text-xs text-gray-500 font-mono mt-0.5">{accessModal.username}</p>
+              </div>
+              <button onClick={() => setAccessModal(null)} className="w-8 h-8 rounded-full bg-white/10 text-white text-sm hover:bg-white/20">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {characters.length === 0 ? (
+                <p className="text-xs text-gray-500 font-mono">No characters found.</p>
+              ) : (
+                characters.map(c => (
+                  <label key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-[#333] hover:border-white/20 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={accessSelected.includes(c.id)}
+                      onChange={() => toggleCharacter(c.id)}
+                      className="w-4 h-4 accent-white"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-mono text-white truncate">{c.name}</p>
+                      <p className="text-xs text-gray-500 font-mono">{c.owner_username}</p>
+                    </div>
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${c.status === "active" ? "bg-green-500/20 text-green-400" : "bg-gray-500/20 text-gray-400"}`}>
+                      {c.status}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="p-4 border-t border-white/10 flex gap-2">
+              <button
+                onClick={saveAccess}
+                disabled={accessSaving}
+                className="flex-1 rounded-lg bg-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wide text-black hover:bg-gray-200 disabled:opacity-50"
+              >
+                {accessSaving ? "Saving..." : `Save (${accessSelected.length} selected)`}
+              </button>
+              <button onClick={() => setAccessModal(null)} className="rounded-lg bg-[#1a1a1a] border border-[#333] px-4 py-2 text-xs font-mono text-white hover:text-gray-300">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

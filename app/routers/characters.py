@@ -15,6 +15,7 @@ from app.database import get_db, async_session
 from app.models.character import Character, CharacterStatus as DBCharacterStatus
 from app.models.image import Image, ImageType as DBImageType, ImageStatus as DBImageStatus
 from app.models.user import User
+from app.models.user_character_access import UserCharacterAccess
 from app.schemas.character import (
     CharacterCreate,
     CharacterUpdate,
@@ -65,10 +66,21 @@ async def list_characters(
             select(Character).order_by(Character.created_at.desc())
         )
     else:
-        # Regular user sees only their own
+        # Regular user sees their own + explicitly granted characters
+        access_result = await db.execute(
+            select(UserCharacterAccess.character_id)
+            .where(UserCharacterAccess.user_id == current_user.id)
+        )
+        granted_ids = [row[0] for row in access_result.fetchall()]
+        from sqlalchemy import or_
         result = await db.execute(
             select(Character)
-            .where(Character.user_id == current_user.id)
+            .where(
+                or_(
+                    Character.user_id == current_user.id,
+                    Character.id.in_(granted_ids),
+                )
+            )
             .order_by(Character.created_at.desc())
         )
     characters = result.scalars().all()

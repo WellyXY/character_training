@@ -468,3 +468,49 @@ async def set_instagram_cookies(
     await db.commit()
     logger.info(f"Admin {admin_user.username} updated Instagram sessionid")
     return {"status": "saved"}
+
+
+# ── User Character Access ──────────────────────────────────────────────────────
+
+from app.models.user_character_access import UserCharacterAccess
+from app.models.character import Character as CharacterModel
+
+
+@router.get("/admin/users/{user_id}/character-access")
+async def get_user_character_access(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Get character IDs this user has explicit access to (admin only)."""
+    result = await db.execute(
+        select(UserCharacterAccess).where(UserCharacterAccess.user_id == user_id)
+    )
+    rows = result.scalars().all()
+    return {"character_ids": [r.character_id for r in rows]}
+
+
+class UserCharacterAccessRequest(BaseModel):
+    character_ids: list[str]
+
+
+@router.put("/admin/users/{user_id}/character-access")
+async def set_user_character_access(
+    user_id: str,
+    request: UserCharacterAccessRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+):
+    """Replace a user's character access list (admin only)."""
+    # Delete existing
+    existing = await db.execute(
+        select(UserCharacterAccess).where(UserCharacterAccess.user_id == user_id)
+    )
+    for row in existing.scalars().all():
+        await db.delete(row)
+    # Insert new
+    for char_id in request.character_ids:
+        db.add(UserCharacterAccess(user_id=user_id, character_id=char_id))
+    await db.commit()
+    logger.info(f"Admin {admin_user.username} updated character access for user {user_id}: {request.character_ids}")
+    return {"status": "saved", "character_ids": request.character_ids}
