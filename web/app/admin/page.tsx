@@ -682,17 +682,17 @@ export default function AdminPage() {
               {lipsyncPresets.length > 0 ? (
                 <div className="grid grid-cols-4 gap-2">
                   {lipsyncPresets.map((preset) => (
-                    <div key={preset.id} className="relative group rounded-lg overflow-hidden aspect-[3/4] border border-[#333]">
-                      <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
-                        <p className="text-white text-[10px] font-mono text-center truncate w-full px-1">{preset.name}</p>
-                        <button
-                          onClick={() => deleteLipsyncPreset(preset.id)}
-                          className="text-[10px] font-mono text-red-400 hover:text-red-300 border border-red-400/50 rounded px-2 py-0.5"
-                        >
-                          Delete
-                        </button>
+                    <div key={preset.id} className="flex flex-col gap-1">
+                      <div className="relative rounded-lg overflow-hidden aspect-[3/4] border border-[#333]">
+                        <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
                       </div>
+                      <p className="text-[10px] font-mono text-gray-400 text-center truncate px-1">{preset.name}</p>
+                      <button
+                        onClick={() => deleteLipsyncPreset(preset.id)}
+                        className="text-[10px] font-mono text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/60 rounded py-0.5 w-full"
+                      >
+                        Delete
+                      </button>
                     </div>
                   ))}
                 </div>
