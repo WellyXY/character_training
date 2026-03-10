@@ -32,7 +32,7 @@ interface VideoResponse {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_API_KEY = "pika_TvWK2wLZCC7RDzlPdby_CQ-VI2B4d9Lvr6knq8D8tYo";
+const DEFAULT_API_KEY = "pika_dkc-LaUeI6lsL5MP1aBjgX4ph_7zCi8kKiGhKZ0MMcA";
 const POLL_INTERVAL = 3000;
 const FINISHED_STATUSES = ["finished", "completed", "done", "success"];
 const FAILED_STATUSES = ["failed", "error"];

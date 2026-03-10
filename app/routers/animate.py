@@ -8,7 +8,7 @@ import tempfile
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -1058,3 +1058,239 @@ async def _poll_video_completion(
                     logger.info(f"Refunded 2 tokens to user {user.username} for failed video {video_id}")
 
             await db.commit()
+
+
+@router.post("/animate/ref-video-to-video", response_model=GenerateResponse)
+async def ref_video_to_video(
+    character_id: str = Form(..., description="Character ID whose base images are used for identity"),
+    prompt: str = Form(..., description="Motion / scene description for the generated video"),
+    ref_video: UploadFile = File(..., description="Reference video file (MP4/MOV/WebM)"),
+    aspect_ratio: str = Form("9:16", description="Output aspect ratio: 9:16 | 16:9 | 1:1"),
+    resolution: str = Form("1080p", description="Output resolution: 480p | 720p | 1080p"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    One-shot API: upload a reference video → generate a pose-matched image → animate it.
+
+    Workflow:
+    1. Save the uploaded reference video to storage.
+    2. Extract the first frame from the video.
+    3. Fetch the character's approved base images (up to 3) for identity consistency.
+    4. Use Seedream (base images + first frame) to generate a pose-matched image.
+    5. Call the Parrot animate endpoint with (pose-matched image + reference video).
+    6. Return immediately; poll GET /api/v1/videos/{video_id} for status / final URL.
+
+    Cost: 2 tokens.
+    """
+    # ── 1. Verify character ownership ──────────────────────────────────────────
+    if current_user.is_admin:
+        char_result = await db.execute(
+            select(Character).where(Character.id == character_id)
+        )
+    else:
+        char_result = await db.execute(
+            select(Character)
+            .where(Character.id == character_id)
+            .where(Character.user_id == current_user.id)
+        )
+    character = char_result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # ── 2. Deduct tokens ────────────────────────────────────────────────────────
+    await deduct_tokens(current_user, "video_generation", db)
+    await db.commit()
+
+    storage = get_storage_service()
+    parrot = get_parrot_client()
+
+    try:
+        # ── 3. Save uploaded reference video to storage ─────────────────────────
+        video_bytes = await ref_video.read()
+        original_filename = ref_video.filename or "ref_video.mp4"
+        ext = os.path.splitext(original_filename)[1] or ".mp4"
+        saved_video = await storage.save_bytes(
+            video_bytes,
+            filename=f"ref_video{ext}",
+            content_type=ref_video.content_type or "video/mp4",
+            db=db,
+        )
+        await db.commit()
+        ref_video_storage_url = saved_video["url"]
+        ref_video_full_url = storage.get_full_url(ref_video_storage_url)
+        logger.info("Ref video saved: %s", ref_video_storage_url)
+
+        # ── 4. Extract first frame ──────────────────────────────────────────────
+        logger.info("Extracting first frame from reference video...")
+        first_frame_url = await _extract_video_first_frame(ref_video_storage_url, db, storage)
+        logger.info("First frame extracted: %s", first_frame_url)
+
+        # ── 5. Fetch character base images ─────────────────────────────────────
+        base_images_result = await db.execute(
+            select(Image)
+            .where(Image.character_id == character_id)
+            .where(Image.type == ImageType.BASE)
+            .where(Image.is_approved == True)
+            .order_by(Image.created_at.desc())
+            .limit(3)
+        )
+        base_images = base_images_result.scalars().all()
+        base_image_urls = [storage.get_full_url(img.image_url) for img in base_images]
+        logger.info("Found %d approved base images for character", len(base_image_urls))
+
+        # ── 6. Generate pose-matched image with Seedream ───────────────────────
+        seedream = get_seedream_client()
+
+        # Image order: base images (identity) + first frame (pose / background)
+        reference_images_for_pose = base_image_urls + [storage.get_full_url(first_frame_url)]
+        if not base_image_urls:
+            reference_images_for_pose = [storage.get_full_url(first_frame_url)]
+
+        from app.agent.skills.prompt_optimizer import PromptOptimizerSkill
+        optimizer = PromptOptimizerSkill()
+        opt_result = await optimizer._optimize_prompt(
+            params={
+                "prompt": prompt,
+                "reference_image_path": first_frame_url,
+                "reference_image_mode": "pose_background",
+                "character_description": character.canonical_prompt_block or character.description or "",
+                "character_gender": character.gender or "female",
+            },
+            db=db,
+        )
+        pose_prompt = opt_result.get("optimized_prompt", prompt)
+
+        aspect_ratios = {
+            "9:16": (1024, 1820),
+            "16:9": (1820, 1024),
+            "1:1": (1024, 1024),
+        }
+        pose_width, pose_height = aspect_ratios.get(aspect_ratio, (1024, 1820))
+        logger.info(
+            "Generating pose-matched image %dx%d with %d reference images...",
+            pose_width, pose_height, len(reference_images_for_pose),
+        )
+
+        pose_result = await seedream.generate(
+            prompt=pose_prompt,
+            width=pose_width,
+            height=pose_height,
+            reference_images=reference_images_for_pose,
+        )
+        pose_image_url = pose_result.get("image_url")
+        if not pose_image_url:
+            raise ValueError("Seedream did not return an image URL")
+
+        # Save pose-matched image to DB
+        saved_pose = await storage.save_from_url(pose_image_url, db, prefix="content")
+        intermediate_image = Image(
+            character_id=character_id,
+            type=ImageType.CONTENT,
+            image_url=saved_pose["url"],
+            status=ImageStatus.COMPLETED,
+            is_approved=False,
+            metadata_json=json.dumps({
+                "prompt": pose_prompt,
+                "source": "ref_video_pose_match",
+                "reference_video_first_frame": first_frame_url,
+            }),
+        )
+        db.add(intermediate_image)
+        await db.commit()
+        await db.refresh(intermediate_image)
+        intermediate_image_id = intermediate_image.id
+        pose_image_full_url = storage.get_full_url(saved_pose["url"])
+        logger.info("Pose-matched image saved: %s", intermediate_image_id)
+
+        # ── 7. Estimate video duration for prompt suffix ───────────────────────
+        video_duration = 0.0
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(video_bytes)
+                tmp_path = tmp.name
+            probe = subprocess.run(
+                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", tmp_path],
+                capture_output=True, text=True,
+            )
+            import json as _json
+            probe_data = _json.loads(probe.stdout)
+            video_duration = float(probe_data.get("format", {}).get("duration", 0))
+        except Exception:
+            pass
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        enhanced_prompt = build_addition_prompt(prompt, video_duration)
+
+        # ── 8. Submit animate job ──────────────────────────────────────────────
+        logger.info(
+            "Submitting animate job: image=%s ref_video=%s prompt=%s",
+            intermediate_image_id, ref_video_storage_url, enhanced_prompt[:120],
+        )
+        video_job_id = await parrot.create_animate_video(
+            image_source=pose_image_full_url,
+            video_source=ref_video_full_url,
+            prompt_text=enhanced_prompt,
+            resolution=resolution,
+        )
+
+        # ── 9. Create Video record ─────────────────────────────────────────────
+        metadata = {
+            "original_prompt": prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "api_type": "ref_video_to_video",
+            "parrot_job_id": video_job_id,
+            "reference_video_url": ref_video_storage_url,
+            "reference_video_duration": video_duration,
+            "intermediate_image_id": intermediate_image_id,
+            "reference_video_first_frame": first_frame_url,
+            "video_model": "animate",
+            "resolution": resolution,
+        }
+        video = Video(
+            character_id=character_id,
+            type=DBVideoType.VLOG,
+            video_url=None,
+            thumbnail_url=None,
+            duration=None,
+            source_image_id=intermediate_image_id,
+            status=DBVideoStatus.PROCESSING,
+            metadata_json=json.dumps(metadata),
+        )
+        db.add(video)
+        await db.commit()
+        await db.refresh(video)
+        logger.info("Video record created: %s", video.id)
+
+        # ── 10. Start background poll ──────────────────────────────────────────
+        task = asyncio.create_task(
+            _poll_video_completion(
+                video_id=video.id,
+                parrot_job_id=video_job_id,
+                use_addition_api=False,
+                metadata=metadata,
+                add_subtitles=False,
+                user_id=current_user.id,
+                video_model="v1",
+                use_v2_audio_api=False,
+                use_animate_api=True,
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
+        return GenerateResponse(
+            success=True,
+            video_id=video.id,
+            video_url=None,
+            message="Video generation started. Poll GET /api/v1/videos/{video_id} for status.",
+        )
+
+    except Exception as e:
+        logger.error("ref_video_to_video failed: %s", str(e))
+        await refund_tokens(current_user, "video_generation", db)
+        await db.commit()
+        return GenerateResponse(success=False, message=str(e))
