@@ -213,6 +213,7 @@ class GenerateRequest(BaseModel):
     aspect_ratio: Optional[str] = None  # Image aspect ratio: "9:16", "16:9", "1:1"
     duration: Optional[int] = None  # Video duration in seconds (V1: 5/10/15, V2: 5)
     audio_url: Optional[str] = None  # Optional audio URL for V2 (image-to-video-v2-audio)
+    resolution: str = "1080p"  # Output resolution for animate/addition path
 
 
 class GenerateResponse(BaseModel):
@@ -692,7 +693,7 @@ async def generate_animation(
                 image_source=image_url_for_addition,
                 video_source=reference_video_url,
                 prompt_text=enhanced_prompt,
-                resolution="720p",
+                resolution=request.resolution,
             )
         else:
             # AI-enhance the video prompt
