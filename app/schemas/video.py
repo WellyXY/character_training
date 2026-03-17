@@ -37,8 +37,14 @@ class VideoMetadata(BaseModel):
     duration: Optional[float] = None
     width: Optional[int] = None
     height: Optional[int] = None
-    progress: Optional[int] = None  # Video generation progress 0-100
+    progress: Optional[int] = None
     caption: Optional[str] = None
+    api_type: Optional[str] = None
+    reference_video_url: Optional[str] = None
+    reference_video_duration: Optional[float] = None
+    reference_video_first_frame: Optional[str] = None
+    match_reference_pose: Optional[bool] = None
+    intermediate_image_id: Optional[str] = None
 
 
 class VideoResponse(BaseModel):
