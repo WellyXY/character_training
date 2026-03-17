@@ -91,8 +91,14 @@ export interface VideoMetadata {
   duration?: number;
   width?: number;
   height?: number;
-  progress?: number;  // Video generation progress 0-100
+  progress?: number;
   caption?: string;
+  api_type?: string;
+  reference_video_url?: string;
+  reference_video_duration?: number;
+  reference_video_first_frame?: string;
+  match_reference_pose?: boolean;
+  intermediate_image_id?: string;
 }
 
 export type VideoStatus = "pending" | "processing" | "completed" | "failed";

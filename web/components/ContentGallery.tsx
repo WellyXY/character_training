@@ -1410,6 +1410,35 @@ export default function ContentGallery({
                         </div>
                       )}
 
+                      {/* Reference Video */}
+                      {selectedItem.video.metadata?.reference_video_url && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Reference Video</p>
+                          <video
+                            src={resolveApiUrl(selectedItem.video.metadata.reference_video_url)}
+                            controls
+                            className="w-full max-w-[200px] rounded-md border border-white/20"
+                          />
+                          <div className="mt-1.5 flex items-center gap-1">
+                            <p className="text-[10px] text-gray-500 break-all flex-1 select-all cursor-text">
+                              {selectedItem.video.metadata.reference_video_url}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard.writeText(selectedItem.video!.metadata!.reference_video_url!)}
+                              className="text-[10px] text-gray-500 hover:text-white transition-colors flex-shrink-0"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          {selectedItem.video.metadata.reference_video_duration && (
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              Duration: {selectedItem.video.metadata.reference_video_duration.toFixed(1)}s
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {/* Prompt */}
                       {selectedItem.prompt && (
                         <div className="pt-3 border-t border-white/10">
