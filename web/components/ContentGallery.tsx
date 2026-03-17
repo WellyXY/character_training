@@ -1439,6 +1439,45 @@ export default function ContentGallery({
                         </div>
                       )}
 
+                      {/* Ref Video First Frame */}
+                      {selectedItem.video.metadata?.reference_video_first_frame && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Ref Video First Frame</p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={resolveApiUrl(selectedItem.video.metadata.reference_video_first_frame)}
+                            alt="First frame"
+                            className="w-20 h-20 object-cover rounded-md border border-white/20"
+                          />
+                        </div>
+                      )}
+
+                      {/* Pose-matched Intermediate Image */}
+                      {selectedItem.video.metadata?.intermediate_image_id && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Pose-matched Image</p>
+                          {(() => {
+                            const intermediateImg = images.find(img => img.id === selectedItem.video?.metadata?.intermediate_image_id);
+                            return intermediateImg && intermediateImg.image_url ? (
+                              <div className="relative group/ref inline-block">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={resolveApiUrl(intermediateImg.image_url)}
+                                  alt="Pose-matched"
+                                  className="w-20 h-20 object-cover rounded-md border border-white/20"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-20 h-20 bg-white/10 rounded-md flex items-center justify-center">
+                                <span className="text-[8px] text-gray-500 text-center px-1 break-all">
+                                  {selectedItem.video?.metadata?.intermediate_image_id?.slice(0, 8)}...
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
                       {/* Prompt */}
                       {selectedItem.prompt && (
                         <div className="pt-3 border-t border-white/10">
